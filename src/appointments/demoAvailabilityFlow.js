@@ -13,7 +13,8 @@ function runDemoAvailabilityFlow(message, options = {}) {
         clinic: demoClinic,
         doctor: demoDoctor,
         now: options.now,
-        limit: 3
+        limit: 3,
+        calendarProvider: options.calendarProvider
       })
     : [];
 

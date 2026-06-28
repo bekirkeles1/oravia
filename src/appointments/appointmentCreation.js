@@ -1,4 +1,5 @@
 const { demoClinic, demoDoctor } = require("../demo/demoData");
+const { getCalendarProvider } = require("../calendar/calendarProvider");
 const { runDemoAvailabilityFlow } = require("./demoAvailabilityFlow");
 
 const demoPatient = {
@@ -12,8 +13,10 @@ function runDemoAppointmentFlow(messages = {}, options = {}) {
     messages.initialMessage || "Merhaba, implant için randevu almak istiyorum.";
   const selectionMessage =
     messages.selectionMessage || "29 Haziran 14:00 uygun.";
+  const calendarProvider = options.calendarProvider || getCalendarProvider();
   const availabilityResult = runDemoAvailabilityFlow(initialMessage, {
-    now: options.now
+    now: options.now,
+    calendarProvider
   });
   const selectedSlot = matchSelectedSlot(
     selectionMessage,
@@ -23,7 +26,8 @@ function runDemoAppointmentFlow(messages = {}, options = {}) {
     ? createLocalAppointment({
         selectedSlot,
         treatmentInterest: availabilityResult.treatment_interest,
-        patient: options.patient || demoPatient
+        patient: options.patient || demoPatient,
+        calendarProvider
       })
     : null;
   const confirmationMessage = appointment
@@ -63,7 +67,19 @@ function matchSelectedSlot(selectionMessage, availableSlots) {
   );
 }
 
-function createLocalAppointment({ selectedSlot, treatmentInterest, patient }) {
+function createLocalAppointment({
+  selectedSlot,
+  treatmentInterest,
+  patient,
+  calendarProvider = getCalendarProvider()
+}) {
+  const calendarEvent = calendarProvider.createCalendarEvent({
+    clinic: demoClinic,
+    doctor: demoDoctor,
+    patient,
+    treatmentInterest,
+    selectedSlot
+  });
   const appointment = {
     id: `appointment_${selectedSlot.id}`,
     clinic: {
@@ -83,6 +99,8 @@ function createLocalAppointment({ selectedSlot, treatmentInterest, patient }) {
     end_time: selectedSlot.end_at,
     status: "confirmed",
     created_by: "ai",
+    calendar_provider: calendarEvent.calendar_provider,
+    calendar_event_id: calendarEvent.calendar_event_id,
     confirmation_message: buildConfirmationMessage(selectedSlot)
   };
 

@@ -22,6 +22,11 @@ test("creates a local appointment only after a valid offered slot is selected", 
   assert.equal(result.appointment.id, "appointment_demo_2026-06-29_1400");
   assert.equal(result.appointment.status, "confirmed");
   assert.equal(result.appointment.created_by, "ai");
+  assert.equal(result.appointment.calendar_provider, "mock");
+  assert.equal(
+    result.appointment.calendar_event_id,
+    "mock_calendar_event_demo_2026-06-29_1400"
+  );
   assert.equal(result.appointment.treatment_interest, "implant");
   assert.equal(result.appointment.start_time, "2026-06-29T14:00:00+03:00");
   assert.equal(result.appointment.end_time, "2026-06-29T14:30:00+03:00");

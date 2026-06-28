@@ -2,7 +2,7 @@
   "name": "oravia",
   "version": "0.1.0",
   "private": true,
-  "description": "Local Sprint 2, Sprint 3, and Sprint 4 demo flows for Oravia Dental Receptionist.",
+  "description": "Local Sprint 2 through Sprint 5A demo flows for Oravia Dental Receptionist.",
   "scripts": {
     "classify:sample": "node scripts/classify-sample.js",
     "demo:availability": "node scripts/demo-availability.js",
