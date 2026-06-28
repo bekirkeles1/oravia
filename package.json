@@ -2,9 +2,10 @@
   "name": "oravia",
   "version": "0.1.0",
   "private": true,
-  "description": "Local Sprint 2 intent classifier for Oravia Dental Receptionist.",
+  "description": "Local Sprint 2 and Sprint 3 demo flows for Oravia Dental Receptionist.",
   "scripts": {
     "classify:sample": "node scripts/classify-sample.js",
+    "demo:availability": "node scripts/demo-availability.js",
     "test": "node --test"
   },
   "engines": {
