@@ -34,6 +34,26 @@ export default function DashboardPage() {
         </div>
       </section>
 
+      <section className="status-section" aria-labelledby="system-status-title">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">System</p>
+            <h2 id="system-status-title">System Status</h2>
+          </div>
+        </div>
+
+        <div className="system-status-grid">
+          {dashboard.systemStatus.map((item) => (
+            <article className="system-status-item" key={item.name}>
+              <span>{item.name}</span>
+              <strong className={`system-status-badge ${item.tone}`}>
+                {item.status}
+              </strong>
+            </article>
+          ))}
+        </div>
+      </section>
+
       <section className="appointments-section" aria-labelledby="appointments-title">
         <div className="section-heading">
           <div>

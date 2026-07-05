@@ -10,6 +10,7 @@
   --accent-soft: #d9ebe6;
   --amber: #916319;
   --amber-soft: #fff3d8;
+  --gray-soft: #ecefed;
 }
 
 * {
@@ -108,7 +109,8 @@ h3 {
 .classification-panel,
 .slots-panel,
 .reply-panel,
-.mock-appointment-panel {
+.mock-appointment-panel,
+.system-status-item {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -140,9 +142,14 @@ dt {
   overflow-wrap: anywhere;
 }
 
+.status-section,
 .appointments-section,
 .simulator-section {
   padding-top: 4px;
+}
+
+.status-section {
+  margin-bottom: 32px;
 }
 
 .simulator-section {
@@ -169,6 +176,55 @@ dt {
   display: grid;
   gap: 14px;
   margin-top: 16px;
+}
+
+.system-status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.system-status-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 54px;
+  padding: 12px 14px;
+}
+
+.system-status-item span {
+  color: var(--text);
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.system-status-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.system-status-badge.ready,
+.system-status-badge.safe,
+.system-status-badge.available {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.system-status-badge.disabled {
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
+.system-status-badge.not-connected {
+  background: var(--gray-soft);
+  color: var(--muted);
 }
 
 .appointment-card {
@@ -393,10 +449,16 @@ blockquote {
 
   .summary-grid,
   .appointment-details,
+  .system-status-grid,
   .simulator-grid,
   .simulator-output-grid,
   .classification-list {
     grid-template-columns: 1fr;
+  }
+
+  .system-status-item {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .slot-list small {

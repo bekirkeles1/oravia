@@ -38,6 +38,43 @@ function buildDashboardData({ appointmentResult, simulatorResult }) {
     productName: "Oravia Dental Receptionist",
     clinic: appointmentResult.appointment.clinic,
     doctor: appointmentResult.appointment.doctor,
+    systemStatus: [
+      {
+        name: "Demo API",
+        status: "Ready",
+        tone: "ready"
+      },
+      {
+        name: "Mock Appointment API",
+        status: "Ready",
+        tone: "ready"
+      },
+      {
+        name: "Dashboard Mode",
+        status: "Demo API / Mock only",
+        tone: "safe"
+      },
+      {
+        name: "Google Calendar CLI Flow",
+        status: "Available",
+        tone: "available"
+      },
+      {
+        name: "Real Calendar Events From Dashboard",
+        status: "Disabled",
+        tone: "disabled"
+      },
+      {
+        name: "WhatsApp Integration",
+        status: "Not connected",
+        tone: "not-connected"
+      },
+      {
+        name: "Database",
+        status: "Not connected",
+        tone: "not-connected"
+      }
+    ],
     appointments: [
       {
         id: appointmentResult.appointment.id,

@@ -68,6 +68,8 @@ http://localhost:3000
 
 The dashboard uses local demo data only. It shows the Oravia Dental Receptionist demo clinic, demo doctor, one sample confirmed appointment, and the calendar provider label. It also includes a conversation simulator labeled `Demo API mode — no real patient data, no real calendar event`.
 
+The `System Status` panel is an informational demo safety panel. It shows that the demo API and mock appointment API are ready, the dashboard is in `Demo API / Mock only` mode, Google Calendar real event creation is available only through the CLI flow, real calendar events from the dashboard are disabled, and WhatsApp/database integrations are not connected. It does not perform live monitoring or call external services.
+
 The simulator shows the sample message:
 
 ```text
