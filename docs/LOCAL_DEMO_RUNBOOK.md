@@ -66,7 +66,7 @@ Open the localhost URL printed by Next.js, usually:
 http://localhost:3000
 ```
 
-The dashboard uses local demo data only. It shows the Oravia Dental Receptionist demo clinic, demo doctor, one sample confirmed appointment, and the calendar provider label. It also includes a conversation simulator labeled `Demo simulator — no real patient data`.
+The dashboard uses local demo data only. It shows the Oravia Dental Receptionist demo clinic, demo doctor, one sample confirmed appointment, and the calendar provider label. It also includes a conversation simulator labeled `Demo API mode — no real patient data, no real calendar event`.
 
 The simulator shows the sample message:
 
@@ -74,7 +74,18 @@ The simulator shows the sample message:
 Merhaba, implant için randevu almak istiyorum.
 ```
 
-It displays the detected intent, confidence, treatment interest, handoff flag, patient message summary, suggested mock available slots, and AI reply. The simulator uses the mock provider only; it does not create appointments or real Google Calendar events.
+Click `Run demo simulation` to call the internal demo API endpoints:
+
+- `POST /api/demo/classify`
+- `POST /api/demo/availability`
+
+The dashboard then displays the detected intent, confidence, treatment interest, handoff flag, patient message summary, suggested mock available slots, and AI reply.
+
+Click `Create mock appointment` to call:
+
+- `POST /api/demo/appointment`
+
+This creates a mock appointment only. The dashboard simulator uses demo API routes with the mock provider; it does not create real Google Calendar events.
 
 ## Internal Demo API
 

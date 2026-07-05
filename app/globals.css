@@ -107,7 +107,8 @@ h3 {
 .message-panel,
 .classification-panel,
 .slots-panel,
-.reply-panel {
+.reply-panel,
+.mock-appointment-panel {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -239,8 +240,81 @@ dd {
 .message-panel,
 .classification-panel,
 .slots-panel,
-.reply-panel {
+.reply-panel,
+.mock-appointment-panel {
   padding: 18px;
+}
+
+.simulator-controls {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.simulator-controls label {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.simulator-controls textarea {
+  width: 100%;
+  min-height: 92px;
+  resize: vertical;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  font: inherit;
+  line-height: 1.45;
+}
+
+.simulator-controls textarea:focus {
+  outline: 2px solid var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.simulator-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+button {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--accent);
+  color: #ffffff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.secondary-button {
+  background: var(--surface);
+  color: var(--accent);
+}
+
+.error-message {
+  margin: 0;
+  padding: 10px 12px;
+  background: #fde7e7;
+  border: 1px solid #efb4b4;
+  border-radius: 8px;
+  color: #8a2525;
 }
 
 blockquote {
@@ -303,6 +377,10 @@ blockquote {
   line-height: 1.6;
 }
 
+.mock-appointment-panel {
+  margin-top: 14px;
+}
+
 @media (max-width: 780px) {
   .dashboard-header,
   .section-heading,
@@ -323,5 +401,9 @@ blockquote {
 
   .slot-list small {
     text-align: left;
+  }
+
+  .simulator-actions {
+    flex-direction: column;
   }
 }

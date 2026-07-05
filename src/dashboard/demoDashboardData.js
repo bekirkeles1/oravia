@@ -45,6 +45,8 @@ function buildDashboardData({ appointmentResult, simulatorResult }) {
         treatmentInterest: appointmentResult.appointment.treatment_interest,
         startTime: appointmentResult.appointment.start_time,
         endTime: appointmentResult.appointment.end_time,
+        startDisplayLabel: appointmentResult.selected_slot.display_label,
+        endDisplayLabel: formatIsoTime(appointmentResult.appointment.end_time),
         status: appointmentResult.appointment.status,
         createdBy: appointmentResult.appointment.created_by,
         calendarProvider: appointmentResult.appointment.calendar_provider,
@@ -55,7 +57,7 @@ function buildDashboardData({ appointmentResult, simulatorResult }) {
       }
     ],
     simulator: {
-      label: "Demo simulator — no real patient data",
+      label: "Demo API mode — no real patient data, no real calendar event",
       patientMessage: SAMPLE_PATIENT_MESSAGE,
       intent: simulatorResult.intent,
       confidence: simulatorResult.confidence,
@@ -66,7 +68,10 @@ function buildDashboardData({ appointmentResult, simulatorResult }) {
         id: slot.id,
         displayLabel: slot.display_label,
         startAt: slot.start_at,
-        endAt: slot.end_at
+        endAt: slot.end_at,
+        timeRangeLabel: `${formatIsoTime(slot.start_at)} to ${formatIsoTime(
+          slot.end_at
+        )}`
       })),
       reply: simulatorResult.reply,
       calendarProvider: "mock",
@@ -89,6 +94,12 @@ function getCalendarProviderLabel(calendarProvider) {
 
 function isPromiseLike(value) {
   return value && typeof value.then === "function";
+}
+
+function formatIsoTime(value) {
+  const match = String(value || "").match(/T(\d{2}:\d{2})/);
+
+  return match ? match[1] : "";
 }
 
 module.exports = {
