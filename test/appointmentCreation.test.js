@@ -47,6 +47,61 @@ test("uses a dynamically offered slot when no explicit selection is provided", (
   assert.match(result.appointment.calendar_event_id, /mock_calendar_event_demo_2026-06-30_1400/);
 });
 
+test("creates an appointment with an async Google-shaped calendar provider", async () => {
+  let createdEventInput = null;
+  const mockGoogleCalendarProvider = {
+    name: "google_service_account",
+    getAvailableSlots() {
+      return Promise.resolve([
+        {
+          id: "demo_2026-07-07_1000",
+          start_at: "2026-07-07T10:00:00+03:00",
+          end_at: "2026-07-07T10:30:00+03:00",
+          timezone: "Europe/Istanbul",
+          duration_minutes: 30,
+          display_label: "7 Temmuz Sali 10:00"
+        },
+        {
+          id: "demo_2026-07-07_1400",
+          start_at: "2026-07-07T14:00:00+03:00",
+          end_at: "2026-07-07T14:30:00+03:00",
+          timezone: "Europe/Istanbul",
+          duration_minutes: 30,
+          display_label: "7 Temmuz Sali 14:00"
+        }
+      ]);
+    },
+    createCalendarEvent(eventInput) {
+      createdEventInput = eventInput;
+
+      return Promise.resolve({
+        calendar_provider: "google_service_account",
+        calendar_event_id: "google_calendar_event_456",
+        start_time: eventInput.selectedSlot.start_at,
+        end_time: eventInput.selectedSlot.end_at
+      });
+    }
+  };
+  const result = await runDemoAppointmentFlow(
+    {
+      initialMessage: "Merhaba, implant için randevu almak istiyorum.",
+      selectionMessage: ""
+    },
+    {
+      calendarProvider: mockGoogleCalendarProvider
+    }
+  );
+
+  assert.equal(result.initial_message_classification.intent, "appointment_request");
+  assert.equal(result.available_slots.length, 2);
+  assert.equal(result.selected_slot.id, "demo_2026-07-07_1400");
+  assert.equal(createdEventInput.selectedSlot.id, result.selected_slot.id);
+  assert.equal(result.appointment.status, "confirmed");
+  assert.equal(result.appointment.created_by, "ai");
+  assert.equal(result.appointment.calendar_provider, "google_service_account");
+  assert.equal(result.appointment.calendar_event_id, "google_calendar_event_456");
+});
+
 test("falls back to an offered slot when the selection message does not match", () => {
   const result = runDemoAppointmentFlow(
     {

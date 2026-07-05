@@ -7,6 +7,7 @@
     "classify:sample": "node scripts/classify-sample.js",
     "demo:availability": "node scripts/demo-availability.js",
     "demo:appointment": "node scripts/demo-appointment.js",
+    "demo:appointment:google": "node scripts/demo-appointment-google.js",
     "google:calendar:service-test": "node scripts/google-calendar-service-check.js",
     "test": "node --test"
   },
