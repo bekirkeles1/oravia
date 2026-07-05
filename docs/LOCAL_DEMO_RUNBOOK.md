@@ -76,6 +76,48 @@ Merhaba, implant için randevu almak istiyorum.
 
 It displays the detected intent, confidence, treatment interest, handoff flag, patient message summary, suggested mock available slots, and AI reply. The simulator uses the mock provider only; it does not create appointments or real Google Calendar events.
 
+## Internal Demo API
+
+Start the local server:
+
+```bash
+npm run dev
+```
+
+The demo API uses local workflow code. The appointment endpoint uses the mock calendar provider only and does not create real Google Calendar events.
+
+Classify a patient message:
+
+```bash
+curl -X POST http://localhost:3000/api/demo/classify \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Merhaba, implant için randevu almak istiyorum."}'
+```
+
+Get mock availability:
+
+```bash
+curl -X POST http://localhost:3000/api/demo/availability \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Merhaba, implant için randevu almak istiyorum."}'
+```
+
+Create a local mock appointment with a dynamically selected offered slot:
+
+```bash
+curl -X POST http://localhost:3000/api/demo/appointment \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Merhaba, implant için randevu almak istiyorum."}'
+```
+
+Create a local mock appointment with a specific offered slot:
+
+```bash
+curl -X POST http://localhost:3000/api/demo/appointment \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Merhaba, implant için randevu almak istiyorum.","selected_slot_id":"demo_2026-07-06_1400"}'
+```
+
 ## Mock Appointment Demo
 
 Run:
