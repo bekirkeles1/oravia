@@ -18,6 +18,31 @@ function runDemoAvailabilityFlow(message, options = {}) {
       })
     : [];
 
+  if (isPromiseLike(availableSlots)) {
+    return availableSlots.then((resolvedSlots) =>
+      buildAvailabilityResult({
+        classification,
+        treatmentInterest,
+        shouldOfferSlots,
+        availableSlots: resolvedSlots
+      })
+    );
+  }
+
+  return buildAvailabilityResult({
+    classification,
+    treatmentInterest,
+    shouldOfferSlots,
+    availableSlots
+  });
+}
+
+function buildAvailabilityResult({
+  classification,
+  treatmentInterest,
+  shouldOfferSlots,
+  availableSlots
+}) {
   return {
     intent: classification.intent,
     confidence: classification.confidence,
@@ -48,6 +73,10 @@ function buildAvailabilityReply(availableSlots, treatmentInterest) {
     .join(", ");
 
   return `Merhaba, ${treatmentText}uygun randevu seçenekleri: ${slotText}. Size uygun olan saati seçebilirsiniz.`;
+}
+
+function isPromiseLike(value) {
+  return value && typeof value.then === "function";
 }
 
 module.exports = {

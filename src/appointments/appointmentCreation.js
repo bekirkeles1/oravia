@@ -18,6 +18,32 @@ function runDemoAppointmentFlow(messages = {}, options = {}) {
     now: options.now,
     calendarProvider
   });
+
+  if (isPromiseLike(availabilityResult)) {
+    return availabilityResult.then((resolvedAvailabilityResult) =>
+      completeDemoAppointmentFlow({
+        availabilityResult: resolvedAvailabilityResult,
+        selectionMessage,
+        options,
+        calendarProvider
+      })
+    );
+  }
+
+  return completeDemoAppointmentFlow({
+    availabilityResult,
+    selectionMessage,
+    options,
+    calendarProvider
+  });
+}
+
+function completeDemoAppointmentFlow({
+  availabilityResult,
+  selectionMessage,
+  options,
+  calendarProvider
+}) {
   const selectedSlot = resolveSelectedSlot(
     selectionMessage,
     availabilityResult.available_slots
@@ -30,6 +56,29 @@ function runDemoAppointmentFlow(messages = {}, options = {}) {
         calendarProvider
       })
     : null;
+
+  if (isPromiseLike(appointment)) {
+    return appointment.then((resolvedAppointment) =>
+      buildDemoAppointmentResult({
+        availabilityResult,
+        selectedSlot,
+        appointment: resolvedAppointment
+      })
+    );
+  }
+
+  return buildDemoAppointmentResult({
+    availabilityResult,
+    selectedSlot,
+    appointment
+  });
+}
+
+function buildDemoAppointmentResult({
+  availabilityResult,
+  selectedSlot,
+  appointment
+}) {
   const confirmationMessage = appointment
     ? appointment.confirmation_message
     : buildClarificationMessage(availabilityResult.available_slots);
@@ -97,6 +146,32 @@ function createLocalAppointment({
     treatmentInterest,
     selectedSlot
   });
+
+  if (isPromiseLike(calendarEvent)) {
+    return calendarEvent.then((resolvedCalendarEvent) =>
+      buildLocalAppointment({
+        selectedSlot,
+        treatmentInterest,
+        patient,
+        calendarEvent: resolvedCalendarEvent
+      })
+    );
+  }
+
+  return buildLocalAppointment({
+    selectedSlot,
+    treatmentInterest,
+    patient,
+    calendarEvent
+  });
+}
+
+function buildLocalAppointment({
+  selectedSlot,
+  treatmentInterest,
+  patient,
+  calendarEvent
+}) {
   const appointment = {
     id: `appointment_${selectedSlot.id}`,
     clinic: {
@@ -177,6 +252,10 @@ function normalizeTurkish(value) {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function isPromiseLike(value) {
+  return value && typeof value.then === "function";
 }
 
 module.exports = {
