@@ -52,6 +52,22 @@ npm test
 
 Automated tests use mock or fake providers only. They must not create real Google Calendar events.
 
+## Local Dashboard
+
+Run:
+
+```bash
+npm run dev
+```
+
+Open the localhost URL printed by Next.js, usually:
+
+```text
+http://localhost:3000
+```
+
+The dashboard uses local demo data only. It shows the Oravia Dental Receptionist demo clinic, demo doctor, one sample confirmed appointment, and the calendar provider label. It does not connect to a database, authentication, WhatsApp, or real patient data.
+
 ## Mock Appointment Demo
 
 Run:

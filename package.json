@@ -6,6 +6,7 @@
   "scripts": {
     "check:env": "node scripts/check-env.js",
     "classify:sample": "node scripts/classify-sample.js",
+    "dev": "next dev",
     "demo:availability": "node scripts/demo-availability.js",
     "demo:appointment": "node scripts/demo-appointment.js",
     "demo:appointment:google": "node scripts/demo-appointment-google.js",
@@ -13,9 +14,12 @@
     "test": "node --test"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.9"
   },
   "dependencies": {
-    "googleapis": "^173.0.0"
+    "googleapis": "^173.0.0",
+    "next": "^16.2.10",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
   }
 }
