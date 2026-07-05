@@ -18,7 +18,7 @@ function runDemoAppointmentFlow(messages = {}, options = {}) {
     now: options.now,
     calendarProvider
   });
-  const selectedSlot = matchSelectedSlot(
+  const selectedSlot = resolveSelectedSlot(
     selectionMessage,
     availabilityResult.available_slots
   );
@@ -47,6 +47,23 @@ function runDemoAppointmentFlow(messages = {}, options = {}) {
     appointment,
     confirmation_message: confirmationMessage
   };
+}
+
+function resolveSelectedSlot(selectionMessage, availableSlots) {
+  const explicitSelection = matchSelectedSlot(selectionMessage, availableSlots);
+
+  if (explicitSelection) {
+    return explicitSelection;
+  }
+
+  if (!availableSlots.length) {
+    return null;
+  }
+
+  const fallbackSlot = availableSlots[1] || availableSlots[0];
+  const simulatedSelection = buildSimulatedSelectionMessage(fallbackSlot);
+
+  return matchSelectedSlot(simulatedSelection, availableSlots) || fallbackSlot;
 }
 
 function matchSelectedSlot(selectionMessage, availableSlots) {
@@ -117,6 +134,14 @@ function buildClarificationMessage(availableSlots) {
   return `Seçtiğiniz saati sunduğumuz randevu seçenekleriyle eşleştiremedim. Uygun seçenekler: ${slotText}. Lütfen bu saatlerden birini seçin.`;
 }
 
+function buildSimulatedSelectionMessage(slot) {
+  if (!slot) {
+    return "";
+  }
+
+  return slot.display_label || slot.start_at || "";
+}
+
 function extractSelectedTime(normalizedSelection) {
   const match = normalizedSelection.match(/\b([01]?\d|2[0-3])[:.]([0-5]\d)\b/);
 
@@ -157,5 +182,6 @@ function normalizeTurkish(value) {
 module.exports = {
   createLocalAppointment,
   matchSelectedSlot,
+  resolveSelectedSlot,
   runDemoAppointmentFlow
 };

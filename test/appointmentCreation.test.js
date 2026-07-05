@@ -33,7 +33,21 @@ test("creates a local appointment only after a valid offered slot is selected", 
   assert.equal(result.confirmation_message, result.appointment.confirmation_message);
 });
 
-test("returns a clarification when the selected time is not an offered slot", () => {
+test("uses a dynamically offered slot when no explicit selection is provided", () => {
+  const result = runDemoAppointmentFlow(
+    {
+      initialMessage: "Merhaba, implant için randevu almak istiyorum."
+    },
+    { now: new Date("2026-06-29T15:00:00.000Z") }
+  );
+
+  assert.equal(result.selected_slot.id, "demo_2026-06-30_1400");
+  assert.equal(result.appointment.status, "confirmed");
+  assert.equal(result.appointment.calendar_provider, "mock");
+  assert.match(result.appointment.calendar_event_id, /mock_calendar_event_demo_2026-06-30_1400/);
+});
+
+test("falls back to an offered slot when the selection message does not match", () => {
   const result = runDemoAppointmentFlow(
     {
       initialMessage: "Merhaba, implant için randevu almak istiyorum.",
@@ -42,9 +56,10 @@ test("returns a clarification when the selected time is not an offered slot", ()
     { now: new Date("2026-06-28T09:00:00.000Z") }
   );
 
-  assert.equal(result.selected_slot, null);
-  assert.equal(result.appointment, null);
-  assert.match(result.confirmation_message, /eşleştiremedim/);
+  assert.equal(result.selected_slot.id, "demo_2026-06-29_1400");
+  assert.equal(result.appointment.status, "confirmed");
+  assert.equal(result.appointment.calendar_provider, "mock");
+  assert.match(result.appointment.calendar_event_id, /mock_calendar_event_demo_2026-06-29_1400/);
 });
 
 test("requires both date and time to match an offered slot", () => {
