@@ -66,7 +66,15 @@ Open the localhost URL printed by Next.js, usually:
 http://localhost:3000
 ```
 
-The dashboard uses local demo data only. It shows the Oravia Dental Receptionist demo clinic, demo doctor, one sample confirmed appointment, and the calendar provider label. It does not connect to a database, authentication, WhatsApp, or real patient data.
+The dashboard uses local demo data only. It shows the Oravia Dental Receptionist demo clinic, demo doctor, one sample confirmed appointment, and the calendar provider label. It also includes a conversation simulator labeled `Demo simulator — no real patient data`.
+
+The simulator shows the sample message:
+
+```text
+Merhaba, implant için randevu almak istiyorum.
+```
+
+It displays the detected intent, confidence, treatment interest, handoff flag, patient message summary, suggested mock available slots, and AI reply. The simulator uses the mock provider only; it does not create appointments or real Google Calendar events.
 
 ## Mock Appointment Demo
 
