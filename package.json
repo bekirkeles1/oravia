@@ -4,6 +4,7 @@
   "private": true,
   "description": "Local Sprint 2 through Sprint 5A demo flows for Oravia Dental Receptionist.",
   "scripts": {
+    "check:env": "node scripts/check-env.js",
     "classify:sample": "node scripts/classify-sample.js",
     "demo:availability": "node scripts/demo-availability.js",
     "demo:appointment": "node scripts/demo-appointment.js",

@@ -3,7 +3,10 @@ const path = require("node:path");
 
 function loadEnvFile(filePath = path.resolve(process.cwd(), ".env")) {
   if (!fs.existsSync(filePath)) {
-    return;
+    return {
+      loaded: false,
+      path: filePath
+    };
   }
 
   const content = fs.readFileSync(filePath, "utf8");
@@ -29,6 +32,11 @@ function loadEnvFile(filePath = path.resolve(process.cwd(), ".env")) {
       process.env[key] = value;
     }
   }
+
+  return {
+    loaded: true,
+    path: filePath
+  };
 }
 
 module.exports = {

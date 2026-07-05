@@ -15,11 +15,14 @@ function createGoogleServiceAccountCalendarProvider(options = {}) {
     options.keyFilePath || process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH;
   const calendarId = options.calendarId || process.env.GOOGLE_CALENDAR_ID;
   const googleClient = options.googleClient || google;
-  const keyFile = resolveServiceAccountKeyFile(keyFilePath);
 
   if (!calendarId) {
-    throw new Error("GOOGLE_CALENDAR_ID is required for Google Calendar.");
+    throw new Error(
+      "GOOGLE_CALENDAR_ID is required when CALENDAR_PROVIDER=google_service_account. Set it to the shared Google Calendar ID."
+    );
   }
+
+  const keyFile = resolveServiceAccountKeyFile(keyFilePath);
 
   const auth = new googleClient.auth.GoogleAuth({
     keyFile,
@@ -97,7 +100,7 @@ function createGoogleServiceAccountCalendarProvider(options = {}) {
 function resolveServiceAccountKeyFile(keyFilePath) {
   if (!keyFilePath) {
     throw new Error(
-      "GOOGLE_SERVICE_ACCOUNT_KEY_PATH is required for Google Calendar."
+      "GOOGLE_SERVICE_ACCOUNT_KEY_PATH is required when CALENDAR_PROVIDER=google_service_account. Set it to the local service account JSON file path."
     );
   }
 
@@ -105,7 +108,7 @@ function resolveServiceAccountKeyFile(keyFilePath) {
 
   if (!fs.existsSync(resolvedPath)) {
     throw new Error(
-      `Google service account key file not found at ${resolvedPath}. Set GOOGLE_SERVICE_ACCOUNT_KEY_PATH to the JSON key file path.`
+      `Google service account key file not found at ${resolvedPath}. Set GOOGLE_SERVICE_ACCOUNT_KEY_PATH to an existing local JSON key file. Do not commit this file.`
     );
   }
 

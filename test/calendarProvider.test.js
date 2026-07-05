@@ -46,6 +46,31 @@ test("google service account provider requires an existing key file", () => {
   );
 });
 
+test("google service account provider requires a calendar id", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "oravia-calendar-"));
+  const keyFilePath = path.join(tempDir, "service-account.json");
+
+  fs.writeFileSync(
+    keyFilePath,
+    JSON.stringify({
+      client_email: "service-account@example.com",
+      private_key: "test-private-key"
+    })
+  );
+
+  try {
+    assert.throws(
+      () =>
+        createGoogleServiceAccountCalendarProvider({
+          keyFilePath
+        }),
+      /GOOGLE_CALENDAR_ID is required/
+    );
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("google service account provider creates event output with Google event id", async () => {
   const calendarId = "calendar@example.com";
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "oravia-calendar-"));
