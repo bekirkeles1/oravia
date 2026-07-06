@@ -1466,3 +1466,97 @@ blockquote {
     grid-template-columns: 1fr;
   }
 }
+
+/* 9D — Secretary Manual Appointment Entry UI */
+
+.manual-entry-card {
+  border-color: rgba(43, 111, 99, 0.22);
+}
+
+.manual-appointment-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.manual-appointment-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.manual-appointment-form input,
+.manual-appointment-form select,
+.manual-appointment-form textarea {
+  width: 100%;
+  min-height: 40px;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #ffffff;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.92rem;
+  outline: none;
+}
+
+.manual-appointment-form textarea {
+  resize: vertical;
+}
+
+.manual-appointment-form input:focus,
+.manual-appointment-form select:focus,
+.manual-appointment-form textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(43, 111, 99, 0.12);
+}
+
+.wide-form-field,
+.manual-submit-button,
+.manual-form-note {
+  grid-column: 1 / -1;
+}
+
+.manual-submit-button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #ffffff;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.manual-submit-button:hover {
+  filter: brightness(0.96);
+}
+
+.manual-form-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+@media (max-width: 680px) {
+  .manual-appointment-form {
+    grid-template-columns: 1fr;
+  }
+}
+
+.manual-form-error {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #efb0a8;
+  border-radius: 10px;
+  background: #fff1ef;
+  color: #9f2f24;
+  font-size: 0.84rem;
+  font-weight: 700;
+}

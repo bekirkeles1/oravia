@@ -115,7 +115,20 @@ function DoctorView({ data }) {
 }
 
 function SecretaryView({ data }) {
-  const timeline = [
+  const [manualForm, setManualForm] = useState({
+    patientName: "",
+    patientPhone: "",
+    treatment: "",
+    doctor: "Dr. Demo Dentist",
+    date: "2026-07-06",
+    time: "",
+    duration: "30",
+    notes: ""
+  });
+
+  const [manualAppointments, setManualAppointments] = useState([]);
+const [manualFormError, setManualFormError] = useState("");
+  const baseTimeline = [
     {
       time: "09:30",
       patient: "Demo Patient",
@@ -142,6 +155,60 @@ function SecretaryView({ data }) {
     }
   ];
 
+  const timeline = [...baseTimeline, ...manualAppointments].sort((a, b) =>
+    a.time.localeCompare(b.time)
+  );
+
+  function updateManualForm(field, value) {
+    setManualForm((current) => ({
+      ...current,
+      [field]: value
+    }));
+  }
+
+  function handleManualAppointmentSubmit(event) {
+  if (event) {
+    event.preventDefault();
+  }
+
+  const patientName = manualForm.patientName.trim();
+  const treatment = manualForm.treatment.trim();
+  const appointmentTime = manualForm.time;
+
+  if (!patientName || !treatment || !appointmentTime) {
+    setManualFormError("Hasta adı, tedavi ilgisi ve saat alanları zorunludur.");
+    return;
+  }
+
+  setManualAppointments((current) => [
+    ...current,
+    {
+      time: appointmentTime,
+      patient: patientName,
+      doctor: manualForm.doctor,
+      treatment,
+      source: "Telefon",
+      status: "Mock kayıt",
+      phone: manualForm.patientPhone,
+      duration: manualForm.duration,
+      notes: manualForm.notes.trim()
+    }
+  ]);
+
+  setManualFormError("");
+
+  setManualForm({
+    patientName: "",
+    patientPhone: "",
+    treatment: "",
+    doctor: "Dr. Demo Dentist",
+    date: "2026-07-06",
+    time: "",
+    duration: "30",
+    notes: ""
+  });
+}
+
   return (
     <div className="role-view secretary-view" aria-label="Sekreter Operasyon Ekranı">
       <RoleIntro title={data.title} subtitle={data.subtitle} />
@@ -158,7 +225,7 @@ function SecretaryView({ data }) {
 
           <div className="appointment-timeline">
             {timeline.map((item) => (
-              <div className="timeline-item" key={`${item.time}-${item.treatment}`}>
+              <div className="timeline-item" key={`${item.time}-${item.patient}-${item.treatment}`}>
                 <div className="timeline-time">{item.time}</div>
                 <div className="timeline-content">
                   <div className="timeline-main-row">
@@ -169,6 +236,7 @@ function SecretaryView({ data }) {
                   <small>
                     {item.doctor} · Kaynak: {item.source}
                   </small>
+                  {item.notes ? <small>Not: {item.notes}</small> : null}
                 </div>
               </div>
             ))}
@@ -189,18 +257,124 @@ function SecretaryView({ data }) {
             </div>
           </article>
 
-          <article className="role-card manual-entry-preview">
-            <h3>Telefonla gelen randevu</h3>
-            <p>
-              Sekreter telefonla gelen hastayı buradan doktora ve saate bağlayacak.
-            </p>
-            <div className="manual-entry-fields">
-              <span>Hasta adı</span>
-              <span>Telefon</span>
-              <span>Doktor</span>
-              <span>Tarih / saat</span>
+          <article className="role-card manual-entry-card">
+            <div className="panel-heading compact-heading">
+              <div>
+                <h3>Telefonla gelen randevu</h3>
+                <p>Bu kayıt şimdilik sadece ekranda mock olarak oluşturulur.</p>
+              </div>
             </div>
-            <span className="status-pill">Manuel randevu masası yakında</span>
+
+            <form className="manual-appointment-form" onSubmit={handleManualAppointmentSubmit}>
+              <label>
+                Hasta adı
+                <input
+                  value={manualForm.patientName}
+                  onChange={(event) =>
+                    updateManualForm("patientName", event.target.value)
+                  }
+                  placeholder="Örn. Demo Hasta"
+                />
+              </label>
+
+              <label>
+                Telefon
+                <input
+                  value={manualForm.patientPhone}
+                  onChange={(event) =>
+                    updateManualForm("patientPhone", event.target.value)
+                  }
+                  placeholder="05xx xxx xx xx"
+                />
+              </label>
+
+              <label>
+                Tedavi ilgisi
+                <input
+                  value={manualForm.treatment}
+                  onChange={(event) =>
+                    updateManualForm("treatment", event.target.value)
+                  }
+                  placeholder="İmplant, kontrol, beyazlatma..."
+                />
+              </label>
+
+              <label>
+                Doktor
+                <select
+                  value={manualForm.doctor}
+                  onChange={(event) =>
+                    updateManualForm("doctor", event.target.value)
+                  }
+                >
+                  <option>Dr. Demo Dentist</option>
+                </select>
+              </label>
+
+              <label>
+                Tarih
+                <input
+                  type="date"
+                  value={manualForm.date}
+                  onChange={(event) =>
+                    updateManualForm("date", event.target.value)
+                  }
+                />
+              </label>
+
+              <label>
+                Saat
+                <input
+                  type="time"
+                  value={manualForm.time}
+                  onChange={(event) =>
+                    updateManualForm("time", event.target.value)
+                  }
+                />
+              </label>
+
+              <label>
+                Süre
+                <select
+                  value={manualForm.duration}
+                  onChange={(event) =>
+                    updateManualForm("duration", event.target.value)
+                  }
+                >
+                  <option value="30">30 dakika</option>
+                  <option value="45">45 dakika</option>
+                  <option value="60">60 dakika</option>
+                </select>
+              </label>
+
+              <label className="wide-form-field">
+                Not
+                <textarea
+                  value={manualForm.notes}
+                  onChange={(event) =>
+                    updateManualForm("notes", event.target.value)
+                  }
+                  placeholder="Hasta isteği, özel not, fiyat bilgisi sorusu..."
+                  rows={3}
+                />
+              </label>
+
+              <button
+  className="manual-submit-button"
+  type="button"
+  onClick={handleManualAppointmentSubmit}
+>
+  Mock randevu ekle
+</button>
+{manualFormError ? (
+  <p className="manual-form-error">{manualFormError}</p>
+) : null}
+
+              <p className="manual-form-note">
+                Bu sprintte Google Calendar’a kayıt yapılmaz. Gerçek takvim
+                senkronu sonraki sprintte eklenecek.
+              </p>
+            </form>
           </article>
         </aside>
 
