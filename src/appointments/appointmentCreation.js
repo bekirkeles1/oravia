@@ -137,6 +137,7 @@ function createLocalAppointment({
   selectedSlot,
   treatmentInterest,
   patient,
+  calendarEventSummary,
   calendarProvider = getCalendarProvider()
 }) {
   const calendarEvent = calendarProvider.createCalendarEvent({
@@ -144,7 +145,8 @@ function createLocalAppointment({
     doctor: demoDoctor,
     patient,
     treatmentInterest,
-    selectedSlot
+    selectedSlot,
+    summary: calendarEventSummary
   });
 
   if (isPromiseLike(calendarEvent)) {

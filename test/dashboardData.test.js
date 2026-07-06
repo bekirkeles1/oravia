@@ -16,7 +16,10 @@ test("dashboard simulator uses local classifier and mock availability only", () 
   assert.equal(statusByName["Mock Appointment API"], "Ready");
   assert.equal(statusByName["Dashboard Mode"], "Demo API / Mock only");
   assert.equal(statusByName["Google Calendar CLI Flow"], "Available");
-  assert.equal(statusByName["Real Calendar Events From Dashboard"], "Disabled");
+  assert.equal(
+    statusByName["Real Calendar Events From Dashboard"],
+    "Explicit confirmation only"
+  );
   assert.equal(statusByName["WhatsApp Integration"], "Not connected");
   assert.equal(statusByName.Database, "Not connected");
   assert.equal(appointment.startDisplayLabel, "6 Temmuz Pazartesi 14:00");

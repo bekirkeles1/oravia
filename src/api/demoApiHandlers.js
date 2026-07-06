@@ -6,6 +6,7 @@ const { demoClinic, demoDoctor } = require("../demo/demoData");
 
 const DEFAULT_DEMO_MESSAGE = "Merhaba, implant için randevu almak istiyorum.";
 const DEMO_API_NOW = new Date("2026-07-05T09:00:00.000Z");
+const GOOGLE_DEMO_EVENT_SUMMARY = "ORAVIA DEMO - Implant Appointment";
 const demoPatient = {
   id: "patient_demo",
   name: null,
@@ -85,6 +86,55 @@ function handleDemoAppointment(input = {}) {
   });
 }
 
+async function handleDemoGoogleCalendarEvent(input = {}, options = {}) {
+  if (input.confirm_real_calendar_event !== true) {
+    return errorResponse(
+      400,
+      "confirm_real_calendar_event must be true to create a real Google Calendar demo event."
+    );
+  }
+
+  const message = normalizeMessage(input.message) || DEFAULT_DEMO_MESSAGE;
+  const calendarProvider =
+    options.calendarProvider || getCalendarProvider("google_service_account");
+  const availability = await runDemoAvailabilityFlow(message, {
+    now: options.now || new Date(),
+    calendarProvider
+  });
+  const selectedSlot = resolveApiSelectedSlot(
+    availability.available_slots,
+    input.selected_slot_id
+  );
+
+  if (selectedSlot.error) {
+    return selectedSlot.error;
+  }
+
+  if (!selectedSlot.slot) {
+    return errorResponse(409, "No available Google Calendar demo slots could be offered.");
+  }
+
+  const appointment = await createLocalAppointment({
+    selectedSlot: selectedSlot.slot,
+    treatmentInterest: availability.treatment_interest,
+    patient: demoPatient,
+    calendarEventSummary: GOOGLE_DEMO_EVENT_SUMMARY,
+    calendarProvider
+  });
+
+  return ok({
+    warning:
+      "Google Calendar demo event creates a real event in the configured demo calendar.",
+    event_title: GOOGLE_DEMO_EVENT_SUMMARY,
+    demo_data_only: true,
+    patient: demoPatient,
+    selected_slot: selectedSlot.slot,
+    appointment,
+    calendar_provider: appointment.calendar_provider,
+    calendar_event_id: appointment.calendar_event_id
+  });
+}
+
 function runMockAvailability(message) {
   return runDemoAvailabilityFlow(message, {
     now: DEMO_API_NOW,
@@ -143,7 +193,9 @@ function errorResponse(status, message, details = {}) {
 
 module.exports = {
   DEFAULT_DEMO_MESSAGE,
+  GOOGLE_DEMO_EVENT_SUMMARY,
   handleDemoAppointment,
   handleDemoAvailability,
-  handleDemoClassify
+  handleDemoClassify,
+  handleDemoGoogleCalendarEvent
 };

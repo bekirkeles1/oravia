@@ -61,7 +61,7 @@ function buildDashboardData({ appointmentResult, simulatorResult }) {
       },
       {
         name: "Real Calendar Events From Dashboard",
-        status: "Disabled",
+        status: "Explicit confirmation only",
         tone: "disabled"
       },
       {

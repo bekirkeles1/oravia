@@ -110,6 +110,9 @@ h3 {
 .slots-panel,
 .reply-panel,
 .mock-appointment-panel,
+.demo-runner-panel,
+.demo-step-panel,
+.google-demo-panel,
 .system-status-item {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -144,7 +147,8 @@ dt {
 
 .status-section,
 .appointments-section,
-.simulator-section {
+.simulator-section,
+.end-to-end-section {
   padding-top: 4px;
 }
 
@@ -152,7 +156,8 @@ dt {
   margin-bottom: 32px;
 }
 
-.simulator-section {
+.simulator-section,
+.end-to-end-section {
   margin-top: 34px;
 }
 
@@ -364,6 +369,81 @@ button:disabled {
   color: var(--accent);
 }
 
+.demo-runner-panel {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 16px;
+  padding: 18px;
+}
+
+.demo-runner-panel > div {
+  min-width: 0;
+}
+
+.demo-step-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.demo-step-panel,
+.google-demo-panel {
+  padding: 18px;
+}
+
+.step-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  margin-bottom: 10px;
+  padding: 0 10px;
+  background: var(--surface-muted);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.demo-step-panel p,
+.google-demo-panel p {
+  margin-bottom: 0;
+  color: var(--text);
+  line-height: 1.55;
+}
+
+.pending-copy {
+  color: var(--muted);
+}
+
+.compact-list {
+  margin-top: 14px;
+}
+
+.selected-slot {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.google-demo-panel {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.warning-message {
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--amber-soft);
+  border: 1px solid #e4c27d;
+  border-radius: 8px;
+  color: var(--amber);
+  font-weight: 700;
+}
+
 .error-message {
   margin: 0;
   padding: 10px 12px;
@@ -442,6 +522,7 @@ blockquote {
   .section-heading,
   .appointment-main,
   .panel-heading,
+  .demo-runner-panel,
   .slot-list li {
     flex-direction: column;
     align-items: stretch;
@@ -450,6 +531,7 @@ blockquote {
   .summary-grid,
   .appointment-details,
   .system-status-grid,
+  .demo-step-grid,
   .simulator-grid,
   .simulator-output-grid,
   .classification-list {
