@@ -11,13 +11,16 @@ test("dashboard simulator uses local classifier and mock availability only", () 
     dashboard.systemStatus.map((item) => [item.name, item.status])
   );
 
-  assert.equal(dashboard.productName, "Oravia Dental Receptionist");
+  assert.equal(
+    dashboard.productName,
+    "Oravia Dental AI Receptionist Agent + Role-Based Clinic Operations Dashboard"
+  );
   assert.equal(statusByName["Demo API"], "Ready");
   assert.equal(statusByName["Mock Appointment API"], "Ready");
-  assert.equal(statusByName["Dashboard Mode"], "Demo API / Mock only");
+  assert.equal(statusByName["Dashboard Mode"], "Admin demo tools / Mock only");
   assert.equal(statusByName["Google Calendar CLI Flow"], "Available");
   assert.equal(
-    statusByName["Real Calendar Events From Dashboard"],
+    statusByName["Optional Google Calendar Demo Event"],
     "Explicit confirmation only"
   );
   assert.equal(statusByName["WhatsApp Integration"], "Not connected");

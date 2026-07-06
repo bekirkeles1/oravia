@@ -84,8 +84,8 @@ export default function DemoApiSimulator({ initialSimulator }) {
     <section className="end-to-end-section" aria-labelledby="end-to-end-title">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">End-to-End Demo</p>
-          <h2 id="end-to-end-title">Patient appointment flow</h2>
+          <p className="eyebrow">Admin Demo Tools</p>
+          <h2 id="end-to-end-title">Demo Appointment Flow</h2>
         </div>
         <span className="status-pill">Demo data only</span>
       </div>
@@ -96,7 +96,9 @@ export default function DemoApiSimulator({ initialSimulator }) {
           <blockquote>{message}</blockquote>
         </div>
         <button type="button" onClick={runEndToEndDemo} disabled={isRunningDemo}>
-          {isRunningDemo ? "Running End-to-End Demo..." : "Run End-to-End Demo"}
+          {isRunningDemo
+            ? "Running Demo Appointment Flow..."
+            : "Run Demo Appointment Flow"}
         </button>
       </div>
 
@@ -166,7 +168,7 @@ export default function DemoApiSimulator({ initialSimulator }) {
 
         <article className="demo-step-panel">
           <span className="step-label">Step 4</span>
-          <h3>Oravia creates a mock appointment</h3>
+          <h3>Demo Appointment Flow</h3>
           {demoResult?.mockAppointment ? (
             <dl className="classification-list compact-list">
               <div>
@@ -198,9 +200,9 @@ export default function DemoApiSimulator({ initialSimulator }) {
         <div className="panel-heading">
           <div>
             <span className="step-label">Step 5</span>
-            <h3>Optional Google Calendar demo event</h3>
+            <h3>Optional Google Calendar Demo Event</h3>
           </div>
-          <span className="status-pill">Real demo calendar event</span>
+          <span className="status-pill">Admin Demo Action</span>
         </div>
         <p className="warning-message">{googleWarning}</p>
         <p>

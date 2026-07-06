@@ -1,6 +1,10 @@
 # Local Demo Runbook
 
-This runbook covers the local dashboard and appointment demos only. It does not include WhatsApp, database, authentication, CRM, or production setup.
+This runbook covers local admin dashboard demo tools and appointment agent demos only. It does not include WhatsApp, database, authentication, CRM, or production setup.
+
+Oravia is a Dental AI Receptionist Agent + Role-Based Clinic Operations Dashboard. The patient-facing experience belongs in a messaging channel such as WhatsApp or future chat channels. The dashboard is only for clinic staff operations, monitoring, configuration, handoff visibility, and admin demo tools.
+
+The current dashboard demo tools are admin/demo tools only. A future dashboard sprint will add role-based Doctor, Secretary, and Admin / Owner views. Secretary manual appointment entry for phone-call appointments will be added in a later sprint.
 
 ## Safety Rules
 
@@ -66,17 +70,17 @@ Open the localhost URL printed by Next.js, usually:
 http://localhost:3000
 ```
 
-The dashboard uses local demo data only. It shows the Oravia Dental Receptionist demo clinic, demo doctor, one sample confirmed appointment, the calendar provider label, the `System Status` panel, and an `End-to-End Demo` section.
+The dashboard uses local demo data only. It shows the Oravia Dental AI Receptionist Agent + Role-Based Clinic Operations Dashboard demo clinic, demo doctor, one sample confirmed appointment, the calendar provider label, the `System Status` panel, and an `Admin Demo Tools` section.
 
-The `System Status` panel is an informational demo safety panel. It shows that the demo API and mock appointment API are ready, the dashboard is in `Demo API / Mock only` mode, Google Calendar CLI flow is available, real calendar events from the dashboard require explicit confirmation, and WhatsApp/database integrations are not connected. It does not perform live monitoring or call external services.
+The `System Status` panel is an informational demo safety panel. It shows that the demo API and mock appointment API are ready, the dashboard is in `Admin demo tools / Mock only` mode, Google Calendar CLI flow is available, optional Google Calendar demo events require explicit confirmation, and WhatsApp/database integrations are not connected. It does not perform live monitoring or call external services.
 
-The `End-to-End Demo` section shows the sample message:
+The `Admin Demo Tools` section contains the `Demo Appointment Flow`. This is an admin/demo action that simulates the agent flow; it is not a patient-facing booking surface. It shows the sample message:
 
 ```text
 Merhaba, implant için randevu almak istiyorum.
 ```
 
-Click `Run End-to-End Demo` to call the internal demo API endpoints:
+Click `Run Demo Appointment Flow` to call the internal demo API endpoints:
 
 - `POST /api/demo/classify`
 - `POST /api/demo/availability`
@@ -96,11 +100,11 @@ The dashboard then displays:
 - mock `calendar_event_id`
 - `calendar_provider: mock`
 
-This mock end-to-end demo does not create real Google Calendar events.
+This demo appointment flow does not create real Google Calendar events. It exists to show how the agent would handle a patient message in a messaging channel.
 
 ## Optional Google Calendar Dashboard Event
 
-The dashboard includes a clearly separated `Create Google Calendar Demo Event` button under Step 5.
+The dashboard includes a clearly separated `Optional Google Calendar Demo Event` admin demo action under Step 5.
 
 Warning:
 
@@ -116,6 +120,7 @@ This button:
 - uses only demo data
 - never uses real patient data
 - creates a real event titled `ORAVIA DEMO - Implant Appointment`
+- is an admin/demo tool, not a patient booking feature
 
 To test it locally:
 
@@ -123,7 +128,7 @@ To test it locally:
 2. Run `npm run check:env`.
 3. Run `npm run dev`.
 4. Open the dashboard.
-5. Click `Run End-to-End Demo`.
+5. Click `Run Demo Appointment Flow`.
 6. Click `Create Google Calendar Demo Event`.
 7. Accept the confirmation prompt.
 8. Verify the event titled `ORAVIA DEMO - Implant Appointment` in the configured demo calendar.
@@ -138,7 +143,7 @@ Start the local server:
 npm run dev
 ```
 
-The demo API uses local workflow code. The classify, availability, and appointment endpoints use the mock calendar provider only and do not create real Google Calendar events.
+The demo API uses local workflow code. The classify, availability, and appointment endpoints model the AI receptionist agent flow. They use the mock calendar provider only and do not create real Google Calendar events.
 
 Classify a patient message:
 
@@ -182,7 +187,7 @@ curl -X POST http://localhost:3000/api/demo/google-calendar-event \
 
 Without `confirm_real_calendar_event: true`, this endpoint returns an error and does not create a real event.
 
-## Mock Appointment Demo
+## Demo Appointment Flow Mock CLI
 
 Run:
 

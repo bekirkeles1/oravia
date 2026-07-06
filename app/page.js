@@ -10,7 +10,7 @@ export default function DashboardPage() {
     <main className="dashboard-shell">
       <section className="dashboard-header" aria-labelledby="dashboard-title">
         <div>
-          <p className="eyebrow">Local demo dashboard</p>
+          <p className="eyebrow">Internal clinic operations</p>
           <h1 id="dashboard-title">{dashboard.productName}</h1>
         </div>
         <div className="status-pill">Demo data only</div>
@@ -57,8 +57,8 @@ export default function DashboardPage() {
       <section className="appointments-section" aria-labelledby="appointments-title">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Appointments</p>
-            <h2 id="appointments-title">Upcoming appointments</h2>
+            <p className="eyebrow">Admin monitoring</p>
+            <h2 id="appointments-title">Demo Appointment Flow</h2>
           </div>
           <span className="count-badge">{dashboard.appointments.length}</span>
         </div>

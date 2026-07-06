@@ -8,15 +8,46 @@ Oravia
 
 ### First Product Line
 
-Oravia Dental Receptionist
+Oravia Dental AI Receptionist Agent + Role-Based Clinic Operations Dashboard
 
 ### One-Line Description
 
-Oravia Dental Receptionist is an AI-powered WhatsApp receptionist for dental clinics that answers patient messages, checks doctor availability, and creates appointments automatically.
+Oravia Dental AI Receptionist Agent + Role-Based Clinic Operations Dashboard is an AI receptionist system for dental clinics that works through messaging channels, understands patient messages, checks doctor availability, offers suitable slots, creates appointments, routes handoffs to clinic staff, and gives doctors, secretaries, and owners an internal operations dashboard.
 
 ### Turkish Positioning
 
-Oravia Dental Receptionist, diş klinikleri için WhatsApp üzerinden çalışan yapay zekâ destekli dijital sekreterdir. Hastalardan gelen mesajları yanıtlar, doktorların uygun saatlerini kontrol eder ve otomatik randevu oluşturur.
+Oravia Dental AI Receptionist Agent + Role-Based Clinic Operations Dashboard, diş klinikleri için WhatsApp ve gelecekteki mesajlaşma kanalları üzerinden çalışan yapay zekâ destekli dijital sekreter ajanı ve klinik operasyon panelidir. Hastalardan gelen mesajları anlar, uygun randevu saatlerini sunar, randevu oluşturur, gerektiğinde konuşmayı klinik ekibine devreder ve doktor, sekreter, yönetici/klinik sahibi için ayrı operasyon görünümleri sağlar.
+
+### Product Role Definition
+
+Oravia is agent-first.
+
+The product is not a patient-facing dashboard booking app.
+
+The product roles are:
+
+* Patient-facing experience: a messaging channel such as WhatsApp now, and future chat channels later.
+* AI agent core: understands patient messages, answers using clinic-approved information, offers available slots, creates appointments, and handles human handoff.
+* Dashboard: role-based clinic operations for doctors, secretaries, and admin/owners, plus monitoring, configuration, handoff visibility, and local demo tools.
+
+### Agent-First Product Direction
+
+Oravia must be understood as:
+
+Dental AI Receptionist Agent + Role-Based Clinic Operations Dashboard.
+
+The AI receptionist agent is the core product. It handles patient communication through messaging channels, not through a patient dashboard.
+
+The role-based dashboard is the internal operations layer for clinic staff. It helps the clinic monitor, edit, and coordinate work created by the agent and by clinic staff.
+
+Product boundaries:
+
+* Patients interact with Oravia through WhatsApp or future messaging channels.
+* The AI agent understands messages, offers slots, creates appointments, and requests handoff when needed.
+* Doctors use the dashboard to see clinical schedule context and AI conversation summaries.
+* Secretaries use the dashboard to manage daily operations, manual phone-call appointment entry, edits, cancellations, handoffs, and calendar sync status.
+* Admin/owners use the dashboard to monitor volume, occupancy, handoff rate, and conversion indicators.
+* The dashboard is not a public patient booking portal.
 
 ---
 
@@ -95,7 +126,7 @@ The MVP will not target:
 
 ## 5. MVP Scope
 
-The first version of Oravia Dental Receptionist will include only the following four core functions:
+The first version of Oravia Dental AI Receptionist Agent will include only the following four core functions:
 
 ### 1. WhatsApp Message Intake
 
@@ -112,6 +143,134 @@ The system checks doctor availability from a connected calendar.
 ### 4. Appointment Creation
 
 The system creates an appointment after the patient selects a suitable time.
+
+### Dashboard is not the primary patient booking surface
+
+Patients should not book appointments through the dashboard.
+
+The dashboard exists for clinic/admin workflows only:
+
+* Monitor conversations and appointment outcomes
+* Configure clinic information, doctors, working hours, and clinic-approved answers
+* Review human handoff cases
+* Verify calendar connection and system health
+* Run local demo/admin tools for sales and testing
+
+The core patient appointment experience must happen inside a messaging channel. For the MVP, this means WhatsApp when the integration is added. Until WhatsApp is connected, local dashboard actions are admin/demo tools that simulate or verify the agent flow.
+
+### Patient-Facing Experience
+
+Patients interact with Oravia through messaging channels.
+
+The primary patient-facing channel will be WhatsApp. Future channels may include website chat, Instagram DM, or other messaging surfaces.
+
+Patient-facing behavior:
+
+* Patient sends a message in a messaging channel.
+* Oravia understands the request.
+* Oravia replies in the same channel.
+* Oravia offers suitable appointment slots in the conversation.
+* Patient chooses a time in the conversation.
+* Oravia creates the appointment after a clear slot selection.
+* Oravia confirms the appointment in the conversation.
+* Oravia hands off to clinic staff when the conversation requires human review.
+
+The patient should not need access to the clinic operations dashboard.
+
+### Clinic Staff Dashboard Roles
+
+The dashboard is a role-based clinic operations dashboard for doctors, secretaries, and admin/owners.
+
+It is not a full CRM and should stay focused on appointment operations, conversation monitoring, handoffs, and clinic configuration.
+
+#### Doctor View
+
+Doctor View should help dentists understand their schedule and patient context quickly.
+
+Doctor View includes:
+
+* Today’s appointments
+* Weekly appointments
+* Patient notes
+* Treatment interest
+* AI conversation summary
+* Appointment status
+
+#### Secretary View
+
+Secretary View should support daily front-desk operations.
+
+Secretary View includes:
+
+* Today’s operations
+* Phone-call appointment entry
+* Manual appointment editing
+* Appointment cancellation
+* Handoff queue
+* Doctor availability view
+* Google Calendar sync status
+
+#### Admin / Owner View
+
+Admin / Owner View should show operational performance without becoming a complex analytics product.
+
+Admin / Owner View includes:
+
+* Appointment volume
+* AI-generated appointments
+* Phone-call appointments
+* Handoff rate
+* Doctor occupancy
+* Conversion indicators
+
+### Secretary Manual Appointment Desk
+
+Secretaries must be able to add phone-call appointments manually.
+
+This is necessary because not every patient appointment starts in WhatsApp. Many dental clinics still receive appointment requests by phone, walk-in, Instagram DM, or direct staff communication.
+
+The Secretary Manual Appointment Desk should allow clinic staff to:
+
+* Create a new appointment from a phone call
+* Choose doctor, date, time, and duration
+* Add patient name and phone number
+* Add treatment interest and notes
+* Edit appointment details later
+* Cancel appointments when needed
+* See whether the appointment is synced to Google Calendar
+
+Manual appointment records should include:
+
+* patient_name
+* patient_phone
+* treatment_interest
+* doctor_id
+* appointment_date
+* appointment_time
+* duration_minutes
+* source: phone_call | ai_agent | walk_in | instagram_dm | manual
+* created_by: secretary | ai | admin
+* status: confirmed | pending | cancelled
+* notes
+* calendar_provider
+* calendar_event_id
+* sync_status
+
+### Google Calendar Sync Rules
+
+Google Calendar is the background calendar sync layer.
+
+The Oravia dashboard should remain the main clinic operations screen. Clinic staff should use Oravia to monitor operations, add manual phone-call appointments, edit appointments, cancel appointments, and track sync status.
+
+Google Calendar sync rules:
+
+* A new manual appointment should create a Google Calendar event.
+* Appointment edits should update the matching Google Calendar event.
+* Appointment cancellations should sync to Google Calendar.
+* AI-generated appointments should continue to create calendar events after patient confirmation.
+* The dashboard should show calendar_provider, calendar_event_id, and sync_status.
+* If sync fails, the dashboard should surface the failure to the secretary/admin without exposing secrets.
+* Google Calendar should not replace the dashboard as the daily operations screen.
 
 ---
 
@@ -242,14 +401,48 @@ The architecture will prioritize speed, reliability, and low cost over technical
 
 Oravia MVP will use the following core components:
 
-1. WhatsApp message channel
+1. Messaging channel adapter
 2. Backend application
-3. AI response engine
+3. AI receptionist agent core
 4. Clinic knowledge base
 5. Calendar availability system
 6. Appointment creation system
-7. Basic clinic dashboard
-8. Database
+7. Human handoff workflow
+8. Basic clinic/admin dashboard
+9. Database
+
+### Agent-first architecture
+
+Oravia should be designed around the AI receptionist agent, not around dashboard booking forms.
+
+The main product loop is:
+
+Patient message -> AI agent understanding -> safe reply or handoff decision -> availability check -> slot offer in the messaging channel -> patient selects a time -> calendar appointment creation -> confirmation message -> clinic/admin dashboard visibility.
+
+Architecture responsibilities:
+
+* Messaging channel: receives patient messages and sends agent replies.
+* AI agent core: classifies intent, extracts safe operational details, decides next action, drafts replies, and requests handoff when needed.
+* Calendar layer: checks availability, prevents double-booking, and creates calendar events only after a confirmed slot.
+* Dashboard: monitors agent activity, displays appointments and conversations, manages configuration, and provides demo/admin controls.
+
+Dashboard actions must never become the primary patient booking path. They may trigger demo flows or admin-only workflows, but patient-facing booking belongs to the messaging agent.
+
+### Future WhatsApp integration path
+
+WhatsApp should be connected only after the local agent flow is reliable.
+
+The future integration path is:
+
+1. Configure WhatsApp Business Cloud API for a demo clinic/test number.
+2. Receive incoming webhook messages from WhatsApp.
+3. Normalize incoming messages into the internal agent message format.
+4. Route the message through the AI agent core.
+5. Send the agent reply, slot options, handoff notice, or confirmation back through WhatsApp.
+6. Store conversation and appointment records when the database layer is introduced.
+7. Show the resulting conversation, handoff state, and appointment outcome in the dashboard for clinic staff.
+
+Do not connect WhatsApp before the local agent demo, calendar flow, safety rules, and handoff behavior are stable.
 
 ---
 
@@ -261,11 +454,14 @@ Next.js
 
 Purpose:
 
-* Build the clinic dashboard
-* View patients
-* View appointments
+* Build the clinic/admin dashboard
+* Monitor patient conversations handled by the agent
+* View appointments created by the agent
 * Configure clinic information
 * Configure doctors and working hours
+* Review handoff cases and demo/admin tools
+
+The frontend dashboard is not the patient booking surface.
 
 ### Backend
 
@@ -390,7 +586,9 @@ Confirmation message is sent to patient.
 
 ↓
 
-Clinic staff can view appointment in dashboard.
+Clinic staff can view the agent-created appointment in the dashboard.
+
+The patient does not use the dashboard in this flow.
 
 ---
 
@@ -613,7 +811,7 @@ The raw WhatsApp webhook payload may be stored for debugging during MVP developm
 
 ## 22. Table: appointments
 
-The `appointments` table stores appointment records created by Oravia.
+The `appointments` table stores appointment records created by the Oravia AI agent or manually by clinic staff.
 
 ### Purpose
 
@@ -625,13 +823,23 @@ Appointments connect patients, doctors, clinics, and calendar events.
 * clinic_id
 * doctor_id
 * patient_id
+* patient_name
+* patient_phone
 * conversation_id
 * treatment_interest
+* doctor_id
+* appointment_date
+* appointment_time
+* duration_minutes
 * start_time
 * end_time
+* source
 * status
-* google_calendar_event_id
 * created_by
+* notes
+* calendar_provider
+* calendar_event_id
+* sync_status
 * created_at
 * updated_at
 
@@ -646,13 +854,33 @@ Appointments connect patients, doctors, clinics, and calendar events.
 ### Created By Values
 
 * ai
-* staff
+* secretary
+* admin
+
+### Source Values
+
+* phone_call
+* ai_agent
+* walk_in
+* instagram_dm
+* manual
+
+### Sync Status Values
+
+* not_synced
+* synced
+* sync_failed
+* pending_sync
 
 ### Notes
 
-For MVP, Oravia should create appointments only after the patient clearly selects a time.
+For MVP, Oravia should create AI-agent appointments only after the patient clearly selects a time.
+
+Secretaries should be able to create manual appointments from phone calls in a later sprint.
 
 The system must avoid double-booking.
+
+Manual appointment create, edit, and cancellation flows should sync to Google Calendar when the Google Calendar provider is configured.
 
 ---
 
@@ -1442,35 +1670,55 @@ Responsibilities:
 
 ## 48. MVP Dashboard Screens
 
-The MVP dashboard only needs these screens:
+The MVP dashboard only needs clinic staff operations screens.
+
+The dashboard is not the primary patient booking surface and is not used by patients.
 
 ### 1. Login Screen
 
 Simple login for clinic staff.
 
-### 2. Appointments Screen
+### 2. Doctor View
 
-Shows upcoming appointments.
+Shows today’s appointments, weekly appointments, patient notes, treatment interest, AI conversation summary, and appointment status.
 
-### 3. Conversations Screen
+### 3. Secretary View
 
-Shows patient conversations.
+Shows today’s operations, phone-call appointment entry, manual appointment editing, appointment cancellation, handoff queue, doctor availability view, and Google Calendar sync status.
 
-### 4. Clinic Settings Screen
+### 4. Admin / Owner View
+
+Shows appointment volume, AI-generated appointments, phone-call appointments, handoff rate, doctor occupancy, and conversion indicators.
+
+### 5. Conversations Screen
+
+Shows patient conversations from the messaging channel, AI conversation summaries, and handoff state.
+
+### 6. Secretary Manual Appointment Desk
+
+Allows secretaries to create phone-call appointments manually and sync them to Google Calendar.
+
+### 7. Clinic Settings Screen
 
 Stores clinic name, address, WhatsApp number, and working hours.
 
-### 5. Doctors Screen
+### 8. Doctors Screen
 
 Stores doctor names and connected calendar IDs.
 
-### 6. Knowledge Base Screen
+### 9. Knowledge Base Screen
 
 Allows clinic-approved answers to be added or edited.
+
+### 10. Admin Demo Tools Screen
+
+Allows local demo/admin actions such as mock appointment demos and optional demo calendar event creation.
 
 The dashboard should be simple.
 
 It should not look like a hospital ERP.
+
+It should not become a patient-facing booking interface.
 
 ---
 
@@ -1649,7 +1897,7 @@ Expected result:
 
 ---
 
-## 59. First End-to-End Demo Goal
+## 59. First Agent End-to-End Demo Goal
 
 The first full demo should show this flow:
 
@@ -1658,9 +1906,11 @@ The first full demo should show this flow:
 3. Oravia offers available times.
 4. Patient selects a time.
 5. Oravia creates appointment.
-6. Clinic dashboard shows the appointment.
+6. Clinic/admin dashboard shows the agent-created appointment for monitoring.
 
-The demo may use a test WhatsApp number and demo clinic data.
+The demo may use a test WhatsApp number, a simulated messaging channel, and demo clinic data.
+
+The patient should not use the dashboard to book.
 
 ---
 
@@ -1670,7 +1920,7 @@ The project must always prioritize the shortest path to a sellable demo.
 
 The sellable demo is:
 
-A dental clinic owner can see that Oravia receives a patient message, responds safely, checks availability, and creates an appointment.
+A dental clinic owner can see that the Oravia agent receives a patient message through a messaging-style flow, responds safely, checks availability, creates an appointment, and shows the result in the admin dashboard.
 
 Anything that does not support this demo should be postponed.
 ---
@@ -2043,6 +2293,6 @@ The project starts with the smallest working appointment automation flow.
 
 The MVP is complete only when this sentence is true:
 
-“A dental clinic owner can watch Oravia receive a patient message, understand it, offer available times, create an appointment, and show the result in a dashboard.”
+“A dental clinic owner can watch the Oravia agent receive a patient message, understand it, offer available times in a messaging-style flow, create an appointment, and show the result in the clinic/admin dashboard.”
 
 Until this works, every other feature is secondary.

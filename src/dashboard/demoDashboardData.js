@@ -35,7 +35,8 @@ function getDemoDashboardData() {
 
 function buildDashboardData({ appointmentResult, simulatorResult }) {
   return {
-    productName: "Oravia Dental Receptionist",
+    productName:
+      "Oravia Dental AI Receptionist Agent + Role-Based Clinic Operations Dashboard",
     clinic: appointmentResult.appointment.clinic,
     doctor: appointmentResult.appointment.doctor,
     systemStatus: [
@@ -51,7 +52,7 @@ function buildDashboardData({ appointmentResult, simulatorResult }) {
       },
       {
         name: "Dashboard Mode",
-        status: "Demo API / Mock only",
+        status: "Admin demo tools / Mock only",
         tone: "safe"
       },
       {
@@ -60,7 +61,7 @@ function buildDashboardData({ appointmentResult, simulatorResult }) {
         tone: "available"
       },
       {
-        name: "Real Calendar Events From Dashboard",
+        name: "Optional Google Calendar Demo Event",
         status: "Explicit confirmation only",
         tone: "disabled"
       },
