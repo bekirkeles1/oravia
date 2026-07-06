@@ -1560,3 +1560,21 @@ blockquote {
   font-size: 0.84rem;
   font-weight: 700;
 }
+
+.manual-form-success {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(43, 111, 99, 0.28);
+  border-radius: 10px;
+  background: rgba(43, 111, 99, 0.08);
+  color: var(--accent);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.timeline-meta {
+  display: grid;
+  gap: 3px;
+  margin-top: 4px;
+}

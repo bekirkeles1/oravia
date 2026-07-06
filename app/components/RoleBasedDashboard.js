@@ -127,7 +127,8 @@ function SecretaryView({ data }) {
   });
 
   const [manualAppointments, setManualAppointments] = useState([]);
-const [manualFormError, setManualFormError] = useState("");
+  const [manualFormError, setManualFormError] = useState("");
+  const [manualFormSuccess, setManualFormSuccess] = useState("");
   const baseTimeline = [
     {
       time: "09:30",
@@ -160,6 +161,9 @@ const [manualFormError, setManualFormError] = useState("");
   );
 
   function updateManualForm(field, value) {
+    setManualFormError("");
+    setManualFormSuccess("");
+
     setManualForm((current) => ({
       ...current,
       [field]: value
@@ -167,47 +171,79 @@ const [manualFormError, setManualFormError] = useState("");
   }
 
   function handleManualAppointmentSubmit(event) {
-  if (event) {
     event.preventDefault();
-  }
 
-  const patientName = manualForm.patientName.trim();
-  const treatment = manualForm.treatment.trim();
-  const appointmentTime = manualForm.time;
+    const patientName = manualForm.patientName.trim();
+    const patientPhone = manualForm.patientPhone.trim();
+    const patientPhoneDigits = patientPhone.replace(/\\D/g, "");
+    const treatment = manualForm.treatment.trim();
+    const appointmentDate = manualForm.date;
+    const appointmentTime = manualForm.time;
+    const notes = manualForm.notes.trim();
 
-  if (!patientName || !treatment || !appointmentTime) {
-    setManualFormError("Hasta adı, tedavi ilgisi ve saat alanları zorunludur.");
-    return;
-  }
+    setManualFormError("");
+    setManualFormSuccess("");
 
-  setManualAppointments((current) => [
-    ...current,
-    {
-      time: appointmentTime,
-      patient: patientName,
-      doctor: manualForm.doctor,
-      treatment,
-      source: "Telefon",
-      status: "Mock kayıt",
-      phone: manualForm.patientPhone,
-      duration: manualForm.duration,
-      notes: manualForm.notes.trim()
+    if (
+      !patientName ||
+      !patientPhone ||
+      !treatment ||
+      !appointmentDate ||
+      !appointmentTime
+    ) {
+      setManualFormError(
+        "Hasta adı, telefon, tedavi ilgisi, tarih ve saat alanları zorunludur."
+      );
+      return;
     }
-  ]);
 
-  setManualFormError("");
+    if (
+      !(
+        (patientPhoneDigits.length === 11 && patientPhoneDigits.startsWith("05")) ||
+        (patientPhoneDigits.length === 10 && patientPhoneDigits.startsWith("5"))
+      )
+    ) {
+      setManualFormError(
+        "Telefon numarası geçerli değil. 05xx xxx xx xx formatında gir."
+      );
+      return;
+    }
 
-  setManualForm({
-    patientName: "",
-    patientPhone: "",
-    treatment: "",
-    doctor: "Dr. Demo Dentist",
-    date: "2026-07-06",
-    time: "",
-    duration: "30",
-    notes: ""
-  });
-}
+    setManualAppointments((current) => [
+      ...current,
+      {
+        id: `manual-${Date.now()}`,
+        date: appointmentDate,
+        time: appointmentTime,
+        patient: patientName,
+        doctor: manualForm.doctor,
+        treatment,
+        source: "Telefon",
+        status: "Mock kayıt",
+        syncStatus: "Google Calendar’a gönderilmedi",
+        phone: patientPhoneDigits.startsWith("0")
+          ? patientPhoneDigits
+          : `0${patientPhoneDigits}`,
+        duration: manualForm.duration,
+        notes
+      }
+    ]);
+
+    setManualForm({
+      patientName: "",
+      patientPhone: "",
+      treatment: "",
+      doctor: "Dr. Demo Dentist",
+      date: "2026-07-06",
+      time: "",
+      duration: "30",
+      notes: ""
+    });
+
+    setManualFormSuccess(
+      "Mock randevu kaydedildi. Bu kayıt henüz Google Calendar’a gönderilmedi."
+    );
+  }
 
   return (
     <div className="role-view secretary-view" aria-label="Sekreter Operasyon Ekranı">
@@ -225,7 +261,10 @@ const [manualFormError, setManualFormError] = useState("");
 
           <div className="appointment-timeline">
             {timeline.map((item) => (
-              <div className="timeline-item" key={`${item.time}-${item.patient}-${item.treatment}`}>
+              <div
+                className="timeline-item"
+                key={item.id || `${item.time}-${item.patient}-${item.treatment}`}
+              >
                 <div className="timeline-time">{item.time}</div>
                 <div className="timeline-content">
                   <div className="timeline-main-row">
@@ -233,10 +272,14 @@ const [manualFormError, setManualFormError] = useState("");
                     <span>{item.status}</span>
                   </div>
                   <p>{item.treatment}</p>
-                  <small>
-                    {item.doctor} · Kaynak: {item.source}
-                  </small>
-                  {item.notes ? <small>Not: {item.notes}</small> : null}
+                  <div className="timeline-meta">
+                    <small>
+                      {item.doctor} · Kaynak: {item.source}
+                    </small>
+                    {item.phone ? <small>Telefon: {item.phone}</small> : null}
+                    {item.notes ? <small>Not: {item.notes}</small> : null}
+                    {item.syncStatus ? <small>{item.syncStatus}</small> : null}
+                  </div>
                 </div>
               </div>
             ))}
@@ -359,16 +402,17 @@ const [manualFormError, setManualFormError] = useState("");
                 />
               </label>
 
-              <button
-  className="manual-submit-button"
-  type="button"
-  onClick={handleManualAppointmentSubmit}
->
-  Mock randevu ekle
-</button>
-{manualFormError ? (
-  <p className="manual-form-error">{manualFormError}</p>
-) : null}
+              <button className="manual-submit-button" type="submit">
+                Mock randevu ekle
+              </button>
+
+              {manualFormError ? (
+                <p className="manual-form-error">{manualFormError}</p>
+              ) : null}
+
+              {manualFormSuccess ? (
+                <p className="manual-form-success">{manualFormSuccess}</p>
+              ) : null}
 
               <p className="manual-form-note">
                 Bu sprintte Google Calendar’a kayıt yapılmaz. Gerçek takvim
