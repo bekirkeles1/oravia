@@ -464,10 +464,17 @@ function SecretaryView({ data }) {
                 <p className="manual-form-success">{manualFormSuccess}</p>
               ) : null}
 
-              <p className="manual-form-note">
-                Bu işlem iç sekreter operasyonudur. Hasta dashboard üzerinden
-                randevu oluşturmaz.
-              </p>
+              <div className="manual-form-note">
+                <strong>Takvim sağlayıcısı güvenlik notu:</strong>
+                <span>
+                  Bu form sekreterin telefonla aldığı randevuları iç operasyon
+                  kaydı olarak takvime gönderir. Dev server
+                  <code>CALENDAR_PROVIDER=mock</code> ile açıldıysa sahte event
+                  id döner. Normal <code>npm run dev</code> kullanılırsa
+                  .env içindeki sağlayıcı aktif olur ve Google Calendar’a gerçek
+                  event oluşturabilir.
+                </span>
+              </div>
             </form>
           </article>
         </aside>
