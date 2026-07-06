@@ -1,107 +1,128 @@
 import { getDemoDashboardData } from "../src/dashboard/demoDashboardData";
 import DemoApiSimulator from "./components/DemoApiSimulator";
+import RoleBasedDashboard from "./components/RoleBasedDashboard";
 
 export default function DashboardPage() {
   const dashboard = getDemoDashboardData();
   const appointment = dashboard.appointments[0];
+  const rolePrototype = dashboard.rolePrototype;
   const simulator = dashboard.simulator;
 
   return (
-    <main className="dashboard-shell">
-      <section className="dashboard-header" aria-labelledby="dashboard-title">
-        <div>
-          <p className="eyebrow">Internal clinic operations</p>
-          <h1 id="dashboard-title">{dashboard.productName}</h1>
-        </div>
-        <div className="status-pill">Demo data only</div>
-      </section>
-
-      <section className="summary-grid" aria-label="Clinic summary">
-        <div className="summary-panel">
-          <span className="label">Clinic</span>
-          <strong>{dashboard.clinic.name}</strong>
-          <span>{dashboard.clinic.timezone}</span>
-        </div>
-        <div className="summary-panel">
-          <span className="label">Doctor</span>
-          <strong>{dashboard.doctor.name}</strong>
-          <span>{dashboard.doctor.specialty}</span>
-        </div>
-        <div className="summary-panel">
-          <span className="label">Calendar provider</span>
-          <strong>{appointment.calendarProviderLabel}</strong>
-          <span>{appointment.calendarProvider}</span>
-        </div>
-      </section>
-
-      <section className="status-section" aria-labelledby="system-status-title">
-        <div className="section-heading">
+    <main className="clinic-app-shell">
+      <aside className="clinic-sidebar" aria-label="Oravia navigation">
+        <div className="sidebar-brand">
+          <div className="brand-mark">O</div>
           <div>
-            <p className="eyebrow">System</p>
-            <h2 id="system-status-title">System Status</h2>
+            <strong>Oravia</strong>
+            <span>Dental AI Agent</span>
           </div>
         </div>
 
-        <div className="system-status-grid">
-          {dashboard.systemStatus.map((item) => (
-            <article className="system-status-item" key={item.name}>
-              <span>{item.name}</span>
-              <strong className={`system-status-badge ${item.tone}`}>
-                {item.status}
-              </strong>
-            </article>
-          ))}
-        </div>
-      </section>
+        <nav className="sidebar-nav" aria-label="Dashboard navigation">
+          <a className="sidebar-nav-item active" href="#operations">
+            Operasyon
+          </a>
+          <a className="sidebar-nav-item" href="#appointments">
+            Randevular
+          </a>
+          <a className="sidebar-nav-item" href="#calendar">
+            Takvim
+          </a>
+          <a className="sidebar-nav-item" href="#handoff">
+            AI Handoff
+          </a>
+          <a className="sidebar-nav-item" href="#settings">
+            Ayarlar
+          </a>
+        </nav>
 
-      <section className="appointments-section" aria-labelledby="appointments-title">
-        <div className="section-heading">
+        <div className="sidebar-footer-card">
+          <span>Demo ortamı</span>
+          <strong>Gerçek hasta verisi yok</strong>
+          <small>WhatsApp ve database henüz bağlı değil.</small>
+        </div>
+      </aside>
+
+      <section className="clinic-main">
+        <header className="clinic-topbar">
           <div>
-            <p className="eyebrow">Admin monitoring</p>
-            <h2 id="appointments-title">Demo Appointment Flow</h2>
+            <span className="topbar-label">Klinik</span>
+            <strong>{dashboard.clinic.name}</strong>
           </div>
-          <span className="count-badge">{dashboard.appointments.length}</span>
-        </div>
 
-        <div className="appointment-list">
-          {dashboard.appointments.map((item) => (
-            <article className="appointment-card" key={item.id}>
-              <div className="appointment-main">
-                <div>
-                  <h3>{item.patientName}</h3>
-                  <p>{formatTreatment(item.treatmentInterest)}</p>
-                </div>
-                <span className="confirmed-badge">{item.status}</span>
-              </div>
+          <div className="topbar-meta">
+            <span>Salı, 7 Temmuz 2026</span>
+            <span className="status-pill">Demo veri</span>
+          </div>
+        </header>
 
-              <dl className="appointment-details">
-                <div>
-                  <dt>Start</dt>
-                  <dd>{item.startDisplayLabel}</dd>
-                </div>
-                <div>
-                  <dt>End</dt>
-                  <dd>{item.endDisplayLabel}</dd>
-                </div>
-                <div>
-                  <dt>Created by</dt>
-                  <dd>{item.createdBy}</dd>
-                </div>
-                <div>
-                  <dt>Calendar event</dt>
-                  <dd>{item.calendarEventId}</dd>
-                </div>
-              </dl>
-            </article>
-          ))}
-        </div>
+        <section className="clinic-hero" aria-labelledby="dashboard-title">
+          <div>
+            <p className="eyebrow">Internal clinic operations</p>
+            <h1 id="dashboard-title">Klinik Operasyon Kokpiti</h1>
+            <p>
+              Oravia hasta tarafında AI sekreter olarak çalışır; klinik ekibi
+              bu panelden günlük randevu akışını, handoffları ve takvim
+              durumunu takip eder.
+            </p>
+          </div>
+
+          <div className="hero-status-card">
+            <span>Takvim sağlayıcı</span>
+            <strong>{appointment.calendarProviderLabel}</strong>
+            <small>{appointment.calendarProvider}</small>
+          </div>
+        </section>
+
+        <section className="clinic-context-grid" aria-label="Clinic context">
+          <div className="context-card">
+            <span>Klinik</span>
+            <strong>{dashboard.clinic.name}</strong>
+            <small>{dashboard.clinic.timezone}</small>
+          </div>
+
+          <div className="context-card">
+            <span>Aktif doktor</span>
+            <strong>{dashboard.doctor.name}</strong>
+            <small>{dashboard.doctor.specialty}</small>
+          </div>
+
+          <div className="context-card">
+            <span>Bugünkü demo randevu</span>
+            <strong>{appointment.startDisplayLabel}</strong>
+            <small>{appointment.treatmentInterest}</small>
+          </div>
+        </section>
+
+        <section id="operations">
+          <RoleBasedDashboard rolePrototype={rolePrototype} />
+        </section>
+
+        <section className="technical-section" aria-labelledby="system-status-title">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Technical demo</p>
+              <h2 id="system-status-title">Sistem Durumu</h2>
+            </div>
+          </div>
+
+          <div className="system-status-grid">
+            {dashboard.systemStatus.map((item) => (
+              <article className="system-status-item" key={item.name}>
+                <span>{item.name}</span>
+                <strong className={`system-status-badge ${item.tone}`}>
+                  {item.status}
+                </strong>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="technical-section">
+          <DemoApiSimulator initialSimulator={simulator} />
+        </section>
       </section>
-
-      <DemoApiSimulator initialSimulator={simulator} />
     </main>
   );
-}
-
-function formatTreatment(value) {
-  return value ? `${value} appointment` : "General appointment";
 }

@@ -7,6 +7,7 @@ test("dashboard simulator uses local classifier and mock availability only", () 
   const dashboard = getDemoDashboardData();
   const simulator = dashboard.simulator;
   const appointment = dashboard.appointments[0];
+  const rolePrototype = dashboard.rolePrototype;
   const statusByName = Object.fromEntries(
     dashboard.systemStatus.map((item) => [item.name, item.status])
   );
@@ -27,6 +28,38 @@ test("dashboard simulator uses local classifier and mock availability only", () 
   assert.equal(statusByName.Database, "Not connected");
   assert.equal(appointment.startDisplayLabel, "6 Temmuz Pazartesi 14:00");
   assert.equal(appointment.endDisplayLabel, "14:30");
+  assert.equal(rolePrototype.defaultRole, "secretary");
+  assert.match(rolePrototype.note, /yerel prototiptir/);
+  assert.deepEqual(
+    rolePrototype.topSummary.map((item) => item.label),
+    [
+      "Bugünkü randevular",
+      "Bekleyen devirler / handoff",
+      "Takvim senkron durumu",
+      "Demo modu"
+    ]
+  );
+  assert.deepEqual(
+    rolePrototype.roles.map((role) => role.label),
+    ["Doktor", "Sekreter", "Yönetici"]
+  );
+  assert.equal(rolePrototype.doctor.title, "Doktor Ekranı");
+  assert.equal(rolePrototype.secretary.title, "Sekreter Operasyon Ekranı");
+  assert.equal(rolePrototype.admin.title, "Yönetici Performans Ekranı");
+  assert.equal(rolePrototype.doctor.todayAppointments.length, 1);
+  assert.equal(
+    rolePrototype.doctor.todayAppointments[0].aiConversationSummary,
+    "AI özeti: hasta implant randevusu istiyor ve önerilen demo saati kabul etti."
+  );
+  assert.equal(
+    rolePrototype.secretary.phoneCallEntryPlaceholder,
+    "Telefonla gelen randevu girişi burada olacak. Manuel randevu masası sonraki sprintte eklenecek."
+  );
+  assert.equal(
+    rolePrototype.secretary.googleCalendarSyncStatus.provider,
+    "mock"
+  );
+  assert.equal(rolePrototype.admin.metrics[0].label, "Toplam randevu");
   assert.equal(
     simulator.label,
     "Demo API mode — no real patient data, no real calendar event"

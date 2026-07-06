@@ -94,6 +94,10 @@ function buildDashboardData({ appointmentResult, simulatorResult }) {
         calendarEventId: appointmentResult.appointment.calendar_event_id
       }
     ],
+    rolePrototype: buildRolePrototypeData({
+      appointment: appointmentResult.appointment,
+      selectedSlot: appointmentResult.selected_slot
+    }),
     simulator: {
       label: "Demo API mode — no real patient data, no real calendar event",
       patientMessage: SAMPLE_PATIENT_MESSAGE,
@@ -114,6 +118,105 @@ function buildDashboardData({ appointmentResult, simulatorResult }) {
       reply: simulatorResult.reply,
       calendarProvider: "mock",
       calendarProviderLabel: getCalendarProviderLabel("mock")
+    }
+  };
+}
+
+function buildRolePrototypeData({ appointment, selectedSlot }) {
+  return {
+    defaultRole: "secretary",
+    note:
+      "Rol seçici yerel prototiptir. Gerçek kimlik doğrulama ve yetkiler daha sonra eklenecek.",
+    topSummary: [
+      { label: "Bugünkü randevular", value: "3", detail: "Demo klinik günü" },
+      { label: "Bekleyen devirler / handoff", value: "1", detail: "Sekreter takibi" },
+      { label: "Takvim senkron durumu", value: "Mock senkron", detail: "Demo takvim" },
+      { label: "Demo modu", value: "Aktif", detail: "Gerçek hasta verisi yok" }
+    ],
+    roles: [
+      {
+        id: "doctor",
+        label: "Doktor",
+        description: "Doktorlar için sabah randevu ve hasta hazırlık ekranı."
+      },
+      {
+        id: "secretary",
+        label: "Sekreter",
+        description: "Ön büro için günlük operasyon, handoff ve takvim ekranı."
+      },
+      {
+        id: "admin",
+        label: "Yönetici",
+        description: "Klinik sahibi için performans ve dönüşüm göstergeleri."
+      }
+    ],
+    doctor: {
+      title: "Doktor Ekranı",
+      subtitle: "Sabah ilk bakışta randevu, hasta notu ve AI özeti.",
+      todayAppointments: [
+        {
+          time: selectedSlot.display_label,
+          patientName: "Demo Patient",
+          treatmentInterest: appointment.treatment_interest,
+          appointmentStatus: appointment.status,
+          patientNotes:
+            "Demo not: hasta implant görüşmesi için randevu istedi. Gerçek hasta verisi yok.",
+          aiConversationSummary:
+            "AI özeti: hasta implant randevusu istiyor ve önerilen demo saati kabul etti."
+        }
+      ],
+      weeklyOverview: [
+        { day: "Pazartesi", appointments: 3, focus: "İmplant görüşmeleri" },
+        { day: "Salı", appointments: 2, focus: "Genel diş hekimliği" },
+        { day: "Çarşamba", appointments: 4, focus: "Kontrol randevuları" },
+        { day: "Perşembe", appointments: 2, focus: "Beyazlatma görüşmeleri" },
+        { day: "Cuma", appointments: 3, focus: "Karma randevu akışı" }
+      ]
+    },
+    secretary: {
+      title: "Sekreter Operasyon Ekranı",
+      subtitle: "Günün randevu akışı, handoff kuyruğu ve takvim senkronu.",
+      todayOperations: [
+        { label: "Onaylı randevular", value: "3" },
+        { label: "Bekleyen handoff", value: "1" },
+        { label: "Düzenleme bekleyen", value: "0" },
+        { label: "Takvim senkronu", value: "Mock senkron" }
+      ],
+      handoffQueue: [
+        {
+          patientName: "Demo Patient",
+          reason: "Tedavi fiyatı için takip",
+          status: "Sekreter kontrolü bekliyor"
+        }
+      ],
+      phoneCallEntryPlaceholder:
+        "Telefonla gelen randevu girişi burada olacak. Manuel randevu masası sonraki sprintte eklenecek.",
+      doctorAvailability: [
+        { doctorName: "Dr. Demo Dentist", nextSlot: "6 Temmuz Pazartesi 16:00" },
+        { doctorName: "Dr. Demo Dentist", nextSlot: "7 Temmuz Salı 10:00" }
+      ],
+      googleCalendarSyncStatus: {
+        provider: appointment.calendar_provider,
+        status: "Mock takvim senkron",
+        lastEventId: appointment.calendar_event_id
+      }
+    },
+    admin: {
+      title: "Yönetici Performans Ekranı",
+      subtitle: "Klinik sahibi için randevu hacmi, doluluk ve dönüşüm özeti.",
+      metrics: [
+        { label: "Toplam randevu", value: "12" },
+        { label: "AI kaynaklı randevular", value: "8" },
+        { label: "Telefonla gelen randevular", value: "3" },
+        { label: "Handoff oranı", value: "14%" },
+        { label: "Doktor doluluk oranı", value: "72%" },
+        { label: "Dönüşüm göstergeleri", value: "Güçlü" }
+      ],
+      conversionIndicators: [
+        "İmplant randevu talepleri demo akışında iyi dönüşüyor.",
+        "Bir handoff sekreter takibi bekliyor.",
+        "Mock takvim aynı hafta randevu önermeyi destekliyor."
+      ]
     }
   };
 }

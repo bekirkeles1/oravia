@@ -4,7 +4,7 @@ This runbook covers local admin dashboard demo tools and appointment agent demos
 
 Oravia is a Dental AI Receptionist Agent + Role-Based Clinic Operations Dashboard. The patient-facing experience belongs in a messaging channel such as WhatsApp or future chat channels. The dashboard is only for clinic staff operations, monitoring, configuration, handoff visibility, and admin demo tools.
 
-The current dashboard demo tools are admin/demo tools only. A future dashboard sprint will add role-based Doctor, Secretary, and Admin / Owner views. Secretary manual appointment entry for phone-call appointments will be added in a later sprint.
+The current dashboard includes a local role switcher prototype for Doctor, Secretary, and Admin / Owner views. Secretary manual appointment entry for phone-call appointments will be added in a later sprint.
 
 ## Safety Rules
 
@@ -70,7 +70,27 @@ Open the localhost URL printed by Next.js, usually:
 http://localhost:3000
 ```
 
-The dashboard uses local demo data only. It shows the Oravia Dental AI Receptionist Agent + Role-Based Clinic Operations Dashboard demo clinic, demo doctor, one sample confirmed appointment, the calendar provider label, the `System Status` panel, and an `Admin Demo Tools` section.
+The dashboard uses local demo data only. It shows the Oravia Dental AI Receptionist Agent + Role-Based Clinic Operations Dashboard demo clinic, demo doctor, one sample confirmed appointment, the calendar provider label, the role switcher prototype, the `System Status` panel, and an `Admin Demo Tools` section.
+
+## Role Switcher Prototype
+
+The role switcher appears near the top of the dashboard as:
+
+```text
+Görünüm: Doktor | Sekreter | Yönetici
+```
+
+The default selected role is `Sekreter`.
+
+Use it to switch between local demo views:
+
+- `Doktor`: `Doktor Ekranı` for morning schedule context, including bugünkü randevular, haftalık randevu özeti, hasta notları, tedavi ilgisi, and AI görüşme özeti.
+- `Sekreter`: `Sekreter Operasyon Ekranı` for front desk operations, including bugünün operasyon özeti, bekleyen hasta / handoff kuyruğu, telefonla gelen randevu girişi placeholder, doktor müsaitlik özeti, and Google Calendar senkron durumu.
+- `Yönetici`: `Yönetici Performans Ekranı` for owner metrics, including toplam randevu, AI kaynaklı randevular, telefonla gelen randevular, handoff oranı, doktor doluluk oranı, and dönüşüm göstergeleri.
+
+The compact top summary shows bugünkü randevular, bekleyen devirler / handoff, takvim senkron durumu, and demo modu.
+
+The role switcher is a local prototype. It does not add real authentication, permissions, database records, or real patient data. Real authentication and permissions will be added later.
 
 The `System Status` panel is an informational demo safety panel. It shows that the demo API and mock appointment API are ready, the dashboard is in `Admin demo tools / Mock only` mode, Google Calendar CLI flow is available, optional Google Calendar demo events require explicit confirmation, and WhatsApp/database integrations are not connected. It does not perform live monitoring or call external services.
 
