@@ -135,6 +135,7 @@ test("manual appointment calendar sync creates a mock calendar event", async () 
 test("manual appointment calendar sync sends title and description to provider", async () => {
   let createdEventInput = null;
   const result = await createManualAppointmentCalendarEvent(validPayload, {
+    now: validNow,
     calendarProvider: {
       createCalendarEvent(eventInput) {
         createdEventInput = eventInput;
