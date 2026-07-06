@@ -11,7 +11,8 @@
     "demo:appointment": "node scripts/demo-appointment.js",
     "demo:appointment:google": "node scripts/demo-appointment-google.js",
     "google:calendar:service-test": "node scripts/google-calendar-service-check.js",
-    "test": "node --test"
+    "test": "node --test",
+    "demo:messaging-inbound": "node scripts/demo-messaging-inbound.js"
   },
   "engines": {
     "node": ">=20.9"
