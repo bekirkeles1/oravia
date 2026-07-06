@@ -160,11 +160,13 @@ function buildEventRequestBody({
   patient = {},
   treatmentInterest,
   selectedSlot,
-  summary
+  summary,
+  description
 }) {
   return {
     summary: summary || buildEventSummary(treatmentInterest),
-    description: buildEventDescription({ clinic, doctor, patient }),
+    description:
+      description || buildEventDescription({ clinic, doctor, patient }),
     start: {
       dateTime: selectedSlot.start_at,
       timeZone: selectedSlot.timezone || clinic.timezone

@@ -115,12 +115,13 @@ function DoctorView({ data }) {
 }
 
 function SecretaryView({ data }) {
+  const todayDate = getTodayDateInputValue();
   const [manualForm, setManualForm] = useState({
     patientName: "",
     patientPhone: "",
     treatment: "",
     doctor: "Dr. Demo Dentist",
-    date: "2026-07-06",
+    date: todayDate,
     time: "",
     duration: "30",
     notes: ""
@@ -129,6 +130,7 @@ function SecretaryView({ data }) {
   const [manualAppointments, setManualAppointments] = useState([]);
   const [manualFormError, setManualFormError] = useState("");
   const [manualFormSuccess, setManualFormSuccess] = useState("");
+  const [manualFormSyncing, setManualFormSyncing] = useState(false);
   const baseTimeline = [
     {
       time: "09:30",
@@ -170,12 +172,16 @@ function SecretaryView({ data }) {
     }));
   }
 
-  function handleManualAppointmentSubmit(event) {
+  async function handleManualAppointmentSubmit(event) {
     event.preventDefault();
+
+    if (manualFormSyncing) {
+      return;
+    }
 
     const patientName = manualForm.patientName.trim();
     const patientPhone = manualForm.patientPhone.trim();
-    const patientPhoneDigits = patientPhone.replace(/\\D/g, "");
+    const patientPhoneDigits = patientPhone.replace(/\D/g, "");
     const treatment = manualForm.treatment.trim();
     const appointmentDate = manualForm.date;
     const appointmentTime = manualForm.time;
@@ -209,40 +215,74 @@ function SecretaryView({ data }) {
       return;
     }
 
-    setManualAppointments((current) => [
-      ...current,
-      {
-        id: `manual-${Date.now()}`,
+    if (isPastManualAppointmentStart(appointmentDate, appointmentTime)) {
+      setManualFormError("Geçmiş tarih veya saat için randevu oluşturulamaz.");
+      return;
+    }
+
+    setManualFormSyncing(true);
+
+    try {
+      const result = await postJson("/api/secretary/manual-appointment/calendar", {
+        patientName,
+        patientPhone,
+        treatment,
+        doctor: manualForm.doctor,
         date: appointmentDate,
         time: appointmentTime,
-        patient: patientName,
-        doctor: manualForm.doctor,
-        treatment,
-        source: "Telefon",
-        status: "Mock kayıt",
-        syncStatus: "Google Calendar’a gönderilmedi",
-        phone: patientPhoneDigits.startsWith("0")
-          ? patientPhoneDigits
-          : `0${patientPhoneDigits}`,
         duration: manualForm.duration,
         notes
-      }
-    ]);
+      });
+      const appointment = result.appointment;
+      const isMockCalendarProvider = appointment.calendar_provider === "mock";
 
-    setManualForm({
-      patientName: "",
-      patientPhone: "",
-      treatment: "",
-      doctor: "Dr. Demo Dentist",
-      date: "2026-07-06",
-      time: "",
-      duration: "30",
-      notes: ""
-    });
+      setManualAppointments((current) => [
+        ...current,
+        {
+          id: `${appointment.calendar_event_id || "manual"}-${Date.now()}`,
+          date: appointment.appointment_date,
+          time: appointment.appointment_time,
+          patient: appointment.patient_name,
+          doctor: appointment.doctor_name,
+          treatment: appointment.treatment_interest,
+          source: "Telefon",
+          status: isMockCalendarProvider ? "Mock takvim kaydı" : "Takvime işlendi",
+          syncStatus: isMockCalendarProvider
+            ? "Senkron: mock calendar provider"
+            : `Senkron: ${appointment.calendar_provider}`,
+          calendarProvider: appointment.calendar_provider,
+          calendarEventId: appointment.calendar_event_id,
+          phone: appointment.patient_phone,
+          duration: appointment.duration_minutes,
+          notes: appointment.notes
+        }
+      ]);
 
-    setManualFormSuccess(
-      "Mock randevu kaydedildi. Bu kayıt henüz Google Calendar’a gönderilmedi."
-    );
+      setManualForm({
+        patientName: "",
+        patientPhone: "",
+        treatment: "",
+        doctor: "Dr. Demo Dentist",
+        date: todayDate,
+        time: "",
+        duration: "30",
+        notes: ""
+      });
+
+      setManualFormSuccess(
+        isMockCalendarProvider
+          ? `Mock takvim kaydı oluşturuldu. Sağlayıcı: ${result.calendar_provider}. Event ID: ${result.calendar_event_id}.`
+          : `Randevu Google Calendar’a işlendi. Sağlayıcı: ${result.calendar_provider}. Event ID: ${result.calendar_event_id}.`
+      );
+    } catch (error) {
+      setManualFormError(
+        error instanceof Error
+          ? error.message
+          : "Randevu takvim senkronu başarısız oldu."
+      );
+    } finally {
+      setManualFormSyncing(false);
+    }
   }
 
   return (
@@ -279,6 +319,9 @@ function SecretaryView({ data }) {
                     {item.phone ? <small>Telefon: {item.phone}</small> : null}
                     {item.notes ? <small>Not: {item.notes}</small> : null}
                     {item.syncStatus ? <small>{item.syncStatus}</small> : null}
+                    {item.calendarEventId ? (
+                      <small>Calendar event id: {item.calendarEventId}</small>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -304,7 +347,7 @@ function SecretaryView({ data }) {
             <div className="panel-heading compact-heading">
               <div>
                 <h3>Telefonla gelen randevu</h3>
-                <p>Bu kayıt şimdilik sadece ekranda mock olarak oluşturulur.</p>
+                <p>{data.phoneCallEntryPlaceholder}</p>
               </div>
             </div>
 
@@ -358,6 +401,7 @@ function SecretaryView({ data }) {
                 Tarih
                 <input
                   type="date"
+                  min={todayDate}
                   value={manualForm.date}
                   onChange={(event) =>
                     updateManualForm("date", event.target.value)
@@ -402,8 +446,14 @@ function SecretaryView({ data }) {
                 />
               </label>
 
-              <button className="manual-submit-button" type="submit">
-                Mock randevu ekle
+              <button
+                className="manual-submit-button"
+                disabled={manualFormSyncing}
+                type="submit"
+              >
+                {manualFormSyncing
+                  ? "Takvime gönderiliyor..."
+                  : "Randevuyu takvime işle"}
               </button>
 
               {manualFormError ? (
@@ -415,8 +465,8 @@ function SecretaryView({ data }) {
               ) : null}
 
               <p className="manual-form-note">
-                Bu sprintte Google Calendar’a kayıt yapılmaz. Gerçek takvim
-                senkronu sonraki sprintte eklenecek.
+                Bu işlem iç sekreter operasyonudur. Hasta dashboard üzerinden
+                randevu oluşturmaz.
               </p>
             </form>
           </article>
@@ -499,4 +549,48 @@ function MetricGrid({ metrics }) {
       ))}
     </div>
   );
+}
+
+async function postJson(url, body) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+  const payload = await response.json();
+
+  if (!response.ok) {
+    throw new Error(payload.error || "Randevu takvim senkronu başarısız oldu.");
+  }
+
+  return payload;
+}
+
+function getTodayDateInputValue() {
+  const parts = new Intl.DateTimeFormat("en", {
+    timeZone: "Europe/Istanbul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(new Date());
+
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value])
+  );
+
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function isPastManualAppointmentStart(date, time) {
+  const startDate = new Date(`${date}T${time}:00+03:00`);
+
+  if (Number.isNaN(startDate.getTime())) {
+    return true;
+  }
+
+  return startDate.getTime() <= Date.now();
 }

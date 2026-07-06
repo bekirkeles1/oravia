@@ -52,7 +52,7 @@ function buildDashboardData({ appointmentResult, simulatorResult }) {
       },
       {
         name: "Dashboard Mode",
-        status: "Admin demo tools / Mock only",
+        status: "Internal operations / Provider aware",
         tone: "safe"
       },
       {
@@ -190,7 +190,7 @@ function buildRolePrototypeData({ appointment, selectedSlot }) {
         }
       ],
       phoneCallEntryPlaceholder:
-        "Telefonla gelen randevu girişi burada olacak. Manuel randevu masası sonraki sprintte eklenecek.",
+        "Telefonla gelen randevu sekreter işlemi olarak takvim sağlayıcısına gönderilir.",
       doctorAvailability: [
         { doctorName: "Dr. Demo Dentist", nextSlot: "6 Temmuz Pazartesi 16:00" },
         { doctorName: "Dr. Demo Dentist", nextSlot: "7 Temmuz Salı 10:00" }

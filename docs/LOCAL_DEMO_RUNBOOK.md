@@ -4,7 +4,7 @@ This runbook covers local admin dashboard demo tools and appointment agent demos
 
 Oravia is a Dental AI Receptionist Agent + Role-Based Clinic Operations Dashboard. The patient-facing experience belongs in a messaging channel such as WhatsApp or future chat channels. The dashboard is only for clinic staff operations, monitoring, configuration, handoff visibility, and admin demo tools.
 
-The current dashboard includes a local role switcher prototype for Doctor, Secretary, and Admin / Owner views. Secretary manual appointment entry for phone-call appointments will be added in a later sprint.
+The current dashboard includes a local role switcher prototype for Doctor, Secretary, and Admin / Owner views. The Secretary screen includes manual phone appointment entry for internal clinic operations.
 
 ## Safety Rules
 
@@ -85,14 +85,29 @@ The default selected role is `Sekreter`.
 Use it to switch between local demo views:
 
 - `Doktor`: `Doktor Ekranı` for morning schedule context, including bugünkü randevular, haftalık randevu özeti, hasta notları, tedavi ilgisi, and AI görüşme özeti.
-- `Sekreter`: `Sekreter Operasyon Ekranı` for front desk operations, including bugünün operasyon özeti, bekleyen hasta / handoff kuyruğu, telefonla gelen randevu girişi placeholder, doktor müsaitlik özeti, and Google Calendar senkron durumu.
+- `Sekreter`: `Sekreter Operasyon Ekranı` for front desk operations, including bugünün operasyon özeti, bekleyen hasta / handoff kuyruğu, telefonla gelen randevu girişi, doktor müsaitlik özeti, and Google Calendar senkron durumu.
 - `Yönetici`: `Yönetici Performans Ekranı` for owner metrics, including toplam randevu, AI kaynaklı randevular, telefonla gelen randevular, handoff oranı, doktor doluluk oranı, and dönüşüm göstergeleri.
 
 The compact top summary shows bugünkü randevular, bekleyen devirler / handoff, takvim senkron durumu, and demo modu.
 
 The role switcher is a local prototype. It does not add real authentication, permissions, database records, or real patient data. Real authentication and permissions will be added later.
 
-The `System Status` panel is an informational demo safety panel. It shows that the demo API and mock appointment API are ready, the dashboard is in `Admin demo tools / Mock only` mode, Google Calendar CLI flow is available, optional Google Calendar demo events require explicit confirmation, and WhatsApp/database integrations are not connected. It does not perform live monitoring or call external services.
+### Secretary Manual Phone Appointment Sync
+
+The Secretary screen can submit the manual phone appointment form to:
+
+```text
+POST /api/secretary/manual-appointment/calendar
+```
+
+The endpoint validates patient name, Turkish mobile phone, treatment, doctor, date, time, and duration. It maps the internal secretary appointment into a calendar event using the configured calendar provider:
+
+- `CALENDAR_PROVIDER=mock` returns a fake `mock_calendar_event_...` id.
+- `CALENDAR_PROVIDER=google_service_account` creates a real event in the configured demo Google Calendar.
+
+The form shows loading, success, and failure states. On success, it adds the appointment to the local timeline and shows the calendar provider and event id. This is still an internal secretary operation; patients do not book through the dashboard.
+
+The `System Status` panel is an informational demo safety panel. It shows that the demo API and mock appointment API are ready, the dashboard is in `Internal operations / Provider aware` mode, Google Calendar CLI flow is available, optional Google Calendar demo events require explicit confirmation, and WhatsApp/database integrations are not connected. It does not perform live monitoring or call external services.
 
 The `Admin Demo Tools` section contains the `Demo Appointment Flow`. This is an admin/demo action that simulates the agent flow; it is not a patient-facing booking surface. It shows the sample message:
 

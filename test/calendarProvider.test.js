@@ -135,6 +135,7 @@ test("google service account provider creates event output with Google event id"
       doctor: demoDoctor,
       patient: { id: "patient_demo" },
       treatmentInterest: "implant",
+      description: "Manual appointment description.",
       selectedSlot: {
         id: "demo_2026-06-29_1400",
         start_at: "2026-06-29T14:00:00+03:00",
@@ -150,6 +151,10 @@ test("google service account provider creates event output with Google event id"
     ]);
     assert.equal(insertRequest.calendarId, calendarId);
     assert.equal(insertRequest.requestBody.summary, "Oravia Appointment - implant");
+    assert.equal(
+      insertRequest.requestBody.description,
+      "Manual appointment description."
+    );
     assert.equal(event.calendar_provider, "google_service_account");
     assert.equal(event.calendar_event_id, "google_event_123");
     assert.equal(event.start_time, "2026-06-29T14:00:00+03:00");

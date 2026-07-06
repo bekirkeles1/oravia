@@ -18,7 +18,7 @@ test("dashboard simulator uses local classifier and mock availability only", () 
   );
   assert.equal(statusByName["Demo API"], "Ready");
   assert.equal(statusByName["Mock Appointment API"], "Ready");
-  assert.equal(statusByName["Dashboard Mode"], "Admin demo tools / Mock only");
+  assert.equal(statusByName["Dashboard Mode"], "Internal operations / Provider aware");
   assert.equal(statusByName["Google Calendar CLI Flow"], "Available");
   assert.equal(
     statusByName["Optional Google Calendar Demo Event"],
@@ -53,7 +53,7 @@ test("dashboard simulator uses local classifier and mock availability only", () 
   );
   assert.equal(
     rolePrototype.secretary.phoneCallEntryPlaceholder,
-    "Telefonla gelen randevu girişi burada olacak. Manuel randevu masası sonraki sprintte eklenecek."
+    "Telefonla gelen randevu sekreter işlemi olarak takvim sağlayıcısına gönderilir."
   );
   assert.equal(
     rolePrototype.secretary.googleCalendarSyncStatus.provider,
