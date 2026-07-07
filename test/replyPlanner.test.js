@@ -82,3 +82,25 @@ test("reply planner falls back to classifier handoff for unknown messages", () =
   assert.equal(result.treatment_id, null);
   assert.match(result.reply_draft, /klinik ekibimize aktaracağım/);
 });
+
+test("reply planner prioritizes handoff rules over treatment answers", () => {
+  const result = planMessagingReply({
+    message: "İmplant yaptırdım, yüzüm şişti ve çok ağrıyor.",
+    classification: {
+      intent: "unknown_intent",
+      requires_handoff: true,
+      reply:
+        "Merhaba, sizi daha doğru yönlendirebilmem için mesajınızı klinik ekibimize aktaracağım."
+    }
+  });
+
+  assert.equal(result.intent, "handoff_required");
+  assert.equal(result.requires_handoff, true);
+  assert.equal(result.reply_source, "handoff_rules");
+  assert.equal(result.treatment_id, null);
+  assert.match(result.reply_draft, /klinik ekibimizin değerlendirmesini gerektiriyor/);
+  assert.equal(
+    result.handoff_reasons.some((reason) => reason.id === "swelling"),
+    true
+  );
+});

@@ -133,3 +133,18 @@ test("messaging inbound handler can return treatment info reply through reply pl
   assert.match(result.body.reply_draft, /eksik dişlerin yerine/);
   assert.match(result.body.reply_draft, /hekim muayenesi/);
 });
+
+test("messaging inbound handler returns handoff for risky clinical message", () => {
+  const result = handleMessagingInbound({
+    channel: "whatsapp",
+    from: "+905322223333",
+    message: "Dişim çok ağrıyor ve yüzüm şişti, hangi antibiyotiği kullanmalıyım?",
+    timestamp: "2026-07-06T15:40:00+03:00"
+  });
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body.status, "received");
+  assert.equal(result.body.intent, "handoff_required");
+  assert.equal(result.body.requires_handoff, true);
+  assert.match(result.body.reply_draft, /klinik ekibimizin değerlendirmesini gerektiriyor/);
+});
