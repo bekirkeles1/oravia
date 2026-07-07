@@ -1,4 +1,5 @@
 const { classifyPatientMessage } = require("../ai/intentClassifier");
+const { planMessagingReply } = require("../messaging/replyPlanner");
 
 const SUPPORTED_CHANNELS = new Set(["whatsapp"]);
 
@@ -10,15 +11,20 @@ function handleMessagingInbound(input = {}, options = {}) {
   }
 
   const classifier = options.classifier || classifyPatientMessage;
+  const replyPlanner = options.replyPlanner || planMessagingReply;
   const classification = classifier(validation.payload.message);
+  const replyPlan = replyPlanner({
+    message: validation.payload.message,
+    classification
+  });
 
   return ok({
     status: "received",
     channel: validation.payload.channel,
     from: validation.payload.from,
-    intent: classification.intent,
-    requires_handoff: classification.requires_handoff,
-    reply_draft: buildReplyDraft(classification)
+    intent: replyPlan.intent,
+    requires_handoff: replyPlan.requires_handoff,
+    reply_draft: replyPlan.reply_draft
   });
 }
 
@@ -62,19 +68,6 @@ function validateInboundPayload(input) {
   }
 
   return { payload };
-}
-
-function buildReplyDraft(classification) {
-  const treatmentInterest = classification.extracted_data?.treatment_interest;
-
-  if (
-    classification.intent === "appointment_request" &&
-    treatmentInterest === "implant"
-  ) {
-    return "İmplant randevusu için uygun saatleri kontrol ediyorum.";
-  }
-
-  return classification.reply;
 }
 
 function normalizeText(value) {

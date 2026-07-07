@@ -115,3 +115,21 @@ test("messaging inbound handler preserves channel and from in response", () => {
   assert.equal(result.body.channel, "whatsapp");
   assert.equal(result.body.from, "+905551112233");
 });
+
+test("messaging inbound handler can return treatment info reply through reply planner", () => {
+  const result = handleMessagingInbound({
+    channel: "whatsapp",
+    from: "+905322223333",
+    message: "İmplant nedir, bilgi alabilir miyim?",
+    timestamp: "2026-07-06T15:35:00+03:00"
+  });
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body.status, "received");
+  assert.equal(result.body.channel, "whatsapp");
+  assert.equal(result.body.from, "+905322223333");
+  assert.equal(result.body.intent, "treatment_info");
+  assert.equal(result.body.requires_handoff, false);
+  assert.match(result.body.reply_draft, /eksik dişlerin yerine/);
+  assert.match(result.body.reply_draft, /hekim muayenesi/);
+});
