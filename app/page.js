@@ -1,5 +1,6 @@
 import { getDemoDashboardData } from "../src/dashboard/demoDashboardData";
 import DemoApiSimulator from "./components/DemoApiSimulator";
+import DoctorAvailabilityWorkspace from "./components/DoctorAvailabilityWorkspace";
 import RoleBasedDashboard from "./components/RoleBasedDashboard";
 
 export default function DashboardPage() {
@@ -28,6 +29,9 @@ export default function DashboardPage() {
           </a>
           <a className="sidebar-nav-item" href="#calendar">
             Takvim
+          </a>
+          <a className="sidebar-nav-item" href="#doctor-availability">
+            Doktor Müsaitlik
           </a>
           <a className="sidebar-nav-item" href="#handoff">
             AI Handoff
@@ -97,6 +101,10 @@ export default function DashboardPage() {
 
         <section id="operations">
           <RoleBasedDashboard rolePrototype={rolePrototype} />
+        </section>
+
+        <section id="doctor-availability">
+          <DoctorAvailabilityWorkspace />
         </section>
 
         <section className="technical-section" aria-labelledby="system-status-title">

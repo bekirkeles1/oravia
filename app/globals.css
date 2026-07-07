@@ -1721,3 +1721,260 @@ blockquote {
   font-size: 0.82rem;
   text-align: right;
 }
+
+/* 10T Revize — Doctor Availability Workspace Tab */
+
+.doctor-availability-workspace-section {
+  margin-top: 28px;
+  scroll-margin-top: 24px;
+}
+
+.doctor-availability-workspace-section .section-heading p:last-child {
+  max-width: 720px;
+  margin: 6px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.doctor-availability-workspace-card {
+  display: grid;
+  gap: 18px;
+  max-width: 1080px;
+  margin: 18px auto 0;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: #ffffff;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
+}
+
+.doctor-availability-workspace-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 320px) 1fr;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.doctor-availability-workspace-toolbar label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.doctor-availability-workspace-toolbar select {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #ffffff;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 800;
+  outline: none;
+}
+
+.doctor-availability-workspace-summary {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px dashed rgba(43, 111, 99, 0.28);
+  border-radius: 14px;
+  background: rgba(43, 111, 99, 0.06);
+}
+
+.doctor-availability-workspace-summary strong {
+  color: var(--text);
+  font-size: 0.98rem;
+}
+
+.doctor-availability-workspace-summary span,
+.doctor-availability-workspace-summary small {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.doctor-availability-workspace-state {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #f8fbf9;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.doctor-availability-day-list {
+  display: grid;
+  gap: 12px;
+}
+
+.doctor-availability-day-row {
+  display: grid;
+  grid-template-columns: 130px minmax(360px, 1.2fr) minmax(220px, 0.8fr) 130px;
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fdfefe;
+}
+
+.doctor-availability-day-row.closed {
+  background: #f7faf8;
+}
+
+.doctor-availability-day-title {
+  display: grid;
+  gap: 8px;
+}
+
+.doctor-availability-day-title strong {
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.doctor-availability-day-title label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.doctor-availability-day-title input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.doctor-availability-time-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.doctor-availability-time-grid label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.doctor-availability-time-grid input {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #ffffff;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 800;
+  outline: none;
+}
+
+.doctor-availability-time-grid input:disabled {
+  background: #eef4f1;
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.doctor-availability-time-grid input:focus,
+.doctor-availability-workspace-toolbar select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(43, 111, 99, 0.12);
+}
+
+.doctor-availability-timeline {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.doctor-availability-timeline span {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.doctor-availability-timeline-track {
+  position: relative;
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.09);
+}
+
+.doctor-availability-timeline-block {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.doctor-availability-timeline-block.secondary {
+  background: rgba(43, 111, 99, 0.55);
+}
+
+.doctor-availability-day-button {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #ffffff;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 900;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.doctor-availability-day-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.doctor-availability-row-message {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 1280px) {
+  .doctor-availability-day-row {
+    grid-template-columns: 1fr;
+  }
+
+  .doctor-availability-day-button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 760px) {
+  .doctor-availability-workspace-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .doctor-availability-time-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .doctor-availability-time-grid {
+    grid-template-columns: 1fr;
+  }
+}
