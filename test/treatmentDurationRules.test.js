@@ -9,28 +9,62 @@ const {
   resolveSlotDurationMinutes,
 } = require("../src/clinic/treatmentDurationRules");
 
-test("lists mock treatment duration rules", () => {
+test("lists mock treatment duration rules by appointment purpose", () => {
   const rules = listTreatmentDurationRules();
 
-  assert.ok(rules.length >= 8);
+  assert.ok(rules.length >= 16);
   assert.ok(rules.every((rule) => rule.source === "mock"));
+  assert.ok(rules.every((rule) => rule.appointmentPurpose));
   assert.ok(rules.every((rule) => Number.isInteger(rule.durationMinutes)));
   assert.ok(rules.every((rule) => rule.durationMinutes > 0));
 });
 
-test("returns treatment-specific appointment durations", () => {
-  assert.equal(getTreatmentDurationMinutes("diş taşı temizliği"), 60);
-  assert.equal(getTreatmentDurationMinutes("dis tasi temizligi"), 60);
-  assert.equal(getTreatmentDurationMinutes("implant"), 120);
-  assert.equal(getTreatmentDurationMinutes("kanal tedavisi"), 90);
-  assert.equal(getTreatmentDurationMinutes("dolgu"), 45);
-  assert.equal(getTreatmentDurationMinutes("genel muayene"), 30);
+test("uses initial consultation duration for first-time patient treatment requests", () => {
+  assert.equal(getTreatmentDurationMinutes("implant", "initial_consultation"), 30);
+  assert.equal(
+    getTreatmentDurationMinutes("kanal tedavisi", "initial_consultation"),
+    30
+  );
+  assert.equal(getTreatmentDurationMinutes("dolgu", "initial_consultation"), 30);
+  assert.equal(
+    getTreatmentDurationMinutes("diş taşı temizliği", "initial_consultation"),
+    60
+  );
+});
+
+test("uses procedure duration for controlled treatment procedure bookings", () => {
+  assert.equal(getTreatmentDurationMinutes("implant", "procedure"), 120);
+  assert.equal(getTreatmentDurationMinutes("kanal tedavisi", "procedure"), 90);
+  assert.equal(getTreatmentDurationMinutes("dolgu", "procedure"), 45);
+  assert.equal(
+    getTreatmentDurationMinutes("diş taşı temizliği", "procedure"),
+    60
+  );
 });
 
 test("falls back to default duration for unknown treatments", () => {
   assert.equal(
-    getTreatmentDurationMinutes("bilinmeyen tedavi"),
+    getTreatmentDurationMinutes("bilinmeyen tedavi", "procedure"),
     DEFAULT_TREATMENT_DURATION_MINUTES
+  );
+});
+
+test("resolveSlotDurationMinutes defaults WhatsApp-style implant request to consultation duration", () => {
+  assert.equal(
+    resolveSlotDurationMinutes({
+      message: "İmplant yaptırmak istiyorum, çarşamba müsait misiniz?",
+    }),
+    30
+  );
+});
+
+test("resolveSlotDurationMinutes supports controlled procedure override", () => {
+  assert.equal(
+    resolveSlotDurationMinutes({
+      treatmentName: "implant",
+      appointmentPurpose: "procedure",
+    }),
+    120
   );
 });
 
@@ -41,22 +75,6 @@ test("resolveSlotDurationMinutes prefers explicit safe duration overrides", () =
       durationMinutes: 75,
     }),
     75
-  );
-});
-
-test("resolveSlotDurationMinutes derives duration from patient message", () => {
-  assert.equal(
-    resolveSlotDurationMinutes({
-      message: "Diş taşı temizliği için cumartesi slot var mı?",
-    }),
-    60
-  );
-
-  assert.equal(
-    resolveSlotDurationMinutes({
-      message: "İmplant için çarşamba slot var mı?",
-    }),
-    120
   );
 });
 

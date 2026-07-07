@@ -10,6 +10,10 @@ const {
   normalizePositiveInteger,
   resolveSlotDurationMinutes,
 } = require("../clinic/treatmentDurationRules");
+const {
+  getAppointmentPurposeLabel,
+  inferAppointmentPurpose,
+} = require("../clinic/appointmentPurposeRules");
 
 const DEFAULT_SLOT_DURATION_MINUTES = DEFAULT_TREATMENT_DURATION_MINUTES;
 const DEFAULT_SLOT_STEP_MINUTES = 30;
@@ -41,7 +45,7 @@ function generateSlotsFromWindow(window, options = {}) {
   );
   const stepMinutes = normalizePositiveInteger(
     options.stepMinutes,
-    DEFAULT_SLOT_STEP_MINUTES
+    durationMinutes || DEFAULT_SLOT_STEP_MINUTES
   );
   const maxSlots = normalizePositiveInteger(options.maxSlots, Number.MAX_SAFE_INTEGER);
   const windowStartMinutes = timeToMinutes(window.start);
@@ -74,10 +78,11 @@ function generateSlotsFromWindow(window, options = {}) {
   return slots;
 }
 
-function buildSlotId({ doctorId, treatment, day, time, durationMinutes }) {
+function buildSlotId({ doctorId, treatment, appointmentPurpose, day, time, durationMinutes }) {
   return [
     doctorId,
     normalizeIdPart(treatment),
+    normalizeIdPart(appointmentPurpose),
     day,
     time.replace(":", ""),
     `${durationMinutes}m`,
@@ -103,9 +108,14 @@ function generateSlotProposals(input = {}) {
   const message = input.message || "";
   const treatment = resolveTreatmentName(input.treatmentName || message);
   const day = findDayInMessage(input.dayName || message);
+  const appointmentPurpose = inferAppointmentPurpose({
+    message,
+    appointmentPurpose: input.appointmentPurpose,
+  });
   const durationMinutes = resolveSlotDurationMinutes({
     treatmentName: treatment,
     message,
+    appointmentPurpose,
     durationMinutes: input.durationMinutes,
   });
   const stepMinutes = normalizePositiveInteger(
@@ -122,6 +132,9 @@ function generateSlotProposals(input = {}) {
       status: "missing_context",
       treatment,
       day,
+      appointmentPurpose,
+      appointmentPurposeLabel: getAppointmentPurposeLabel(appointmentPurpose),
+      durationMinutes,
       source: "mock",
       proposals: [],
       safety_note:
@@ -151,6 +164,7 @@ function generateSlotProposals(input = {}) {
           id: buildSlotId({
             doctorId: match.doctor.id,
             treatment: match.treatment,
+            appointmentPurpose,
             day: match.day,
             time: slot.time,
             durationMinutes: slot.durationMinutes,
@@ -158,6 +172,8 @@ function generateSlotProposals(input = {}) {
           doctorId: match.doctor.id,
           doctorName: match.doctor.name,
           treatment: match.treatment,
+          appointmentPurpose,
+          appointmentPurposeLabel: getAppointmentPurposeLabel(appointmentPurpose),
           day: match.day,
           dayLabel: match.dayLabel,
           time: slot.time,
@@ -177,6 +193,9 @@ function generateSlotProposals(input = {}) {
     status: proposals.length > 0 ? "ok" : "no_slots",
     treatment,
     day,
+    appointmentPurpose,
+    appointmentPurposeLabel: getAppointmentPurposeLabel(appointmentPurpose),
+    durationMinutes,
     source: "mock",
     proposals,
     safety_note:
@@ -192,11 +211,11 @@ function createSlotProposalReply(input = {}) {
   }
 
   if (result.status === "no_slots") {
-    return `${result.treatment} için seçilen gün mock programa göre önerilebilir slot bulunamadı. Gerçek müsaitlik için sekreter veya takvim kontrolü gerekir.`;
+    return `${result.treatment} için seçilen gün mock programa göre önerilebilir ${result.appointmentPurposeLabel.toLocaleLowerCase("tr-TR")} slotu bulunamadı. Gerçek müsaitlik için sekreter veya takvim kontrolü gerekir.`;
   }
 
   return [
-    `${result.treatment} için ${result.proposals[0].dayLabel} günü mock slot önerileri:`,
+    `${result.treatment} için ${result.proposals[0].dayLabel} günü mock ${result.appointmentPurposeLabel.toLocaleLowerCase("tr-TR")} slot önerileri:`,
     ...result.proposals.map(
       (proposal, index) =>
         `${index + 1}. ${proposal.doctorName} — ${proposal.time} (${proposal.durationMinutes} dk)`
