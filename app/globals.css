@@ -1591,3 +1591,133 @@ blockquote {
   color: var(--text);
   font-size: 0.78rem;
 }
+
+/* 10L — Secretary Doctor Availability Panel */
+
+.doctor-availability-card {
+  border-color: rgba(43, 111, 99, 0.2);
+}
+
+.doctor-panel-warning {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px dashed rgba(43, 111, 99, 0.28);
+  border-radius: 12px;
+  background: rgba(43, 111, 99, 0.06);
+}
+
+.doctor-panel-state {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f8fbf9;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.doctor-availability-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.doctor-availability-item {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #f8fbf9;
+}
+
+.doctor-availability-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.doctor-availability-header div {
+  display: grid;
+  gap: 3px;
+}
+
+.doctor-availability-header strong {
+  color: var(--text);
+  font-size: 0.98rem;
+}
+
+.doctor-availability-header span,
+.doctor-availability-header small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.doctor-chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.doctor-chip-group span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(43, 111, 99, 0.1);
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.doctor-treatment-list {
+  display: grid;
+  gap: 4px;
+}
+
+.doctor-treatment-list small {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.doctor-treatment-list p {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.doctor-schedule-list {
+  display: grid;
+  gap: 6px;
+}
+
+.doctor-schedule-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.doctor-schedule-row span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.doctor-schedule-row strong {
+  color: var(--text);
+  font-size: 0.82rem;
+  text-align: right;
+}

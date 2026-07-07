@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function RoleBasedDashboard({ rolePrototype }) {
   const [selectedRole, setSelectedRole] = useState(
@@ -114,6 +114,38 @@ function DoctorView({ data }) {
   );
 }
 
+
+const SECRETARY_WEEKDAY_LABELS = {
+  monday: "Pazartesi",
+  tuesday: "Salı",
+  wednesday: "Çarşamba",
+  thursday: "Perşembe",
+  friday: "Cuma",
+  saturday: "Cumartesi",
+  sunday: "Pazar"
+};
+
+function formatSecretaryAvailabilityWindows(windows) {
+  if (!Array.isArray(windows) || windows.length === 0) {
+    return "Aktif saat aralığı yok";
+  }
+
+  return windows.map((window) => `${window.start}-${window.end}`).join(", ");
+}
+
+function getEnabledSecretaryAvailabilityDays(availability) {
+  if (!availability || !Array.isArray(availability.weeklyAvailability)) {
+    return [];
+  }
+
+  return availability.weeklyAvailability.filter(
+    (dayAvailability) =>
+      dayAvailability.enabled &&
+      Array.isArray(dayAvailability.windows) &&
+      dayAvailability.windows.length > 0
+  );
+}
+
 function SecretaryView({ data }) {
   const todayDate = getTodayDateInputValue();
   const [manualForm, setManualForm] = useState({
@@ -131,6 +163,12 @@ function SecretaryView({ data }) {
   const [manualFormError, setManualFormError] = useState("");
   const [manualFormSuccess, setManualFormSuccess] = useState("");
   const [manualFormSyncing, setManualFormSyncing] = useState(false);
+  const [doctorPanel, setDoctorPanel] = useState({
+    doctors: [],
+    availability: [],
+    loading: true,
+    error: ""
+  });
   const baseTimeline = [
     {
       time: "09:30",
@@ -161,6 +199,76 @@ function SecretaryView({ data }) {
   const timeline = [...baseTimeline, ...manualAppointments].sort((a, b) =>
     a.time.localeCompare(b.time)
   );
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadDoctorPanel() {
+      try {
+        const [doctorsResponse, availabilityResponse] = await Promise.all([
+          fetch("/api/secretary/doctors"),
+          fetch("/api/secretary/doctors/availability")
+        ]);
+
+        if (!doctorsResponse.ok || !availabilityResponse.ok) {
+          throw new Error("Doktor programı API yanıtı başarısız oldu.");
+        }
+
+        const [doctorsPayload, availabilityPayload] = await Promise.all([
+          doctorsResponse.json(),
+          availabilityResponse.json()
+        ]);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setDoctorPanel({
+          doctors: Array.isArray(doctorsPayload.doctors)
+            ? doctorsPayload.doctors
+            : [],
+          availability: Array.isArray(availabilityPayload.availability)
+            ? availabilityPayload.availability
+            : [],
+          loading: false,
+          error: ""
+        });
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setDoctorPanel({
+          doctors: [],
+          availability: [],
+          loading: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Doktor programı yüklenemedi."
+        });
+      }
+    }
+
+    loadDoctorPanel();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const doctorAvailabilityById = new Map(
+    doctorPanel.availability.map((availability) => [
+      availability.doctorId,
+      availability
+    ])
+  );
+
+  function getDoctorAvailabilityDays(doctorId) {
+    return getEnabledSecretaryAvailabilityDays(
+      doctorAvailabilityById.get(doctorId)
+    );
+  }
 
   function updateManualForm(field, value) {
     setManualFormError("");
@@ -341,6 +449,98 @@ function SecretaryView({ data }) {
                 </div>
               ))}
             </div>
+          </article>
+
+          <article className="role-card doctor-availability-card">
+            <div className="panel-heading compact-heading">
+              <div>
+                <h3>Doktor çalışma programı</h3>
+                <p>
+                  Sekreterin ve ileride WhatsApp botun okuyacağı mock doktor
+                  müsaitlik görünümü.
+                </p>
+              </div>
+              <span className="status-pill">Mock veri</span>
+            </div>
+
+            <p className="manual-form-note doctor-panel-warning">
+              <strong>Güvenlik sınırı</strong>
+              <span>
+                Bu panel şimdilik sadece mock programı gösterir. Gerçek randevu
+                vermeden önce takvim çakışması ayrıca kontrol edilmelidir.
+              </span>
+            </p>
+
+            {doctorPanel.loading ? (
+              <p className="doctor-panel-state">Doktor programı yükleniyor...</p>
+            ) : null}
+
+            {doctorPanel.error ? (
+              <p className="manual-form-error">{doctorPanel.error}</p>
+            ) : null}
+
+            {!doctorPanel.loading &&
+            !doctorPanel.error &&
+            doctorPanel.doctors.length === 0 ? (
+              <p className="doctor-panel-state">
+                Kayıtlı mock doktor bulunamadı.
+              </p>
+            ) : null}
+
+            {!doctorPanel.loading && !doctorPanel.error ? (
+              <div className="doctor-availability-list">
+                {doctorPanel.doctors.map((doctor) => {
+                  const availabilityDays = getDoctorAvailabilityDays(doctor.id);
+
+                  return (
+                    <div className="doctor-availability-item" key={doctor.id}>
+                      <div className="doctor-availability-header">
+                        <div>
+                          <strong>{doctor.name}</strong>
+                          <span>{doctor.title}</span>
+                        </div>
+                        <small>{availabilityDays.length} aktif gün</small>
+                      </div>
+
+                      <div className="doctor-chip-group" aria-label="Uzmanlıklar">
+                        {doctor.specialties.map((specialty) => (
+                          <span key={specialty}>{specialty}</span>
+                        ))}
+                      </div>
+
+                      <div className="doctor-treatment-list">
+                        <small>Baktığı tedaviler</small>
+                        <p>{doctor.treatments.join(", ")}</p>
+                      </div>
+
+                      <div className="doctor-schedule-list">
+                        {availabilityDays.length > 0 ? (
+                          availabilityDays.map((dayAvailability) => (
+                            <div
+                              className="doctor-schedule-row"
+                              key={`${doctor.id}-${dayAvailability.day}`}
+                            >
+                              <span>
+                                {SECRETARY_WEEKDAY_LABELS[
+                                  dayAvailability.day
+                                ] || dayAvailability.day}
+                              </span>
+                              <strong>
+                                {formatSecretaryAvailabilityWindows(
+                                  dayAvailability.windows
+                                )}
+                              </strong>
+                            </div>
+                          ))
+                        ) : (
+                          <small>Mock programa göre aktif gün yok.</small>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
           </article>
 
           <article className="role-card manual-entry-card">
