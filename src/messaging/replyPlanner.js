@@ -2,6 +2,9 @@ const {
   buildTreatmentAnswer,
   searchTreatmentKnowledge
 } = require("../clinic/treatmentKnowledgeBase");
+const {
+  createDoctorAvailabilityReply
+} = require("../clinic/doctorAvailability");
 const { evaluateHandoff } = require("./handoffRules");
 
 function planMessagingReply(input = {}) {
@@ -21,6 +24,20 @@ function planMessagingReply(input = {}) {
   }
 
   const treatmentKnowledge = searchTreatmentKnowledge(message);
+
+  if (isDoctorAvailabilityQuestion(message)) {
+    const availabilityReply = createDoctorAvailabilityReply(message);
+
+    if (availabilityReply) {
+      return {
+        intent: "doctor_availability",
+        requires_handoff: false,
+        reply_draft: availabilityReply,
+        reply_source: "doctor_availability_mock",
+        treatment_id: treatmentKnowledge?.id || null
+      };
+    }
+  }
 
   if (classification.intent === "appointment_request") {
     return {
@@ -71,6 +88,46 @@ function buildAppointmentReplyDraft(classification) {
     classification.reply ||
     "Uygun randevu saatlerini kontrol ediyorum."
   );
+}
+
+function isDoctorAvailabilityQuestion(message) {
+  const normalizedMessage = normalizeForKeywordSearch(message);
+
+  if (!normalizedMessage) {
+    return false;
+  }
+
+  return [
+    "musait",
+    "uygun",
+    "bos",
+    "hangi doktor",
+    "doktor var",
+    "doktor bakiyor",
+    "kim bakiyor",
+    "hangi gun",
+    "hangi saat",
+    "saatleri",
+    "gunleri",
+    "calisiyor",
+    "calisma programi",
+    "program"
+  ].some((keyword) => normalizedMessage.includes(keyword));
+}
+
+function normalizeForKeywordSearch(value) {
+  return String(value || "")
+    .toLocaleLowerCase("tr-TR")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ı/g, "i")
+    .replace(/ğ/g, "g")
+    .replace(/ü/g, "u")
+    .replace(/ş/g, "s")
+    .replace(/ö/g, "o")
+    .replace(/ç/g, "c")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function normalizeText(value) {
