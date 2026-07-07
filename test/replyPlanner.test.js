@@ -182,3 +182,91 @@ test("reply planner does not treat general treatment info as availability", () =
   assert.equal(result.reply_source, "treatment_knowledge_base");
   assert.equal(result.treatment_id, "implant");
 });
+
+test("reply planner proposes consultation slots for first-time implant appointment requests", () => {
+  const result = planMessagingReply({
+    message: "İmplant yaptırmak istiyorum, çarşamba saat önerir misiniz?",
+    classification: {
+      intent: "appointment_request",
+      requires_handoff: false,
+      extracted_data: {
+        treatment_interest: "implant"
+      },
+      reply: "Uygun randevu saatlerini kontrol ediyorum."
+    }
+  });
+
+  assert.equal(result.intent, "appointment_slot_proposal");
+  assert.equal(result.requires_handoff, false);
+  assert.equal(result.reply_source, "slot_proposal_mock");
+  assert.equal(result.treatment_id, "implant");
+  assert.match(result.reply_draft, /mock ilk muayene \/ değerlendirme slot önerileri/);
+  assert.match(result.reply_draft, /1\. Dr\. Ayşe Demir — 10:00 \(30 dk\)/);
+  assert.match(result.reply_draft, /2\. Dr\. Ayşe Demir — 10:30 \(30 dk\)/);
+  assert.match(result.reply_draft, /3\. Dr\. Ayşe Demir — 11:00 \(30 dk\)/);
+  assert.match(result.reply_draft, /kesin randevu değildir/);
+  assert.match(result.reply_draft, /takvim çakışması/);
+  assert.doesNotMatch(result.reply_draft, /120 dk/);
+  assert.doesNotMatch(result.reply_draft, /randevunuz oluşturuldu/i);
+});
+
+test("reply planner proposes treatment-specific duration slots for dental cleaning", () => {
+  const result = planMessagingReply({
+    message: "Diş taşı temizliği için cumartesi saat var mı?",
+    classification: {
+      intent: "unknown_intent",
+      requires_handoff: true,
+      reply:
+        "Merhaba, sizi daha doğru yönlendirebilmem için mesajınızı klinik ekibimize aktaracağım."
+    }
+  });
+
+  assert.equal(result.intent, "appointment_slot_proposal");
+  assert.equal(result.requires_handoff, false);
+  assert.equal(result.reply_source, "slot_proposal_mock");
+  assert.equal(result.treatment_id, "dental_cleaning");
+  assert.match(result.reply_draft, /diş taşı temizliği için Cumartesi günü/);
+  assert.match(result.reply_draft, /1\. Dr\. Zeynep Arslan — 10:00 \(60 dk\)/);
+  assert.match(result.reply_draft, /2\. Dr\. Zeynep Arslan — 11:00 \(60 dk\)/);
+  assert.match(result.reply_draft, /kesin randevu değildir/);
+});
+
+test("reply planner keeps handoff rules above slot proposal answers", () => {
+  const result = planMessagingReply({
+    message:
+      "İmplant yaptırmak istiyorum, çarşamba saat önerir misiniz? Yüzüm şişti ve çok ağrıyor.",
+    classification: {
+      intent: "appointment_request",
+      requires_handoff: false,
+      extracted_data: {
+        treatment_interest: "implant"
+      },
+      reply: "Uygun randevu saatlerini kontrol ediyorum."
+    }
+  });
+
+  assert.equal(result.intent, "handoff_required");
+  assert.equal(result.requires_handoff, true);
+  assert.equal(result.reply_source, "handoff_rules");
+  assert.equal(result.treatment_id, null);
+  assert.match(result.reply_draft, /klinik ekibimizin değerlendirmesini gerektiriyor/);
+});
+
+test("reply planner falls back to appointment request when slot context is incomplete", () => {
+  const result = planMessagingReply({
+    message: "İmplant için saat önerir misiniz?",
+    classification: {
+      intent: "appointment_request",
+      requires_handoff: false,
+      extracted_data: {
+        treatment_interest: "implant"
+      },
+      reply: "Uygun randevu saatlerini kontrol ediyorum."
+    }
+  });
+
+  assert.equal(result.intent, "appointment_request");
+  assert.equal(result.requires_handoff, false);
+  assert.equal(result.reply_source, "classifier");
+  assert.equal(result.reply_draft, "İmplant randevusu için uygun saatleri kontrol ediyorum.");
+});

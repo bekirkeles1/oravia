@@ -5,6 +5,7 @@ const {
 const {
   createDoctorAvailabilityReply
 } = require("../clinic/doctorAvailability");
+const { createSlotProposalReply } = require("./slotProposal");
 const { evaluateHandoff } = require("./handoffRules");
 
 function planMessagingReply(input = {}) {
@@ -24,6 +25,22 @@ function planMessagingReply(input = {}) {
   }
 
   const treatmentKnowledge = searchTreatmentKnowledge(message);
+
+  if (isSlotProposalQuestion(message)) {
+    const slotProposalReply = createSlotProposalReply({
+      message
+    });
+
+    if (slotProposalReply) {
+      return {
+        intent: "appointment_slot_proposal",
+        requires_handoff: false,
+        reply_draft: slotProposalReply,
+        reply_source: "slot_proposal_mock",
+        treatment_id: treatmentKnowledge?.id || null
+      };
+    }
+  }
 
   if (isDoctorAvailabilityQuestion(message)) {
     const availabilityReply = createDoctorAvailabilityReply(message);
@@ -88,6 +105,30 @@ function buildAppointmentReplyDraft(classification) {
     classification.reply ||
     "Uygun randevu saatlerini kontrol ediyorum."
   );
+}
+
+function isSlotProposalQuestion(message) {
+  const normalizedMessage = normalizeForKeywordSearch(message);
+
+  if (!normalizedMessage) {
+    return false;
+  }
+
+  return [
+    "slot",
+    "saat oner",
+    "saat oneri",
+    "saat var",
+    "hangi saat",
+    "randevu onerebilir",
+    "randevu oner",
+    "randevu secenegi",
+    "secenek",
+    "rezerve",
+    "ayirabilir",
+    "ayir",
+    "ayır"
+  ].some((keyword) => normalizedMessage.includes(keyword));
 }
 
 function isDoctorAvailabilityQuestion(message) {
