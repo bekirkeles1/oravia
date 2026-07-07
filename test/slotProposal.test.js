@@ -69,7 +69,7 @@ test("buildSlotId creates stable mock slot ids", () => {
   assert.equal(id, "dr-ayse-demir-dis-tasi-temizligi-wednesday-1030-30m");
 });
 
-test("generateSlotProposals creates doctor-aware proposals from a patient message", () => {
+test("generateSlotProposals creates treatment-duration-aware proposals from a patient message", () => {
   const result = generateSlotProposals({
     message: "İmplant için çarşamba müsait slot var mı?",
     maxSlots: 3,
@@ -83,7 +83,10 @@ test("generateSlotProposals creates doctor-aware proposals from a patient messag
 
   assert.deepEqual(
     result.proposals.map((proposal) => proposal.time),
-    ["10:00", "10:30", "11:00"]
+    ["10:00", "14:00", "16:00"]
+  );
+  assert.ok(
+    result.proposals.every((proposal) => proposal.durationMinutes === 120)
   );
   assert.ok(
     result.proposals.every((proposal) => proposal.doctorName === "Dr. Ayşe Demir")
@@ -108,6 +111,8 @@ test("generateSlotProposals can use explicit treatment and day inputs", () => {
   assert.equal(result.proposals.length, 2);
   assert.equal(result.proposals[0].doctorName, "Dr. Zeynep Arslan");
   assert.equal(result.proposals[0].time, "10:00");
+  assert.equal(result.proposals[0].durationMinutes, 60);
+  assert.equal(result.proposals[1].time, "11:00");
 });
 
 test("generateSlotProposals returns missing context when treatment or day is absent", () => {
@@ -148,9 +153,9 @@ test("createSlotProposalReply returns safe patient-facing proposal text", () => 
   });
 
   assert.match(reply, /implant için Çarşamba günü mock slot önerileri/);
-  assert.match(reply, /1\. Dr\. Ayşe Demir — 10:00 \(30 dk\)/);
-  assert.match(reply, /2\. Dr\. Ayşe Demir — 10:30 \(30 dk\)/);
-  assert.match(reply, /3\. Dr\. Ayşe Demir — 11:00 \(30 dk\)/);
+  assert.match(reply, /1\. Dr\. Ayşe Demir — 10:00 \(120 dk\)/);
+  assert.match(reply, /2\. Dr\. Ayşe Demir — 14:00 \(120 dk\)/);
+  assert.match(reply, /3\. Dr\. Ayşe Demir — 16:00 \(120 dk\)/);
   assert.match(reply, /kesin randevu değildir/);
   assert.match(reply, /takvim çakışması/);
   assert.doesNotMatch(reply, /randevunuz oluşturuldu/i);
@@ -172,4 +177,23 @@ test("createSlotProposalReply returns safe no-slot text", () => {
   assert.match(reply, /önerilebilir slot bulunamadı/);
   assert.match(reply, /sekreter veya takvim kontrolü/);
   assert.doesNotMatch(reply, /randevunuz oluşturuldu/i);
+});
+
+test("generateSlotProposals allows explicit duration override for controlled flows", () => {
+  const result = generateSlotProposals({
+    message: "İmplant için çarşamba slot var mı?",
+    durationMinutes: 30,
+    stepMinutes: 30,
+    maxSlots: 3,
+  });
+
+  assert.equal(result.status, "ok");
+  assert.equal(result.proposals.length, 3);
+  assert.deepEqual(
+    result.proposals.map((proposal) => proposal.time),
+    ["10:00", "10:30", "11:00"]
+  );
+  assert.ok(
+    result.proposals.every((proposal) => proposal.durationMinutes === 30)
+  );
 });

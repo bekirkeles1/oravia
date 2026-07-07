@@ -5,20 +5,15 @@ const {
   validateAvailabilityWindow,
 } = require("../clinic/doctorAvailability");
 const { resolveTreatmentName } = require("../clinic/doctorDirectory");
+const {
+  DEFAULT_TREATMENT_DURATION_MINUTES,
+  normalizePositiveInteger,
+  resolveSlotDurationMinutes,
+} = require("../clinic/treatmentDurationRules");
 
-const DEFAULT_SLOT_DURATION_MINUTES = 30;
+const DEFAULT_SLOT_DURATION_MINUTES = DEFAULT_TREATMENT_DURATION_MINUTES;
 const DEFAULT_SLOT_STEP_MINUTES = 30;
 const DEFAULT_MAX_SLOT_PROPOSALS = 3;
-
-function normalizePositiveInteger(value, fallback) {
-  const number = Number(value);
-
-  if (!Number.isInteger(number) || number <= 0) {
-    return fallback;
-  }
-
-  return number;
-}
 
 function minutesToTime(totalMinutes) {
   if (
@@ -108,13 +103,14 @@ function generateSlotProposals(input = {}) {
   const message = input.message || "";
   const treatment = resolveTreatmentName(input.treatmentName || message);
   const day = findDayInMessage(input.dayName || message);
-  const durationMinutes = normalizePositiveInteger(
-    input.durationMinutes,
-    DEFAULT_SLOT_DURATION_MINUTES
-  );
+  const durationMinutes = resolveSlotDurationMinutes({
+    treatmentName: treatment,
+    message,
+    durationMinutes: input.durationMinutes,
+  });
   const stepMinutes = normalizePositiveInteger(
     input.stepMinutes,
-    DEFAULT_SLOT_STEP_MINUTES
+    durationMinutes || DEFAULT_SLOT_STEP_MINUTES
   );
   const maxSlots = normalizePositiveInteger(
     input.maxSlots,
