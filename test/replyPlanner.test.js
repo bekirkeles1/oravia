@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const { planMessagingReply } = require("../src/messaging/replyPlanner");
+const { dentalVertical } = require("../src/verticals/dental/dentalVertical");
 
 test("reply planner preserves appointment request reply draft", () => {
   const result = planMessagingReply({
@@ -47,6 +48,25 @@ test("reply planner answers treatment information from knowledge base", () => {
   assert.match(result.reply_draft, /uygun randevu saatlerini kontrol edebilirim/);
 });
 
+test("reply planner can use the dental vertical adapter for treatment information", () => {
+  const result = planMessagingReply({
+    message: "İmplant nedir, bilgi alabilir miyim?",
+    assistantVertical: dentalVertical,
+    classification: {
+      intent: "unknown_intent",
+      requires_handoff: true,
+      reply:
+        "Merhaba, sizi daha doğru yönlendirebilmem için mesajınızı klinik ekibimize aktaracağım."
+    }
+  });
+
+  assert.equal(result.intent, "treatment_info");
+  assert.equal(result.requires_handoff, false);
+  assert.equal(result.reply_source, "treatment_knowledge_base");
+  assert.equal(result.treatment_id, "implant");
+  assert.match(result.reply_draft, /eksik dişlerin yerine/);
+});
+
 test("reply planner answers dental cleaning information from knowledge base", () => {
   const result = planMessagingReply({
     message: "Diş taşı temizliği ne sıklıkla yapılmalı?",
@@ -63,6 +83,49 @@ test("reply planner answers dental cleaning information from knowledge base", ()
   assert.equal(result.reply_source, "treatment_knowledge_base");
   assert.equal(result.treatment_id, "dental_cleaning");
   assert.match(result.reply_draft, /Diş taşı temizliği/);
+});
+
+test("reply planner can use a fake vertical for treatment information", () => {
+  const fakeVertical = {
+    id: "fake",
+    name: "Fake vertical",
+    evaluateHandoff() {
+      return {
+        requires_handoff: false,
+        matched_rules: [],
+        reply_draft: null
+      };
+    },
+    searchTreatmentInfo(message) {
+      if (message.includes("custom")) {
+        return {
+          id: "custom_service"
+        };
+      }
+
+      return null;
+    },
+    buildTreatmentAnswer(treatment) {
+      return `Fake vertical answer for ${treatment.id}.`;
+    }
+  };
+
+  const result = planMessagingReply({
+    message: "custom bilgi alabilir miyim?",
+    vertical: fakeVertical,
+    classification: {
+      intent: "unknown_intent",
+      requires_handoff: true,
+      reply:
+        "Merhaba, sizi daha doğru yönlendirebilmem için mesajınızı klinik ekibimize aktaracağım."
+    }
+  });
+
+  assert.equal(result.intent, "treatment_info");
+  assert.equal(result.requires_handoff, false);
+  assert.equal(result.reply_source, "treatment_knowledge_base");
+  assert.equal(result.treatment_id, "custom_service");
+  assert.equal(result.reply_draft, "Fake vertical answer for custom_service.");
 });
 
 test("reply planner falls back to classifier handoff for unknown messages", () => {
@@ -103,6 +166,29 @@ test("reply planner prioritizes handoff rules over treatment answers", () => {
     result.handoff_reasons.some((reason) => reason.id === "swelling"),
     true
   );
+});
+
+test("reply planner can use the dental vertical adapter for handoff evaluation", () => {
+  const result = planMessagingReply({
+    message: "Dişim çok ağrıyor ve yüzüm şişti.",
+    assistantVertical: dentalVertical,
+    classification: {
+      intent: "unknown_intent",
+      requires_handoff: true,
+      reply:
+        "Merhaba, sizi daha doğru yönlendirebilmem için mesajınızı klinik ekibimize aktaracağım."
+    }
+  });
+
+  assert.equal(result.intent, "handoff_required");
+  assert.equal(result.requires_handoff, true);
+  assert.equal(result.reply_source, "handoff_rules");
+  assert.equal(result.treatment_id, null);
+  assert.equal(
+    result.handoff_reasons.some((reason) => reason.id === "swelling"),
+    true
+  );
+  assert.match(result.reply_draft, /klinik ekibimizin değerlendirmesini gerektiriyor/);
 });
 
 test("reply planner answers doctor availability questions with treatment and day", () => {

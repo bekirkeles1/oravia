@@ -1,17 +1,11 @@
-const {
-  buildTreatmentAnswer,
-  searchTreatmentKnowledge
-} = require("../clinic/treatmentKnowledgeBase");
-const {
-  createDoctorAvailabilityReply
-} = require("../clinic/doctorAvailability");
 const { createSlotProposalReply } = require("./slotProposal");
-const { evaluateHandoff } = require("./handoffRules");
+const { dentalVertical } = require("../verticals/dental/dentalVertical");
 
 function planMessagingReply(input = {}) {
   const message = normalizeText(input.message);
   const classification = input.classification || {};
-  const handoff = evaluateHandoff(message);
+  const vertical = resolveReplyPlanningVertical(input);
+  const handoff = evaluateVerticalHandoff(vertical, message);
 
   if (handoff.requires_handoff) {
     return {
@@ -24,7 +18,7 @@ function planMessagingReply(input = {}) {
     };
   }
 
-  const treatmentKnowledge = searchTreatmentKnowledge(message);
+  const treatmentKnowledge = searchVerticalTreatmentInfo(vertical, message);
 
   if (isSlotProposalQuestion(message)) {
     const slotProposalReply = createSlotProposalReply({
@@ -43,7 +37,10 @@ function planMessagingReply(input = {}) {
   }
 
   if (isDoctorAvailabilityQuestion(message)) {
-    const availabilityReply = createDoctorAvailabilityReply(message);
+    const availabilityReply = createVerticalDoctorAvailabilityReply(
+      vertical,
+      message
+    );
 
     if (availabilityReply) {
       return {
@@ -71,7 +68,7 @@ function planMessagingReply(input = {}) {
     return {
       intent: "treatment_info",
       requires_handoff: false,
-      reply_draft: buildTreatmentAnswer(treatmentKnowledge),
+      reply_draft: buildVerticalTreatmentAnswer(vertical, treatmentKnowledge),
       reply_source: "treatment_knowledge_base",
       treatment_id: treatmentKnowledge.id
     };
@@ -89,6 +86,68 @@ function planMessagingReply(input = {}) {
     reply_source: "classifier",
     treatment_id: null
   };
+}
+
+function resolveReplyPlanningVertical(input = {}) {
+  return input.vertical || input.assistantVertical || dentalVertical;
+}
+
+function evaluateVerticalHandoff(vertical, message) {
+  if (typeof vertical.evaluateHandoff === "function") {
+    return vertical.evaluateHandoff(message);
+  }
+
+  if (typeof vertical.handoffRules?.evaluateHandoff === "function") {
+    return vertical.handoffRules.evaluateHandoff(message);
+  }
+
+  return {
+    requires_handoff: false,
+    matched_rules: [],
+    reply_draft: null
+  };
+}
+
+function searchVerticalTreatmentInfo(vertical, message) {
+  if (typeof vertical.searchTreatmentInfo === "function") {
+    return vertical.searchTreatmentInfo(message);
+  }
+
+  if (
+    typeof vertical.treatmentKnowledgeBase?.searchTreatmentKnowledge ===
+    "function"
+  ) {
+    return vertical.treatmentKnowledgeBase.searchTreatmentKnowledge(message);
+  }
+
+  return null;
+}
+
+function buildVerticalTreatmentAnswer(vertical, treatmentKnowledge) {
+  if (typeof vertical.buildTreatmentAnswer === "function") {
+    return vertical.buildTreatmentAnswer(treatmentKnowledge);
+  }
+
+  if (
+    typeof vertical.treatmentKnowledgeBase?.buildTreatmentAnswer === "function"
+  ) {
+    return vertical.treatmentKnowledgeBase.buildTreatmentAnswer(
+      treatmentKnowledge
+    );
+  }
+
+  return null;
+}
+
+function createVerticalDoctorAvailabilityReply(vertical, message) {
+  if (
+    typeof vertical.doctorAvailability?.createDoctorAvailabilityReply ===
+    "function"
+  ) {
+    return vertical.doctorAvailability.createDoctorAvailabilityReply(message);
+  }
+
+  return null;
 }
 
 function buildAppointmentReplyDraft(classification) {
