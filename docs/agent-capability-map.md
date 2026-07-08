@@ -162,6 +162,21 @@ The bot should not rely only on a generic language model.
 
 The answer should be grounded in controlled Oravia modules.
 
+## 6A. Assistant core and vertical boundary
+
+Oravia is now treated as an assistant engine plus a dental clinic vertical.
+
+Assistant core should own generic assistant concepts such as message intake,
+intent routing, reply planning interfaces, handoff interfaces, slot proposal
+interfaces, appointment flow state, and provider contracts.
+
+Dental-specific knowledge should stay behind the dental vertical boundary. The
+current adapter lives at `src/verticals/dental/dentalVertical.js` and is
+registered through `src/assistant/verticalRegistry.js`. It exposes existing
+dental modules for treatment knowledge, handoff rules, doctor directory,
+doctor availability, treatment duration rules, and appointment purpose rules
+without duplicating their business logic.
+
 Future knowledge sources:
 
 ### clinicProfile
