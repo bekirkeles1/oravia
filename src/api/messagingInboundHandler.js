@@ -15,17 +15,31 @@ function handleMessagingInbound(input = {}, options = {}) {
   const classification = classifier(validation.payload.message);
   const replyPlan = replyPlanner({
     message: validation.payload.message,
-    classification
+    classification,
+    appointmentFlowState:
+      options.appointmentFlowState ||
+      input.appointmentFlowState ||
+      input.appointment_flow_state ||
+      null,
+    selected_slot_id: input.selected_slot_id || input.selectedSlotId || null
   });
 
-  return ok({
+  const responseBody = {
     status: "received",
     channel: validation.payload.channel,
     from: validation.payload.from,
     intent: replyPlan.intent,
     requires_handoff: replyPlan.requires_handoff,
     reply_draft: replyPlan.reply_draft
-  });
+  };
+
+  if (replyPlan.reply_source === "appointment_flow_state") {
+    responseBody.appointment_selection_status =
+      replyPlan.appointment_selection_status;
+    responseBody.selected_slot = replyPlan.selected_slot;
+  }
+
+  return ok(responseBody);
 }
 
 function validateInboundPayload(input) {

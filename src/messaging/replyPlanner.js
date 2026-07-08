@@ -1,4 +1,7 @@
 const { createSlotProposalReply } = require("./slotProposal");
+const {
+  createAppointmentSelectionReply,
+} = require("./appointmentFlowState");
 const { getActiveAssistantVertical } = require("../assistant/defaultVertical");
 
 function planMessagingReply(input = {}) {
@@ -16,6 +19,15 @@ function planMessagingReply(input = {}) {
       treatment_id: null,
       handoff_reasons: handoff.matched_rules
     };
+  }
+
+  const appointmentSelectionReply = createPendingAppointmentSelectionReply(
+    input,
+    message
+  );
+
+  if (appointmentSelectionReply) {
+    return appointmentSelectionReply;
   }
 
   const treatmentKnowledge = searchVerticalTreatmentInfo(vertical, message);
@@ -91,6 +103,45 @@ function planMessagingReply(input = {}) {
 
 function resolveReplyPlanningVertical(input = {}) {
   return input.vertical || input.assistantVertical || getActiveAssistantVertical();
+}
+
+function createPendingAppointmentSelectionReply(input, message) {
+  const flowState =
+    input.appointmentFlowState ||
+    input.appointment_flow_state ||
+    input.flowState ||
+    null;
+
+  if (!flowState || !isAppointmentSelectionAttempt(input, message)) {
+    return null;
+  }
+
+  const selectionReply = createAppointmentSelectionReply(flowState, {
+    message,
+    selected_slot_id: input.selected_slot_id || input.selectedSlotId || null,
+  });
+
+  if (selectionReply.status === "no_pending_appointment") {
+    return null;
+  }
+
+  return {
+    intent: "appointment_slot_selection",
+    requires_handoff: false,
+    reply_draft: selectionReply.reply_draft,
+    reply_source: "appointment_flow_state",
+    treatment_id: flowState.treatment || null,
+    appointment_selection_status: selectionReply.status,
+    selected_slot: selectionReply.selectedSlot,
+  };
+}
+
+function isAppointmentSelectionAttempt(input, message) {
+  if (input.selected_slot_id || input.selectedSlotId) {
+    return true;
+  }
+
+  return /\b([01]?\d|2[0-3])[:.]([0-5]\d)\b/.test(String(message || ""));
 }
 
 function evaluateVerticalHandoff(vertical, message) {

@@ -2,7 +2,20 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const { planMessagingReply } = require("../src/messaging/replyPlanner");
+const {
+  createPendingAppointmentFlowState,
+} = require("../src/messaging/appointmentFlowState");
+const { generateSlotProposals } = require("../src/messaging/slotProposal");
 const { dentalVertical } = require("../src/verticals/dental/dentalVertical");
+
+function createSampleAppointmentFlowState() {
+  return createPendingAppointmentFlowState(
+    generateSlotProposals({
+      message: "İmplant yaptırmak istiyorum, çarşamba müsait slot var mı?",
+      maxSlots: 3,
+    })
+  );
+}
 
 test("reply planner preserves appointment request reply draft", () => {
   const result = planMessagingReply({
@@ -419,4 +432,65 @@ test("reply planner falls back to appointment request when slot context is incom
   assert.equal(result.requires_handoff, false);
   assert.equal(result.reply_source, "classifier");
   assert.equal(result.reply_draft, "İmplant randevusu için uygun saatleri kontrol ediyorum.");
+});
+
+test("reply planner can match a pending appointment slot by visible time", () => {
+  const result = planMessagingReply({
+    message: "10:30 olur",
+    appointmentFlowState: createSampleAppointmentFlowState(),
+    classification: {
+      intent: "unknown_intent",
+      requires_handoff: true,
+      reply:
+        "Merhaba, sizi daha doğru yönlendirebilmem için mesajınızı klinik ekibimize aktaracağım."
+    }
+  });
+
+  assert.equal(result.intent, "appointment_slot_selection");
+  assert.equal(result.requires_handoff, false);
+  assert.equal(result.reply_source, "appointment_flow_state");
+  assert.equal(result.appointment_selection_status, "selected_slot_matched");
+  assert.equal(result.selected_slot.time, "10:30");
+  assert.match(result.reply_draft, /10:30 slotunu seçtiniz/);
+  assert.match(result.reply_draft, /henüz kesin randevu değildir/);
+  assert.doesNotMatch(result.reply_draft, /randevunuz oluşturuldu/i);
+});
+
+test("reply planner returns safe clarification for unknown slot selection in pending context", () => {
+  const result = planMessagingReply({
+    message: "15:00 olur",
+    appointmentFlowState: createSampleAppointmentFlowState(),
+    classification: {
+      intent: "unknown_intent",
+      requires_handoff: true,
+      reply:
+        "Merhaba, sizi daha doğru yönlendirebilmem için mesajınızı klinik ekibimize aktaracağım."
+    }
+  });
+
+  assert.equal(result.intent, "appointment_slot_selection");
+  assert.equal(result.requires_handoff, false);
+  assert.equal(result.appointment_selection_status, "selected_slot_not_found");
+  assert.equal(result.selected_slot, null);
+  assert.match(result.reply_draft, /eşleştiremedim/);
+  assert.match(result.reply_draft, /10:00, 10:30, 11:00/);
+});
+
+test("reply planner keeps handoff above pending appointment selection", () => {
+  const result = planMessagingReply({
+    message: "10:30 olur ama yüzüm şişti ve çok ağrıyor.",
+    appointmentFlowState: createSampleAppointmentFlowState(),
+    classification: {
+      intent: "unknown_intent",
+      requires_handoff: true,
+      reply:
+        "Merhaba, sizi daha doğru yönlendirebilmem için mesajınızı klinik ekibimize aktaracağım."
+    }
+  });
+
+  assert.equal(result.intent, "handoff_required");
+  assert.equal(result.requires_handoff, true);
+  assert.equal(result.reply_source, "handoff_rules");
+  assert.equal(result.appointment_selection_status, undefined);
+  assert.match(result.reply_draft, /klinik ekibimizin değerlendirmesini gerektiriyor/);
 });
