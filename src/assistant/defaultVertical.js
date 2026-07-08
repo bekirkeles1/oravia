@@ -3,6 +3,7 @@ const {
   registerVertical,
   resolveVertical,
 } = require("./verticalRegistry");
+const { assertVerticalCapabilities } = require("./verticalContract");
 const { dentalVertical } = require("../verticals/dental/dentalVertical");
 
 const DEFAULT_VERTICAL_ID = "dental";
@@ -12,12 +13,16 @@ function ensureDefaultAssistantVerticalRegistered() {
     registerVertical(dentalVertical, { active: !getActiveVertical() });
   }
 
-  return resolveVertical(DEFAULT_VERTICAL_ID);
+  const defaultVertical = resolveVertical(DEFAULT_VERTICAL_ID);
+  assertVerticalCapabilities(defaultVertical);
+  return defaultVertical;
 }
 
 function getActiveAssistantVertical() {
   ensureDefaultAssistantVerticalRegistered();
-  return getActiveVertical();
+  const activeVertical = getActiveVertical();
+  assertVerticalCapabilities(activeVertical);
+  return activeVertical;
 }
 
 function getDefaultAssistantVertical() {
