@@ -1978,3 +1978,107 @@ blockquote {
     grid-template-columns: 1fr;
   }
 }
+
+/* 11N — Appointment Reviews Workspace */
+
+.appointment-reviews-workspace-section {
+  margin-top: 28px;
+  scroll-margin-top: 24px;
+}
+
+.appointment-reviews-workspace-section .section-heading p:last-child {
+  max-width: 720px;
+  margin: 6px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.appointment-reviews-workspace-card {
+  display: grid;
+  gap: 16px;
+  max-width: 1080px;
+  margin: 18px auto 0;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.appointment-reviews-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.appointment-reviews-summary-grid div,
+.appointment-reviews-safety-note,
+.appointment-reviews-empty-state,
+.appointment-review-item {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fbf9;
+}
+
+.appointment-reviews-summary-grid div,
+.appointment-reviews-safety-note,
+.appointment-reviews-empty-state {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+}
+
+.appointment-reviews-summary-grid span,
+.appointment-reviews-safety-note span,
+.appointment-reviews-empty-state span,
+.appointment-review-item span {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.appointment-reviews-summary-grid span,
+.appointment-review-item span {
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.appointment-reviews-safety-note {
+  border-style: dashed;
+  border-color: rgba(43, 111, 99, 0.28);
+  background: rgba(43, 111, 99, 0.06);
+}
+
+.appointment-reviews-state {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fbf9;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.appointment-reviews-list {
+  display: grid;
+  gap: 10px;
+}
+
+.appointment-review-item {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.appointment-review-item dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .appointment-reviews-summary-grid,
+  .appointment-review-item dl {
+    grid-template-columns: 1fr;
+  }
+}
