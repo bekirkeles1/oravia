@@ -1,5 +1,6 @@
 const { classifyPatientMessage } = require("../ai/intentClassifier");
 const { planMessagingReply } = require("../messaging/replyPlanner");
+const { buildConversationStateKey } = require("../messaging/conversationStateStore");
 
 const SUPPORTED_CHANNELS = new Set(["whatsapp"]);
 
@@ -12,15 +13,24 @@ function handleMessagingInbound(input = {}, options = {}) {
 
   const classifier = options.classifier || classifyPatientMessage;
   const replyPlanner = options.replyPlanner || planMessagingReply;
+  const conversationStateStore = options.conversationStateStore || null;
+  const conversationStateKey = buildConversationStateKey(validation.payload);
+  const explicitAppointmentFlowState =
+    options.appointmentFlowState ||
+    input.appointmentFlowState ||
+    input.appointment_flow_state ||
+    null;
+  const storedAppointmentFlowState =
+    !explicitAppointmentFlowState &&
+    conversationStateStore &&
+    typeof conversationStateStore.getAppointmentFlowState === "function"
+      ? conversationStateStore.getAppointmentFlowState(conversationStateKey)
+      : null;
   const classification = classifier(validation.payload.message);
   const replyPlan = replyPlanner({
     message: validation.payload.message,
     classification,
-    appointmentFlowState:
-      options.appointmentFlowState ||
-      input.appointmentFlowState ||
-      input.appointment_flow_state ||
-      null,
+    appointmentFlowState: explicitAppointmentFlowState || storedAppointmentFlowState,
     selected_slot_id: input.selected_slot_id || input.selectedSlotId || null
   });
 
@@ -43,7 +53,42 @@ function handleMessagingInbound(input = {}, options = {}) {
     responseBody.appointmentFlowState = replyPlan.appointmentFlowState;
   }
 
+  persistAppointmentFlowState({
+    conversationStateStore,
+    conversationStateKey,
+    replyPlan,
+  });
+
   return ok(responseBody);
+}
+
+function persistAppointmentFlowState({
+  conversationStateStore,
+  conversationStateKey,
+  replyPlan,
+}) {
+  if (!conversationStateStore || !conversationStateKey) {
+    return;
+  }
+
+  if (
+    replyPlan.reply_source === "appointment_flow_state" &&
+    replyPlan.appointment_selection_status === "selected_slot_matched" &&
+    typeof conversationStateStore.clearAppointmentFlowState === "function"
+  ) {
+    conversationStateStore.clearAppointmentFlowState(conversationStateKey);
+    return;
+  }
+
+  if (
+    replyPlan.appointmentFlowState &&
+    typeof conversationStateStore.setAppointmentFlowState === "function"
+  ) {
+    conversationStateStore.setAppointmentFlowState(
+      conversationStateKey,
+      replyPlan.appointmentFlowState
+    );
+  }
 }
 
 function validateInboundPayload(input) {

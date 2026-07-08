@@ -8,6 +8,10 @@ const {
   createPendingAppointmentFlowState,
   getPendingOfferedSlots
 } = require("../src/messaging/appointmentFlowState");
+const {
+  buildConversationStateKey,
+  createInMemoryConversationStateStore
+} = require("../src/messaging/conversationStateStore");
 const { generateSlotProposals } = require("../src/messaging/slotProposal");
 
 const validInput = {
@@ -217,6 +221,104 @@ test("returned appointment flow state can be passed into the next inbound select
   assert.doesNotMatch(selectionResult.body.reply_draft, /randevunuz oluşturuldu/i);
 });
 
+test("messaging inbound handler saves appointment flow state when store is provided", () => {
+  const conversationStateStore = createInMemoryConversationStateStore();
+  const result = handleMessagingInbound(
+    {
+      ...validInput,
+      message: "İmplant yaptırmak istiyorum, çarşamba saat önerir misiniz?"
+    },
+    {
+      conversationStateStore
+    }
+  );
+  const key = buildConversationStateKey(validInput);
+  const storedState = conversationStateStore.getAppointmentFlowState(key);
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body.intent, "appointment_slot_proposal");
+  assert.equal(storedState.status, "pending_appointment_selection");
+  assert.deepEqual(
+    storedState.offeredSlots.map((slot) => slot.time),
+    ["10:00", "10:30", "11:00"]
+  );
+});
+
+test("messaging inbound handler can load stored appointment flow state for next selection", () => {
+  const conversationStateStore = createInMemoryConversationStateStore();
+  handleMessagingInbound(
+    {
+      ...validInput,
+      message: "İmplant yaptırmak istiyorum, çarşamba saat önerir misiniz?"
+    },
+    {
+      conversationStateStore
+    }
+  );
+
+  const selectionResult = handleMessagingInbound(
+    {
+      ...validInput,
+      message: "10:30 olur"
+    },
+    {
+      conversationStateStore
+    }
+  );
+
+  assert.equal(selectionResult.status, 200);
+  assert.equal(selectionResult.body.intent, "appointment_slot_selection");
+  assert.equal(
+    selectionResult.body.appointment_selection_status,
+    "selected_slot_matched"
+  );
+  assert.equal(selectionResult.body.selected_slot.time, "10:30");
+  assert.match(selectionResult.body.reply_draft, /henüz kesin randevu değildir/);
+});
+
+test("messaging inbound handler clears stored flow state after matched selection", () => {
+  const conversationStateStore = createInMemoryConversationStateStore();
+  const key = buildConversationStateKey(validInput);
+  handleMessagingInbound(
+    {
+      ...validInput,
+      message: "İmplant yaptırmak istiyorum, çarşamba saat önerir misiniz?"
+    },
+    {
+      conversationStateStore
+    }
+  );
+
+  assert.ok(conversationStateStore.getAppointmentFlowState(key));
+
+  handleMessagingInbound(
+    {
+      ...validInput,
+      message: "10:30 olur"
+    },
+    {
+      conversationStateStore
+    }
+  );
+
+  assert.equal(conversationStateStore.getAppointmentFlowState(key), null);
+});
+
+test("messaging inbound handler keeps no-store behavior unchanged for later selection", () => {
+  const proposalResult = handleMessagingInbound({
+    ...validInput,
+    message: "İmplant yaptırmak istiyorum, çarşamba saat önerir misiniz?"
+  });
+  const selectionResult = handleMessagingInbound({
+    ...validInput,
+    message: "10:30 olur"
+  });
+
+  assert.equal(proposalResult.body.intent, "appointment_slot_proposal");
+  assert.equal(selectionResult.body.intent, "unknown_intent");
+  assert.equal(selectionResult.body.appointment_selection_status, undefined);
+});
+
 test("messaging inbound handler can match pending appointment selection by visible time", () => {
   const result = handleMessagingInbound(
     {
@@ -319,6 +421,33 @@ test("messaging inbound handler keeps handoff above pending appointment selectio
   assert.match(result.body.reply_draft, /klinik ekibimizin değerlendirmesini gerektiriyor/);
 });
 
+test("messaging inbound handler keeps handoff above stored pending appointment selection", () => {
+  const conversationStateStore = createInMemoryConversationStateStore();
+  handleMessagingInbound(
+    {
+      ...validInput,
+      message: "İmplant yaptırmak istiyorum, çarşamba saat önerir misiniz?"
+    },
+    {
+      conversationStateStore
+    }
+  );
+  const result = handleMessagingInbound(
+    {
+      ...validInput,
+      message: "10:30 olur ama yüzüm şişti ve çok ağrıyor."
+    },
+    {
+      conversationStateStore
+    }
+  );
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body.intent, "handoff_required");
+  assert.equal(result.body.appointment_selection_status, undefined);
+  assert.match(result.body.reply_draft, /klinik ekibimizin değerlendirmesini gerektiriyor/);
+});
+
 test("messaging inbound pending selection does not call appointment creation or calendar provider", () => {
   let calendarProviderCalled = false;
   let appointmentCreationCalled = false;
@@ -365,6 +494,41 @@ test("messaging inbound slot proposal does not call appointment creation or cale
   assert.equal(result.status, 200);
   assert.equal(result.body.intent, "appointment_slot_proposal");
   assert.equal(result.body.appointmentFlowState.status, "pending_appointment_selection");
+  assert.equal(calendarProviderCalled, false);
+  assert.equal(appointmentCreationCalled, false);
+});
+
+test("messaging inbound store-backed selection does not call appointment creation or calendar provider", () => {
+  let calendarProviderCalled = false;
+  let appointmentCreationCalled = false;
+  const conversationStateStore = createInMemoryConversationStateStore();
+  handleMessagingInbound(
+    {
+      ...validInput,
+      message: "İmplant yaptırmak istiyorum, çarşamba saat önerir misiniz?"
+    },
+    {
+      conversationStateStore
+    }
+  );
+  const result = handleMessagingInbound(
+    {
+      ...validInput,
+      message: "10:30 olur"
+    },
+    {
+      conversationStateStore,
+      calendarProvider() {
+        calendarProviderCalled = true;
+      },
+      createAppointment() {
+        appointmentCreationCalled = true;
+      }
+    }
+  );
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body.intent, "appointment_slot_selection");
   assert.equal(calendarProviderCalled, false);
   assert.equal(appointmentCreationCalled, false);
 });
