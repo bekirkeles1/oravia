@@ -177,6 +177,10 @@ dental modules for treatment knowledge, handoff rules, doctor directory,
 doctor availability, treatment duration rules, and appointment purpose rules
 without duplicating their business logic.
 
+The currently expected messaging capabilities are documented in code by
+`src/assistant/verticalContract.js`, which lets tests validate vertical
+adapters without forcing broad runtime enforcement yet.
+
 Future knowledge sources:
 
 ### clinicProfile
