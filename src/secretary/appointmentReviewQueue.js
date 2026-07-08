@@ -20,11 +20,12 @@ function createAppointmentReviewItem(appointmentSelectionReview, metadata = {}) 
 
   const sourceReview = validation.review;
   const selectedSlot = cloneValue(sourceReview.selectedSlot);
+  const safeMetadata = sanitizeMetadata(metadata);
 
   return {
     status: "ok",
     review: {
-      id: buildReviewId(sourceReview, selectedSlot),
+      id: buildReviewId(sourceReview, selectedSlot, safeMetadata),
       status: PENDING_SECRETARY_REVIEW,
       source: sourceReview.source || "mock",
       selectedSlot,
@@ -41,7 +42,7 @@ function createAppointmentReviewItem(appointmentSelectionReview, metadata = {}) 
       requiresSecretaryConfirmation: true,
       bookingCreated: false,
       calendarChecked: false,
-      metadata: sanitizeMetadata(metadata),
+      metadata: safeMetadata,
     },
   };
 }
@@ -176,12 +177,20 @@ function validationError(code, message) {
   };
 }
 
-function buildReviewId(review, selectedSlot) {
-  return [
+function buildReviewId(review, selectedSlot, metadata = {}) {
+  const parts = [
     "review",
     normalizeId(review.source || selectedSlot.source || "mock"),
-    normalizeId(selectedSlot.id || selectedSlot.time || "slot"),
-  ].join("_");
+  ];
+  const conversationKey = normalizeId(metadata.conversationKey);
+
+  if (conversationKey) {
+    parts.push(conversationKey);
+  }
+
+  parts.push(normalizeId(selectedSlot.id || selectedSlot.time || "slot"));
+
+  return parts.join("_");
 }
 
 function sanitizeMetadata(metadata) {

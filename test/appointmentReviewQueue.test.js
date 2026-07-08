@@ -32,7 +32,7 @@ test("appointmentSelectionReview can create a pending secretary review item", ()
 
   assert.equal(result.status, "ok");
   assert.equal(result.review.status, PENDING_SECRETARY_REVIEW);
-  assert.match(result.review.id, /^review_mock_/);
+  assert.match(result.review.id, /^review_mock_whatsapp_905322223333_/);
   assert.equal(result.review.selectedSlot.time, "10:30");
   assert.equal(result.review.treatment, "implant");
   assert.equal(result.review.day, "wednesday");
@@ -43,6 +43,45 @@ test("appointmentSelectionReview can create a pending secretary review item", ()
   assert.equal(
     result.review.metadata.conversationKey,
     "whatsapp:+905322223333"
+  );
+});
+
+test("appointment review ids include conversation key when available", () => {
+  const appointmentSelectionReview = createSampleAppointmentSelectionReview();
+  const firstResult = createAppointmentReviewItem(appointmentSelectionReview, {
+    conversationKey: "whatsapp:+905322223333",
+    message: "10:30 olur",
+  });
+  const secondResult = createAppointmentReviewItem(appointmentSelectionReview, {
+    conversationKey: "whatsapp:+905551112233",
+    message: "10:30 olur",
+  });
+
+  assert.notEqual(firstResult.review.id, secondResult.review.id);
+  assert.match(firstResult.review.id, /whatsapp_905322223333/);
+  assert.match(secondResult.review.id, /whatsapp_905551112233/);
+  assert.doesNotMatch(firstResult.review.id, /10_30_olur|olur/);
+  assert.doesNotMatch(secondResult.review.id, /10_30_olur|olur/);
+});
+
+test("appointment review queue keeps same-slot reviews from different conversations", () => {
+  const queue = createInMemoryAppointmentReviewQueue();
+  const appointmentSelectionReview = createSampleAppointmentSelectionReview();
+  const firstResult = queue.addAppointmentReview(appointmentSelectionReview, {
+    conversationKey: "whatsapp:+905322223333",
+  });
+  const secondResult = queue.addAppointmentReview(appointmentSelectionReview, {
+    conversationKey: "whatsapp:+905551112233",
+  });
+  const listedReviews = queue.listAppointmentReviews();
+
+  assert.equal(firstResult.status, "ok");
+  assert.equal(secondResult.status, "ok");
+  assert.notEqual(firstResult.review.id, secondResult.review.id);
+  assert.equal(listedReviews.length, 2);
+  assert.deepEqual(
+    listedReviews.map((review) => review.selectedSlot.time),
+    ["10:30", "10:30"]
   );
 });
 
