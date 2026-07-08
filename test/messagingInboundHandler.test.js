@@ -146,6 +146,7 @@ test("messaging inbound handler can return treatment info reply through reply pl
   assert.equal(result.body.requires_handoff, false);
   assert.match(result.body.reply_draft, /eksik dişlerin yerine/);
   assert.match(result.body.reply_draft, /hekim muayenesi/);
+  assert.equal(result.body.appointmentFlowState, undefined);
 });
 
 test("messaging inbound handler returns handoff for risky clinical message", () => {
@@ -161,6 +162,59 @@ test("messaging inbound handler returns handoff for risky clinical message", () 
   assert.equal(result.body.intent, "handoff_required");
   assert.equal(result.body.requires_handoff, true);
   assert.match(result.body.reply_draft, /klinik ekibimizin değerlendirmesini gerektiriyor/);
+  assert.equal(result.body.appointmentFlowState, undefined);
+});
+
+test("messaging inbound handler includes appointment flow state when proposing slots", () => {
+  const result = handleMessagingInbound({
+    ...validInput,
+    message: "İmplant yaptırmak istiyorum, çarşamba saat önerir misiniz?"
+  });
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body.intent, "appointment_slot_proposal");
+  assert.equal(result.body.requires_handoff, false);
+  assert.match(result.body.reply_draft, /mock ilk muayene \/ değerlendirme slot önerileri/);
+  assert.equal(
+    result.body.appointmentFlowState.status,
+    "pending_appointment_selection"
+  );
+  assert.equal(result.body.appointmentFlowState.treatment, "implant");
+  assert.equal(result.body.appointmentFlowState.day, "wednesday");
+  assert.deepEqual(
+    result.body.appointmentFlowState.offeredSlots.map((slot) => slot.time),
+    ["10:00", "10:30", "11:00"]
+  );
+  assert.doesNotMatch(
+    JSON.stringify(result.body.appointmentFlowState),
+    /randevunuz oluşturuldu|booked|confirmed/i
+  );
+});
+
+test("returned appointment flow state can be passed into the next inbound selection", () => {
+  const proposalResult = handleMessagingInbound({
+    ...validInput,
+    message: "İmplant yaptırmak istiyorum, çarşamba saat önerir misiniz?"
+  });
+  const selectionResult = handleMessagingInbound(
+    {
+      ...validInput,
+      message: "10:30 olur"
+    },
+    {
+      appointmentFlowState: proposalResult.body.appointmentFlowState
+    }
+  );
+
+  assert.equal(selectionResult.status, 200);
+  assert.equal(selectionResult.body.intent, "appointment_slot_selection");
+  assert.equal(
+    selectionResult.body.appointment_selection_status,
+    "selected_slot_matched"
+  );
+  assert.equal(selectionResult.body.selected_slot.time, "10:30");
+  assert.match(selectionResult.body.reply_draft, /henüz kesin randevu değildir/);
+  assert.doesNotMatch(selectionResult.body.reply_draft, /randevunuz oluşturuldu/i);
 });
 
 test("messaging inbound handler can match pending appointment selection by visible time", () => {
@@ -286,6 +340,31 @@ test("messaging inbound pending selection does not call appointment creation or 
 
   assert.equal(result.status, 200);
   assert.equal(result.body.intent, "appointment_slot_selection");
+  assert.equal(calendarProviderCalled, false);
+  assert.equal(appointmentCreationCalled, false);
+});
+
+test("messaging inbound slot proposal does not call appointment creation or calendar provider", () => {
+  let calendarProviderCalled = false;
+  let appointmentCreationCalled = false;
+  const result = handleMessagingInbound(
+    {
+      ...validInput,
+      message: "İmplant yaptırmak istiyorum, çarşamba saat önerir misiniz?"
+    },
+    {
+      calendarProvider() {
+        calendarProviderCalled = true;
+      },
+      createAppointment() {
+        appointmentCreationCalled = true;
+      }
+    }
+  );
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body.intent, "appointment_slot_proposal");
+  assert.equal(result.body.appointmentFlowState.status, "pending_appointment_selection");
   assert.equal(calendarProviderCalled, false);
   assert.equal(appointmentCreationCalled, false);
 });

@@ -371,6 +371,13 @@ test("reply planner proposes consultation slots for first-time implant appointme
   assert.match(result.reply_draft, /takvim çakışması/);
   assert.doesNotMatch(result.reply_draft, /120 dk/);
   assert.doesNotMatch(result.reply_draft, /randevunuz oluşturuldu/i);
+  assert.equal(result.appointmentFlowState.status, "pending_appointment_selection");
+  assert.equal(result.appointmentFlowState.treatment, "implant");
+  assert.equal(result.appointmentFlowState.day, "wednesday");
+  assert.deepEqual(
+    result.appointmentFlowState.offeredSlots.map((slot) => slot.time),
+    ["10:00", "10:30", "11:00"]
+  );
 });
 
 test("reply planner proposes treatment-specific duration slots for dental cleaning", () => {
@@ -392,6 +399,9 @@ test("reply planner proposes treatment-specific duration slots for dental cleani
   assert.match(result.reply_draft, /1\. Dr\. Zeynep Arslan — 10:00 \(60 dk\)/);
   assert.match(result.reply_draft, /2\. Dr\. Zeynep Arslan — 11:00 \(60 dk\)/);
   assert.match(result.reply_draft, /kesin randevu değildir/);
+  assert.equal(result.appointmentFlowState.treatment, "diş taşı temizliği");
+  assert.equal(result.appointmentFlowState.day, "saturday");
+  assert.equal(result.appointmentFlowState.offeredSlots.length, 3);
 });
 
 test("reply planner keeps handoff rules above slot proposal answers", () => {
@@ -493,4 +503,34 @@ test("reply planner keeps handoff above pending appointment selection", () => {
   assert.equal(result.reply_source, "handoff_rules");
   assert.equal(result.appointment_selection_status, undefined);
   assert.match(result.reply_draft, /klinik ekibimizin değerlendirmesini gerektiriyor/);
+});
+
+test("reply planner does not return appointment flow state for treatment info", () => {
+  const result = planMessagingReply({
+    message: "İmplant nedir, bilgi alabilir miyim?",
+    classification: {
+      intent: "unknown_intent",
+      requires_handoff: true,
+      reply:
+        "Merhaba, sizi daha doğru yönlendirebilmem için mesajınızı klinik ekibimize aktaracağım."
+    }
+  });
+
+  assert.equal(result.intent, "treatment_info");
+  assert.equal(result.appointmentFlowState, undefined);
+});
+
+test("reply planner does not return appointment flow state for handoff", () => {
+  const result = planMessagingReply({
+    message: "Dişim çok ağrıyor ve yüzüm şişti.",
+    classification: {
+      intent: "unknown_intent",
+      requires_handoff: true,
+      reply:
+        "Merhaba, sizi daha doğru yönlendirebilmem için mesajınızı klinik ekibimize aktaracağım."
+    }
+  });
+
+  assert.equal(result.intent, "handoff_required");
+  assert.equal(result.appointmentFlowState, undefined);
 });

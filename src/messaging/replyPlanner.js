@@ -1,6 +1,10 @@
-const { createSlotProposalReply } = require("./slotProposal");
+const {
+  createSlotProposalReplyFromResult,
+  generateSlotProposals,
+} = require("./slotProposal");
 const {
   createAppointmentSelectionReply,
+  createPendingAppointmentFlowState,
 } = require("./appointmentFlowState");
 const { getActiveAssistantVertical } = require("../assistant/defaultVertical");
 
@@ -33,19 +37,31 @@ function planMessagingReply(input = {}) {
   const treatmentKnowledge = searchVerticalTreatmentInfo(vertical, message);
 
   if (isSlotProposalQuestion(message)) {
-    const slotProposalReply = createSlotProposalReply({
+    const slotProposalResult = generateSlotProposals({
       message,
       vertical
     });
+    const slotProposalReply =
+      createSlotProposalReplyFromResult(slotProposalResult);
 
     if (slotProposalReply) {
-      return {
+      const replyPlan = {
         intent: "appointment_slot_proposal",
         requires_handoff: false,
         reply_draft: slotProposalReply,
         reply_source: "slot_proposal_mock",
         treatment_id: treatmentKnowledge?.id || null
       };
+
+      if (
+        slotProposalResult.status === "ok" &&
+        slotProposalResult.proposals.length > 0
+      ) {
+        replyPlan.appointmentFlowState =
+          createPendingAppointmentFlowState(slotProposalResult);
+      }
+
+      return replyPlan;
     }
   }
 

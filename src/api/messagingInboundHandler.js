@@ -39,6 +39,10 @@ function handleMessagingInbound(input = {}, options = {}) {
     responseBody.selected_slot = replyPlan.selected_slot;
   }
 
+  if (replyPlan.appointmentFlowState) {
+    responseBody.appointmentFlowState = replyPlan.appointmentFlowState;
+  }
+
   return ok(responseBody);
 }
 

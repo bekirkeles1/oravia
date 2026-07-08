@@ -219,6 +219,10 @@ function generateSlotProposals(input = {}) {
 function createSlotProposalReply(input = {}) {
   const result = generateSlotProposals(input);
 
+  return createSlotProposalReplyFromResult(result);
+}
+
+function createSlotProposalReplyFromResult(result) {
   if (result.status === "missing_context") {
     return null;
   }
@@ -334,6 +338,7 @@ module.exports = {
   DEFAULT_SLOT_DURATION_MINUTES,
   DEFAULT_SLOT_STEP_MINUTES,
   buildSlotId,
+  createSlotProposalReplyFromResult,
   createSlotProposalReply,
   generateSlotProposals,
   generateSlotsFromWindow,
