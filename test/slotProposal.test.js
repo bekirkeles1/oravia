@@ -8,6 +8,7 @@ const {
   generateSlotsFromWindow,
   minutesToTime,
 } = require("../src/messaging/slotProposal");
+const { dentalVertical } = require("../src/verticals/dental/dentalVertical");
 
 test("minutesToTime formats valid minute values", () => {
   assert.equal(minutesToTime(0), "00:00");
@@ -101,6 +102,105 @@ test("generateSlotProposals defaults first-time implant request to consultation 
     result.proposals.every(
       (proposal) => proposal.requires_calendar_conflict_check === true
     )
+  );
+});
+
+test("generateSlotProposals can use the dental vertical adapter", () => {
+  const result = generateSlotProposals({
+    message: "İmplant yaptırmak istiyorum, çarşamba müsait slot var mı?",
+    assistantVertical: dentalVertical,
+    maxSlots: 3,
+  });
+
+  assert.equal(result.status, "ok");
+  assert.equal(result.treatment, "implant");
+  assert.equal(result.appointmentPurpose, "initial_consultation");
+  assert.equal(result.durationMinutes, 30);
+  assert.equal(result.day, "wednesday");
+  assert.deepEqual(
+    result.proposals.map((proposal) => proposal.time),
+    ["10:00", "10:30", "11:00"]
+  );
+});
+
+test("generateSlotProposals can use a fake vertical for slot dependencies", () => {
+  const fakeVertical = {
+    id: "fake",
+    name: "Fake vertical",
+    doctorDirectory: {
+      resolveTreatmentName(value) {
+        return String(value || "").includes("laser") ? "laser" : null;
+      },
+    },
+    doctorAvailability: {
+      findDayInMessage(value) {
+        return String(value || "").includes("monday") ? "monday" : null;
+      },
+      findAvailableDoctorsByTreatmentAndDay(treatmentName, dayName) {
+        if (treatmentName !== "laser" || dayName !== "monday") {
+          return [];
+        }
+
+        return [
+          {
+            doctor: {
+              id: "dr-fake",
+              name: "Dr. Fake",
+            },
+            treatment: "laser",
+            day: "monday",
+            dayLabel: "Monday",
+            windows: [{ start: "09:00", end: "10:00" }],
+            source: "fake",
+          },
+        ];
+      },
+      validateAvailabilityWindow(window) {
+        return Boolean(window?.start && window?.end);
+      },
+      timeToMinutes(value) {
+        const [hours, minutes] = value.split(":").map(Number);
+        return hours * 60 + minutes;
+      },
+    },
+    treatmentDurationRules: {
+      resolveSlotDurationMinutes() {
+        return 25;
+      },
+      normalizePositiveInteger(value, fallback) {
+        const number = Number(value);
+        return Number.isInteger(number) && number > 0 ? number : fallback;
+      },
+    },
+    appointmentPurposeRules: {
+      inferAppointmentPurpose() {
+        return "fake_consultation";
+      },
+      getAppointmentPurposeLabel() {
+        return "Fake consultation";
+      },
+    },
+  };
+
+  const result = generateSlotProposals({
+    message: "laser monday slot",
+    vertical: fakeVertical,
+    maxSlots: 2,
+  });
+
+  assert.equal(result.status, "ok");
+  assert.equal(result.treatment, "laser");
+  assert.equal(result.day, "monday");
+  assert.equal(result.appointmentPurpose, "fake_consultation");
+  assert.equal(result.appointmentPurposeLabel, "Fake consultation");
+  assert.equal(result.durationMinutes, 25);
+  assert.deepEqual(
+    result.proposals.map((proposal) => proposal.time),
+    ["09:00", "09:25"]
+  );
+  assert.deepEqual(
+    result.proposals.map((proposal) => proposal.doctorName),
+    ["Dr. Fake", "Dr. Fake"]
   );
 });
 

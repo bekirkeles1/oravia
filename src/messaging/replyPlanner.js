@@ -22,7 +22,8 @@ function planMessagingReply(input = {}) {
 
   if (isSlotProposalQuestion(message)) {
     const slotProposalReply = createSlotProposalReply({
-      message
+      message,
+      vertical
     });
 
     if (slotProposalReply) {

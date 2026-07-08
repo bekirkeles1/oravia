@@ -1,21 +1,7 @@
-const {
-  findAvailableDoctorsByTreatmentAndDay,
-  findDayInMessage,
-  timeToMinutes,
-  validateAvailabilityWindow,
-} = require("../clinic/doctorAvailability");
-const { resolveTreatmentName } = require("../clinic/doctorDirectory");
-const {
-  DEFAULT_TREATMENT_DURATION_MINUTES,
-  normalizePositiveInteger,
-  resolveSlotDurationMinutes,
-} = require("../clinic/treatmentDurationRules");
-const {
-  getAppointmentPurposeLabel,
-  inferAppointmentPurpose,
-} = require("../clinic/appointmentPurposeRules");
+const { dentalVertical } = require("../verticals/dental/dentalVertical");
 
-const DEFAULT_SLOT_DURATION_MINUTES = DEFAULT_TREATMENT_DURATION_MINUTES;
+const DEFAULT_SLOT_DURATION_MINUTES =
+  dentalVertical.treatmentDurationRules.DEFAULT_TREATMENT_DURATION_MINUTES;
 const DEFAULT_SLOT_STEP_MINUTES = 30;
 const DEFAULT_MAX_SLOT_PROPOSALS = 3;
 
@@ -35,21 +21,29 @@ function minutesToTime(totalMinutes) {
 }
 
 function generateSlotsFromWindow(window, options = {}) {
-  if (!validateAvailabilityWindow(window)) {
+  const vertical = resolveSlotProposalVertical(options);
+
+  if (!validateAvailabilityWindowWithVertical(vertical, window)) {
     return [];
   }
 
-  const durationMinutes = normalizePositiveInteger(
+  const durationMinutes = normalizePositiveIntegerWithVertical(
+    vertical,
     options.durationMinutes,
     DEFAULT_SLOT_DURATION_MINUTES
   );
-  const stepMinutes = normalizePositiveInteger(
+  const stepMinutes = normalizePositiveIntegerWithVertical(
+    vertical,
     options.stepMinutes,
     durationMinutes || DEFAULT_SLOT_STEP_MINUTES
   );
-  const maxSlots = normalizePositiveInteger(options.maxSlots, Number.MAX_SAFE_INTEGER);
-  const windowStartMinutes = timeToMinutes(window.start);
-  const windowEndMinutes = timeToMinutes(window.end);
+  const maxSlots = normalizePositiveIntegerWithVertical(
+    vertical,
+    options.maxSlots,
+    Number.MAX_SAFE_INTEGER
+  );
+  const windowStartMinutes = timeToMinutesWithVertical(vertical, window.start);
+  const windowEndMinutes = timeToMinutesWithVertical(vertical, window.end);
   const slots = [];
 
   for (
@@ -105,24 +99,30 @@ function normalizeIdPart(value) {
 }
 
 function generateSlotProposals(input = {}) {
+  const vertical = resolveSlotProposalVertical(input);
   const message = input.message || "";
-  const treatment = resolveTreatmentName(input.treatmentName || message);
-  const day = findDayInMessage(input.dayName || message);
-  const appointmentPurpose = inferAppointmentPurpose({
+  const treatment = resolveTreatmentNameWithVertical(
+    vertical,
+    input.treatmentName || message
+  );
+  const day = findDayInMessageWithVertical(vertical, input.dayName || message);
+  const appointmentPurpose = inferAppointmentPurposeWithVertical(vertical, {
     message,
     appointmentPurpose: input.appointmentPurpose,
   });
-  const durationMinutes = resolveSlotDurationMinutes({
+  const durationMinutes = resolveSlotDurationMinutesWithVertical(vertical, {
     treatmentName: treatment,
     message,
     appointmentPurpose,
     durationMinutes: input.durationMinutes,
   });
-  const stepMinutes = normalizePositiveInteger(
+  const stepMinutes = normalizePositiveIntegerWithVertical(
+    vertical,
     input.stepMinutes,
     durationMinutes || DEFAULT_SLOT_STEP_MINUTES
   );
-  const maxSlots = normalizePositiveInteger(
+  const maxSlots = normalizePositiveIntegerWithVertical(
+    vertical,
     input.maxSlots,
     DEFAULT_MAX_SLOT_PROPOSALS
   );
@@ -133,7 +133,10 @@ function generateSlotProposals(input = {}) {
       treatment,
       day,
       appointmentPurpose,
-      appointmentPurposeLabel: getAppointmentPurposeLabel(appointmentPurpose),
+      appointmentPurposeLabel: getAppointmentPurposeLabelWithVertical(
+        vertical,
+        appointmentPurpose
+      ),
       durationMinutes,
       source: "mock",
       proposals: [],
@@ -142,7 +145,11 @@ function generateSlotProposals(input = {}) {
     };
   }
 
-  const matches = findAvailableDoctorsByTreatmentAndDay(treatment, day);
+  const matches = findAvailableDoctorsByTreatmentAndDayWithVertical(
+    vertical,
+    treatment,
+    day
+  );
   const proposals = [];
 
   for (const match of matches) {
@@ -154,6 +161,7 @@ function generateSlotProposals(input = {}) {
       }
 
       const windowSlots = generateSlotsFromWindow(window, {
+        vertical,
         durationMinutes,
         stepMinutes,
         maxSlots: remainingSlots,
@@ -173,7 +181,10 @@ function generateSlotProposals(input = {}) {
           doctorName: match.doctor.name,
           treatment: match.treatment,
           appointmentPurpose,
-          appointmentPurposeLabel: getAppointmentPurposeLabel(appointmentPurpose),
+          appointmentPurposeLabel: getAppointmentPurposeLabelWithVertical(
+            vertical,
+            appointmentPurpose
+          ),
           day: match.day,
           dayLabel: match.dayLabel,
           time: slot.time,
@@ -194,7 +205,10 @@ function generateSlotProposals(input = {}) {
     treatment,
     day,
     appointmentPurpose,
-    appointmentPurposeLabel: getAppointmentPurposeLabel(appointmentPurpose),
+    appointmentPurposeLabel: getAppointmentPurposeLabelWithVertical(
+      vertical,
+      appointmentPurpose
+    ),
     durationMinutes,
     source: "mock",
     proposals,
@@ -222,6 +236,98 @@ function createSlotProposalReply(input = {}) {
     ),
     "Bu seçenekler kesin randevu değildir; gerçek randevu oluşturmadan önce takvim çakışması ayrıca kontrol edilmelidir.",
   ].join("\n");
+}
+
+function resolveSlotProposalVertical(input = {}) {
+  return input.vertical || input.assistantVertical || dentalVertical;
+}
+
+function resolveTreatmentNameWithVertical(vertical, value) {
+  if (typeof vertical.doctorDirectory?.resolveTreatmentName === "function") {
+    return vertical.doctorDirectory.resolveTreatmentName(value);
+  }
+
+  return dentalVertical.doctorDirectory.resolveTreatmentName(value);
+}
+
+function findDayInMessageWithVertical(vertical, value) {
+  if (typeof vertical.doctorAvailability?.findDayInMessage === "function") {
+    return vertical.doctorAvailability.findDayInMessage(value);
+  }
+
+  return dentalVertical.doctorAvailability.findDayInMessage(value);
+}
+
+function inferAppointmentPurposeWithVertical(vertical, input) {
+  if (typeof vertical.appointmentPurposeRules?.inferAppointmentPurpose === "function") {
+    return vertical.appointmentPurposeRules.inferAppointmentPurpose(input);
+  }
+
+  return dentalVertical.appointmentPurposeRules.inferAppointmentPurpose(input);
+}
+
+function resolveSlotDurationMinutesWithVertical(vertical, input) {
+  if (typeof vertical.treatmentDurationRules?.resolveSlotDurationMinutes === "function") {
+    return vertical.treatmentDurationRules.resolveSlotDurationMinutes(input);
+  }
+
+  return dentalVertical.treatmentDurationRules.resolveSlotDurationMinutes(input);
+}
+
+function normalizePositiveIntegerWithVertical(vertical, value, fallback) {
+  if (typeof vertical.treatmentDurationRules?.normalizePositiveInteger === "function") {
+    return vertical.treatmentDurationRules.normalizePositiveInteger(value, fallback);
+  }
+
+  return dentalVertical.treatmentDurationRules.normalizePositiveInteger(
+    value,
+    fallback
+  );
+}
+
+function getAppointmentPurposeLabelWithVertical(vertical, value) {
+  if (typeof vertical.appointmentPurposeRules?.getAppointmentPurposeLabel === "function") {
+    return vertical.appointmentPurposeRules.getAppointmentPurposeLabel(value);
+  }
+
+  return dentalVertical.appointmentPurposeRules.getAppointmentPurposeLabel(value);
+}
+
+function findAvailableDoctorsByTreatmentAndDayWithVertical(
+  vertical,
+  treatment,
+  day
+) {
+  if (
+    typeof vertical.doctorAvailability?.findAvailableDoctorsByTreatmentAndDay ===
+    "function"
+  ) {
+    return vertical.doctorAvailability.findAvailableDoctorsByTreatmentAndDay(
+      treatment,
+      day
+    );
+  }
+
+  return dentalVertical.doctorAvailability.findAvailableDoctorsByTreatmentAndDay(
+    treatment,
+    day
+  );
+}
+
+function validateAvailabilityWindowWithVertical(vertical, window) {
+  if (typeof vertical.doctorAvailability?.validateAvailabilityWindow === "function") {
+    return vertical.doctorAvailability.validateAvailabilityWindow(window);
+  }
+
+  return dentalVertical.doctorAvailability.validateAvailabilityWindow(window);
+}
+
+function timeToMinutesWithVertical(vertical, value) {
+  if (typeof vertical.doctorAvailability?.timeToMinutes === "function") {
+    return vertical.doctorAvailability.timeToMinutes(value);
+  }
+
+  return dentalVertical.doctorAvailability.timeToMinutes(value);
 }
 
 module.exports = {
