@@ -1,7 +1,6 @@
-const { dentalVertical } = require("../verticals/dental/dentalVertical");
+const { getDefaultAssistantVertical } = require("../assistant/defaultVertical");
 
-const DEFAULT_SLOT_DURATION_MINUTES =
-  dentalVertical.treatmentDurationRules.DEFAULT_TREATMENT_DURATION_MINUTES;
+const DEFAULT_SLOT_DURATION_MINUTES = 30;
 const DEFAULT_SLOT_STEP_MINUTES = 30;
 const DEFAULT_MAX_SLOT_PROPOSALS = 3;
 
@@ -239,7 +238,7 @@ function createSlotProposalReply(input = {}) {
 }
 
 function resolveSlotProposalVertical(input = {}) {
-  return input.vertical || input.assistantVertical || dentalVertical;
+  return input.vertical || input.assistantVertical || getDefaultAssistantVertical();
 }
 
 function resolveTreatmentNameWithVertical(vertical, value) {
@@ -247,7 +246,7 @@ function resolveTreatmentNameWithVertical(vertical, value) {
     return vertical.doctorDirectory.resolveTreatmentName(value);
   }
 
-  return dentalVertical.doctorDirectory.resolveTreatmentName(value);
+  return getDefaultAssistantVertical().doctorDirectory.resolveTreatmentName(value);
 }
 
 function findDayInMessageWithVertical(vertical, value) {
@@ -255,7 +254,7 @@ function findDayInMessageWithVertical(vertical, value) {
     return vertical.doctorAvailability.findDayInMessage(value);
   }
 
-  return dentalVertical.doctorAvailability.findDayInMessage(value);
+  return getDefaultAssistantVertical().doctorAvailability.findDayInMessage(value);
 }
 
 function inferAppointmentPurposeWithVertical(vertical, input) {
@@ -263,7 +262,7 @@ function inferAppointmentPurposeWithVertical(vertical, input) {
     return vertical.appointmentPurposeRules.inferAppointmentPurpose(input);
   }
 
-  return dentalVertical.appointmentPurposeRules.inferAppointmentPurpose(input);
+  return getDefaultAssistantVertical().appointmentPurposeRules.inferAppointmentPurpose(input);
 }
 
 function resolveSlotDurationMinutesWithVertical(vertical, input) {
@@ -271,7 +270,7 @@ function resolveSlotDurationMinutesWithVertical(vertical, input) {
     return vertical.treatmentDurationRules.resolveSlotDurationMinutes(input);
   }
 
-  return dentalVertical.treatmentDurationRules.resolveSlotDurationMinutes(input);
+  return getDefaultAssistantVertical().treatmentDurationRules.resolveSlotDurationMinutes(input);
 }
 
 function normalizePositiveIntegerWithVertical(vertical, value, fallback) {
@@ -279,7 +278,7 @@ function normalizePositiveIntegerWithVertical(vertical, value, fallback) {
     return vertical.treatmentDurationRules.normalizePositiveInteger(value, fallback);
   }
 
-  return dentalVertical.treatmentDurationRules.normalizePositiveInteger(
+  return getDefaultAssistantVertical().treatmentDurationRules.normalizePositiveInteger(
     value,
     fallback
   );
@@ -290,7 +289,7 @@ function getAppointmentPurposeLabelWithVertical(vertical, value) {
     return vertical.appointmentPurposeRules.getAppointmentPurposeLabel(value);
   }
 
-  return dentalVertical.appointmentPurposeRules.getAppointmentPurposeLabel(value);
+  return getDefaultAssistantVertical().appointmentPurposeRules.getAppointmentPurposeLabel(value);
 }
 
 function findAvailableDoctorsByTreatmentAndDayWithVertical(
@@ -308,7 +307,7 @@ function findAvailableDoctorsByTreatmentAndDayWithVertical(
     );
   }
 
-  return dentalVertical.doctorAvailability.findAvailableDoctorsByTreatmentAndDay(
+  return getDefaultAssistantVertical().doctorAvailability.findAvailableDoctorsByTreatmentAndDay(
     treatment,
     day
   );
@@ -319,7 +318,7 @@ function validateAvailabilityWindowWithVertical(vertical, window) {
     return vertical.doctorAvailability.validateAvailabilityWindow(window);
   }
 
-  return dentalVertical.doctorAvailability.validateAvailabilityWindow(window);
+  return getDefaultAssistantVertical().doctorAvailability.validateAvailabilityWindow(window);
 }
 
 function timeToMinutesWithVertical(vertical, value) {
@@ -327,7 +326,7 @@ function timeToMinutesWithVertical(vertical, value) {
     return vertical.doctorAvailability.timeToMinutes(value);
   }
 
-  return dentalVertical.doctorAvailability.timeToMinutes(value);
+  return getDefaultAssistantVertical().doctorAvailability.timeToMinutes(value);
 }
 
 module.exports = {

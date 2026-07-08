@@ -1,5 +1,5 @@
 const { createSlotProposalReply } = require("./slotProposal");
-const { dentalVertical } = require("../verticals/dental/dentalVertical");
+const { getActiveAssistantVertical } = require("../assistant/defaultVertical");
 
 function planMessagingReply(input = {}) {
   const message = normalizeText(input.message);
@@ -90,7 +90,7 @@ function planMessagingReply(input = {}) {
 }
 
 function resolveReplyPlanningVertical(input = {}) {
-  return input.vertical || input.assistantVertical || dentalVertical;
+  return input.vertical || input.assistantVertical || getActiveAssistantVertical();
 }
 
 function evaluateVerticalHandoff(vertical, message) {
