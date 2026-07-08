@@ -372,6 +372,7 @@ test("reply planner proposes consultation slots for first-time implant appointme
   assert.doesNotMatch(result.reply_draft, /120 dk/);
   assert.doesNotMatch(result.reply_draft, /randevunuz oluşturuldu/i);
   assert.equal(result.appointmentFlowState.status, "pending_appointment_selection");
+  assert.equal(result.appointmentSelectionReview, undefined);
   assert.equal(result.appointmentFlowState.treatment, "implant");
   assert.equal(result.appointmentFlowState.day, "wednesday");
   assert.deepEqual(
@@ -461,6 +462,20 @@ test("reply planner can match a pending appointment slot by visible time", () =>
   assert.equal(result.reply_source, "appointment_flow_state");
   assert.equal(result.appointment_selection_status, "selected_slot_matched");
   assert.equal(result.selected_slot.time, "10:30");
+  assert.equal(
+    result.appointmentSelectionReview.status,
+    "pending_secretary_confirmation"
+  );
+  assert.equal(result.appointmentSelectionReview.selectedSlot.time, "10:30");
+  assert.equal(result.appointmentSelectionReview.treatment, "implant");
+  assert.equal(result.appointmentSelectionReview.day, "wednesday");
+  assert.equal(
+    result.appointmentSelectionReview.appointmentPurpose,
+    "initial_consultation"
+  );
+  assert.equal(result.appointmentSelectionReview.requiresSecretaryConfirmation, true);
+  assert.equal(result.appointmentSelectionReview.bookingCreated, false);
+  assert.equal(result.appointmentSelectionReview.calendarChecked, false);
   assert.match(result.reply_draft, /10:30 slotunu seçtiniz/);
   assert.match(result.reply_draft, /henüz kesin randevu değildir/);
   assert.doesNotMatch(result.reply_draft, /randevunuz oluşturuldu/i);
@@ -482,6 +497,7 @@ test("reply planner returns safe clarification for unknown slot selection in pen
   assert.equal(result.requires_handoff, false);
   assert.equal(result.appointment_selection_status, "selected_slot_not_found");
   assert.equal(result.selected_slot, null);
+  assert.equal(result.appointmentSelectionReview, undefined);
   assert.match(result.reply_draft, /eşleştiremedim/);
   assert.match(result.reply_draft, /10:00, 10:30, 11:00/);
 });
@@ -502,6 +518,7 @@ test("reply planner keeps handoff above pending appointment selection", () => {
   assert.equal(result.requires_handoff, true);
   assert.equal(result.reply_source, "handoff_rules");
   assert.equal(result.appointment_selection_status, undefined);
+  assert.equal(result.appointmentSelectionReview, undefined);
   assert.match(result.reply_draft, /klinik ekibimizin değerlendirmesini gerektiriyor/);
 });
 
@@ -518,6 +535,7 @@ test("reply planner does not return appointment flow state for treatment info", 
 
   assert.equal(result.intent, "treatment_info");
   assert.equal(result.appointmentFlowState, undefined);
+  assert.equal(result.appointmentSelectionReview, undefined);
 });
 
 test("reply planner does not return appointment flow state for handoff", () => {
@@ -533,4 +551,5 @@ test("reply planner does not return appointment flow state for handoff", () => {
 
   assert.equal(result.intent, "handoff_required");
   assert.equal(result.appointmentFlowState, undefined);
+  assert.equal(result.appointmentSelectionReview, undefined);
 });

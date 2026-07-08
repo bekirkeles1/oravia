@@ -151,6 +151,7 @@ test("messaging inbound handler can return treatment info reply through reply pl
   assert.match(result.body.reply_draft, /eksik dişlerin yerine/);
   assert.match(result.body.reply_draft, /hekim muayenesi/);
   assert.equal(result.body.appointmentFlowState, undefined);
+  assert.equal(result.body.appointmentSelectionReview, undefined);
 });
 
 test("messaging inbound handler returns handoff for risky clinical message", () => {
@@ -167,6 +168,7 @@ test("messaging inbound handler returns handoff for risky clinical message", () 
   assert.equal(result.body.requires_handoff, true);
   assert.match(result.body.reply_draft, /klinik ekibimizin değerlendirmesini gerektiriyor/);
   assert.equal(result.body.appointmentFlowState, undefined);
+  assert.equal(result.body.appointmentSelectionReview, undefined);
 });
 
 test("messaging inbound handler includes appointment flow state when proposing slots", () => {
@@ -185,6 +187,7 @@ test("messaging inbound handler includes appointment flow state when proposing s
   );
   assert.equal(result.body.appointmentFlowState.treatment, "implant");
   assert.equal(result.body.appointmentFlowState.day, "wednesday");
+  assert.equal(result.body.appointmentSelectionReview, undefined);
   assert.deepEqual(
     result.body.appointmentFlowState.offeredSlots.map((slot) => slot.time),
     ["10:00", "10:30", "11:00"]
@@ -217,6 +220,16 @@ test("returned appointment flow state can be passed into the next inbound select
     "selected_slot_matched"
   );
   assert.equal(selectionResult.body.selected_slot.time, "10:30");
+  assert.equal(
+    selectionResult.body.appointmentSelectionReview.status,
+    "pending_secretary_confirmation"
+  );
+  assert.equal(
+    selectionResult.body.appointmentSelectionReview.selectedSlot.time,
+    "10:30"
+  );
+  assert.equal(selectionResult.body.appointmentSelectionReview.bookingCreated, false);
+  assert.equal(selectionResult.body.appointmentSelectionReview.calendarChecked, false);
   assert.match(selectionResult.body.reply_draft, /henüz kesin randevu değildir/);
   assert.doesNotMatch(selectionResult.body.reply_draft, /randevunuz oluşturuldu/i);
 });
@@ -273,6 +286,12 @@ test("messaging inbound handler can load stored appointment flow state for next 
     "selected_slot_matched"
   );
   assert.equal(selectionResult.body.selected_slot.time, "10:30");
+  assert.equal(
+    selectionResult.body.appointmentSelectionReview.status,
+    "pending_secretary_confirmation"
+  );
+  assert.equal(selectionResult.body.appointmentSelectionReview.bookingCreated, false);
+  assert.equal(selectionResult.body.appointmentSelectionReview.calendarChecked, false);
   assert.match(selectionResult.body.reply_draft, /henüz kesin randevu değildir/);
 });
 
@@ -317,6 +336,7 @@ test("messaging inbound handler keeps no-store behavior unchanged for later sele
   assert.equal(proposalResult.body.intent, "appointment_slot_proposal");
   assert.equal(selectionResult.body.intent, "unknown_intent");
   assert.equal(selectionResult.body.appointment_selection_status, undefined);
+  assert.equal(selectionResult.body.appointmentSelectionReview, undefined);
 });
 
 test("messaging inbound handler can match pending appointment selection by visible time", () => {
@@ -338,6 +358,14 @@ test("messaging inbound handler can match pending appointment selection by visib
     "selected_slot_matched"
   );
   assert.equal(result.body.selected_slot.time, "10:30");
+  assert.equal(
+    result.body.appointmentSelectionReview.status,
+    "pending_secretary_confirmation"
+  );
+  assert.equal(result.body.appointmentSelectionReview.treatment, "implant");
+  assert.equal(result.body.appointmentSelectionReview.day, "wednesday");
+  assert.equal(result.body.appointmentSelectionReview.bookingCreated, false);
+  assert.equal(result.body.appointmentSelectionReview.calendarChecked, false);
   assert.match(result.body.reply_draft, /10:30 slotunu seçtiniz/);
   assert.match(result.body.reply_draft, /henüz kesin randevu değildir/);
   assert.doesNotMatch(result.body.reply_draft, /randevunuz oluşturuldu/i);
@@ -364,6 +392,9 @@ test("messaging inbound handler can match pending appointment selection by selec
     "selected_slot_matched"
   );
   assert.equal(result.body.selected_slot.id, offeredSlot.id);
+  assert.equal(result.body.appointmentSelectionReview.selectedSlot.id, offeredSlot.id);
+  assert.equal(result.body.appointmentSelectionReview.bookingCreated, false);
+  assert.equal(result.body.appointmentSelectionReview.calendarChecked, false);
   assert.match(result.body.reply_draft, /henüz kesin randevu değildir/);
 });
 
@@ -399,6 +430,7 @@ test("messaging inbound handler returns safe clarification for unknown pending s
     "selected_slot_not_found"
   );
   assert.equal(result.body.selected_slot, null);
+  assert.equal(result.body.appointmentSelectionReview, undefined);
   assert.match(result.body.reply_draft, /eşleştiremedim/);
   assert.match(result.body.reply_draft, /10:00, 10:30, 11:00/);
 });
@@ -418,6 +450,7 @@ test("messaging inbound handler keeps handoff above pending appointment selectio
   assert.equal(result.body.intent, "handoff_required");
   assert.equal(result.body.requires_handoff, true);
   assert.equal(result.body.appointment_selection_status, undefined);
+  assert.equal(result.body.appointmentSelectionReview, undefined);
   assert.match(result.body.reply_draft, /klinik ekibimizin değerlendirmesini gerektiriyor/);
 });
 
@@ -445,6 +478,7 @@ test("messaging inbound handler keeps handoff above stored pending appointment s
   assert.equal(result.status, 200);
   assert.equal(result.body.intent, "handoff_required");
   assert.equal(result.body.appointment_selection_status, undefined);
+  assert.equal(result.body.appointmentSelectionReview, undefined);
   assert.match(result.body.reply_draft, /klinik ekibimizin değerlendirmesini gerektiriyor/);
 });
 
@@ -469,6 +503,8 @@ test("messaging inbound pending selection does not call appointment creation or 
 
   assert.equal(result.status, 200);
   assert.equal(result.body.intent, "appointment_slot_selection");
+  assert.equal(result.body.appointmentSelectionReview.bookingCreated, false);
+  assert.equal(result.body.appointmentSelectionReview.calendarChecked, false);
   assert.equal(calendarProviderCalled, false);
   assert.equal(appointmentCreationCalled, false);
 });
@@ -494,6 +530,7 @@ test("messaging inbound slot proposal does not call appointment creation or cale
   assert.equal(result.status, 200);
   assert.equal(result.body.intent, "appointment_slot_proposal");
   assert.equal(result.body.appointmentFlowState.status, "pending_appointment_selection");
+  assert.equal(result.body.appointmentSelectionReview, undefined);
   assert.equal(calendarProviderCalled, false);
   assert.equal(appointmentCreationCalled, false);
 });
@@ -529,6 +566,8 @@ test("messaging inbound store-backed selection does not call appointment creatio
 
   assert.equal(result.status, 200);
   assert.equal(result.body.intent, "appointment_slot_selection");
+  assert.equal(result.body.appointmentSelectionReview.bookingCreated, false);
+  assert.equal(result.body.appointmentSelectionReview.calendarChecked, false);
   assert.equal(calendarProviderCalled, false);
   assert.equal(appointmentCreationCalled, false);
 });

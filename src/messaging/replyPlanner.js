@@ -149,6 +149,7 @@ function createPendingAppointmentSelectionReply(input, message) {
     treatment_id: flowState.treatment || null,
     appointment_selection_status: selectionReply.status,
     selected_slot: selectionReply.selectedSlot,
+    appointmentSelectionReview: selectionReply.appointmentSelectionReview,
   };
 }
 

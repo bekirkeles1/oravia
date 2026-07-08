@@ -91,10 +91,37 @@ function createAppointmentSelectionReply(flowState, patientMessageOrSelection) {
 
   return {
     ...matchResult,
+    appointmentSelectionReview: createAppointmentSelectionReview(
+      flowState,
+      slot
+    ),
     reply_draft: [
       `${slot.doctorName} için ${slot.dayLabel} günü ${slot.time} slotunu seçtiniz.`,
       "Bu seçim henüz kesin randevu değildir; gerçek randevu oluşturulmadan önce klinik ekibi ve takvim çakışması kontrolü ile onaylanmalıdır.",
     ].join(" "),
+  };
+}
+
+function createAppointmentSelectionReview(flowState, selectedSlot) {
+  if (!hasPendingAppointment(flowState) || !selectedSlot) {
+    return null;
+  }
+
+  return {
+    status: "pending_secretary_confirmation",
+    selectedSlot: cloneSlot(selectedSlot),
+    treatment: flowState.treatment || selectedSlot.treatment || null,
+    day: flowState.day || selectedSlot.day || null,
+    appointmentPurpose:
+      flowState.appointmentPurpose || selectedSlot.appointmentPurpose || null,
+    appointmentPurposeLabel:
+      flowState.appointmentPurposeLabel ||
+      selectedSlot.appointmentPurposeLabel ||
+      null,
+    source: flowState.source || selectedSlot.source || null,
+    requiresSecretaryConfirmation: true,
+    bookingCreated: false,
+    calendarChecked: false,
   };
 }
 
@@ -182,6 +209,7 @@ function cloneSlot(slot) {
 module.exports = {
   PENDING_APPOINTMENT_SELECTION,
   createAppointmentSelectionReply,
+  createAppointmentSelectionReview,
   createPendingAppointmentFlowState,
   getPendingOfferedSlots,
   matchSelectedOfferedSlot,

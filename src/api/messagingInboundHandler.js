@@ -53,6 +53,11 @@ function handleMessagingInbound(input = {}, options = {}) {
     responseBody.appointmentFlowState = replyPlan.appointmentFlowState;
   }
 
+  if (replyPlan.appointmentSelectionReview) {
+    responseBody.appointmentSelectionReview =
+      replyPlan.appointmentSelectionReview;
+  }
+
   persistAppointmentFlowState({
     conversationStateStore,
     conversationStateKey,

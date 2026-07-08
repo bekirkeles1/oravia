@@ -4,6 +4,7 @@ const test = require("node:test");
 const {
   PENDING_APPOINTMENT_SELECTION,
   createAppointmentSelectionReply,
+  createAppointmentSelectionReview,
   createPendingAppointmentFlowState,
   getPendingOfferedSlots,
   matchSelectedOfferedSlot,
@@ -113,6 +114,43 @@ test("confirmation reply is safe and does not claim booking is complete", () => 
   assert.match(result.reply_draft, /takvim çakışması kontrolü/);
   assert.doesNotMatch(result.reply_draft, /randevunuz oluşturuldu/i);
   assert.doesNotMatch(result.reply_draft, /booked/i);
+});
+
+test("appointment selection review payload is safe for secretary confirmation", () => {
+  const flowState = createPendingAppointmentFlowState(
+    createSampleSlotProposalResult()
+  );
+  const selectedSlot = getPendingOfferedSlots(flowState)[1];
+  const review = createAppointmentSelectionReview(flowState, selectedSlot);
+
+  assert.equal(review.status, "pending_secretary_confirmation");
+  assert.equal(review.selectedSlot.id, selectedSlot.id);
+  assert.equal(review.selectedSlot.time, "10:30");
+  assert.equal(review.treatment, "implant");
+  assert.equal(review.day, "wednesday");
+  assert.equal(review.appointmentPurpose, "initial_consultation");
+  assert.equal(review.appointmentPurposeLabel, "İlk muayene / değerlendirme");
+  assert.equal(review.source, "mock");
+  assert.equal(review.requiresSecretaryConfirmation, true);
+  assert.equal(review.bookingCreated, false);
+  assert.equal(review.calendarChecked, false);
+  assert.doesNotMatch(JSON.stringify(review), /randevunuz oluşturuldu|booked|confirmed/i);
+});
+
+test("appointment selection reply includes review payload only for matched slots", () => {
+  const flowState = createPendingAppointmentFlowState(
+    createSampleSlotProposalResult()
+  );
+  const matched = createAppointmentSelectionReply(flowState, "10:30 olur");
+  const notFound = createAppointmentSelectionReply(flowState, "15:00 olur");
+
+  assert.equal(
+    matched.appointmentSelectionReview.status,
+    "pending_secretary_confirmation"
+  );
+  assert.equal(matched.appointmentSelectionReview.bookingCreated, false);
+  assert.equal(matched.appointmentSelectionReview.calendarChecked, false);
+  assert.equal(notFound.appointmentSelectionReview, undefined);
 });
 
 test("helper does not call appointment creation or calendar provider", () => {
