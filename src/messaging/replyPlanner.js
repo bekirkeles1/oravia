@@ -141,6 +141,10 @@ function buildVerticalTreatmentAnswer(vertical, treatmentKnowledge) {
 }
 
 function createVerticalDoctorAvailabilityReply(vertical, message) {
+  if (typeof vertical.createDoctorAvailabilityReply === "function") {
+    return vertical.createDoctorAvailabilityReply(message);
+  }
+
   if (
     typeof vertical.doctorAvailability?.createDoctorAvailabilityReply ===
     "function"

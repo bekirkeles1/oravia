@@ -213,6 +213,70 @@ test("reply planner answers doctor availability questions with treatment and day
   assert.doesNotMatch(result.reply_draft, /randevunuz oluşturuldu/i);
 });
 
+test("reply planner can use the dental vertical adapter for doctor availability replies", () => {
+  const result = planMessagingReply({
+    message: "İmplant için çarşamba müsait doktor var mı?",
+    assistantVertical: dentalVertical,
+    classification: {
+      intent: "unknown_intent",
+      requires_handoff: true,
+      reply:
+        "Merhaba, sizi daha doğru yönlendirebilmem için mesajınızı klinik ekibimize aktaracağım."
+    }
+  });
+
+  assert.equal(result.intent, "doctor_availability");
+  assert.equal(result.requires_handoff, false);
+  assert.equal(result.reply_source, "doctor_availability_mock");
+  assert.equal(result.treatment_id, "implant");
+  assert.match(result.reply_draft, /implant için Çarşamba günü/);
+  assert.match(result.reply_draft, /Dr. Ayşe Demir/);
+  assert.match(result.reply_draft, /takvim çakışması/);
+});
+
+test("reply planner can use a fake vertical for doctor availability replies", () => {
+  const fakeVertical = {
+    id: "fake",
+    name: "Fake vertical",
+    evaluateHandoff() {
+      return {
+        requires_handoff: false,
+        matched_rules: [],
+        reply_draft: null
+      };
+    },
+    searchTreatmentInfo() {
+      return {
+        id: "fake_treatment"
+      };
+    },
+    createDoctorAvailabilityReply(message) {
+      if (message.includes("uygun doktor")) {
+        return "Fake vertical doctor availability reply.";
+      }
+
+      return null;
+    }
+  };
+
+  const result = planMessagingReply({
+    message: "fake için uygun doktor var mı?",
+    vertical: fakeVertical,
+    classification: {
+      intent: "unknown_intent",
+      requires_handoff: true,
+      reply:
+        "Merhaba, sizi daha doğru yönlendirebilmem için mesajınızı klinik ekibimize aktaracağım."
+    }
+  });
+
+  assert.equal(result.intent, "doctor_availability");
+  assert.equal(result.requires_handoff, false);
+  assert.equal(result.reply_source, "doctor_availability_mock");
+  assert.equal(result.treatment_id, "fake_treatment");
+  assert.equal(result.reply_draft, "Fake vertical doctor availability reply.");
+});
+
 test("reply planner summarizes doctor availability when no day is given", () => {
   const result = planMessagingReply({
     message: "Kanal tedavisi için müsait doktor var mı?",

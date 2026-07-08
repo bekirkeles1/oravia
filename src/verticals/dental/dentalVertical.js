@@ -16,6 +16,7 @@ const dentalVertical = {
   evaluateHandoff: handoffRules.evaluateHandoff,
   doctorDirectory,
   doctorAvailability,
+  createDoctorAvailabilityReply: doctorAvailability.createDoctorAvailabilityReply,
   treatmentDurationRules,
   appointmentPurposeRules,
 };
