@@ -18,12 +18,28 @@ function handleSecretaryAppointmentReviewQueueRequest(input = {}, options = {}) 
   }
 
   const queue = options.appointmentReviewQueue || null;
+  const requireReviewId = input.requireReviewId === true;
+  const reviewId = normalizeReviewId(input.id || input.reviewId);
 
-  if (!queue) {
-    return createSuccessResponse(buildAppointmentReviewListResponse([]));
+  if (requireReviewId && !reviewId) {
+    return createErrorResponse(
+      400,
+      "missing_review_id",
+      "Appointment review id is required."
+    );
   }
 
-  const reviewId = normalizeReviewId(input.id || input.reviewId);
+  if (!queue) {
+    if (requireReviewId) {
+      return createErrorResponse(
+        404,
+        "review_not_found",
+        "Appointment review item was not found."
+      );
+    }
+
+    return createSuccessResponse(buildAppointmentReviewListResponse([]));
+  }
 
   if (reviewId) {
     return handleGetAppointmentReviewById(queue, reviewId);
@@ -74,6 +90,11 @@ function createErrorResponse(statusCode, code, message) {
       status: "error",
       source: "mock",
       mode: "read_only",
+      persistence: "not_persisted",
+      persisted: false,
+      databasePersisted: false,
+      actionPerformed: false,
+      appointmentCreated: false,
       safety: createAppointmentReviewReadOnlySafety(),
       error: {
         code,

@@ -32,9 +32,13 @@ test("read-only safety contract makes appointment review boundaries explicit", (
   assert.equal(safety.readOnly, true);
   assert.equal(safety.source, "mock");
   assert.equal(safety.persistence, "not_persisted");
+  assert.equal(safety.persisted, false);
+  assert.equal(safety.databasePersisted, false);
+  assert.equal(safety.actionPerformed, false);
   assert.equal(safety.requiresSecretaryConfirmation, true);
   assert.equal(safety.bookingCreated, false);
   assert.equal(safety.calendarChecked, false);
+  assert.equal(safety.appointmentCreated, false);
   assert.equal(safety.createsAppointment, false);
   assert.equal(safety.writesCalendar, false);
   assert.equal(safety.checksCalendarConflict, false);
@@ -62,6 +66,10 @@ test("read-only list response includes count, items, and safety metadata", () =>
   assert.equal(response.source, "mock");
   assert.equal(response.mode, READ_ONLY_MODE);
   assert.equal(response.persistence, "not_persisted");
+  assert.equal(response.persisted, false);
+  assert.equal(response.databasePersisted, false);
+  assert.equal(response.actionPerformed, false);
+  assert.equal(response.appointmentCreated, false);
   assert.equal(response.count, 1);
   assert.equal(response.reviews[0].bookingCreated, false);
   assert.equal(response.reviews[0].calendarChecked, false);
@@ -74,6 +82,10 @@ test("read-only detail response keeps one safe review item", () => {
 
   assert.equal(response.status, "ok");
   assert.equal(response.mode, READ_ONLY_MODE);
+  assert.equal(response.persisted, false);
+  assert.equal(response.databasePersisted, false);
+  assert.equal(response.actionPerformed, false);
+  assert.equal(response.appointmentCreated, false);
   assert.equal(response.review.requiresSecretaryConfirmation, true);
   assert.equal(response.review.bookingCreated, false);
   assert.equal(response.review.calendarChecked, false);
