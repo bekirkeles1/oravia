@@ -12,6 +12,9 @@ export default function AppointmentReviewsWorkspace() {
   });
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [selectedReviewId, setSelectedReviewId] = useState("");
+  const selectedReview =
+    reviews.find((review) => review.id === selectedReviewId) || null;
 
   useEffect(() => {
     let isMounted = true;
@@ -30,7 +33,19 @@ export default function AppointmentReviewsWorkspace() {
           return;
         }
 
-        setReviews(Array.isArray(payload.reviews) ? payload.reviews : []);
+        const nextReviews = Array.isArray(payload.reviews) ? payload.reviews : [];
+
+        setReviews(nextReviews);
+        setSelectedReviewId((currentSelectedReviewId) => {
+          if (
+            currentSelectedReviewId &&
+            nextReviews.some((review) => review.id === currentSelectedReviewId)
+          ) {
+            return currentSelectedReviewId;
+          }
+
+          return nextReviews[0]?.id || "";
+        });
         setSummary({
           source: payload.source || "mock",
           mode: payload.mode || payload.safety?.mode || "read_only",
@@ -45,6 +60,7 @@ export default function AppointmentReviewsWorkspace() {
         }
 
         setReviews([]);
+        setSelectedReviewId("");
         setLoading(false);
         setLoadError(
           error instanceof Error
@@ -132,6 +148,92 @@ export default function AppointmentReviewsWorkspace() {
           </div>
         ) : null}
 
+        {!loading && !loadError ? (
+          <section
+            className="appointment-review-detail-preview"
+            aria-labelledby="appointment-review-detail-preview-title"
+          >
+            <div>
+              <span>Detail preview</span>
+              <h3 id="appointment-review-detail-preview-title">
+                Read-only review preview
+              </h3>
+              <p>
+                No booking created. Calendar not checked. Secretary confirmation
+                is required before any real booking workflow. No database
+                persistence is used in this mock queue boundary.
+              </p>
+            </div>
+
+            {selectedReview ? (
+              <dl className="appointment-review-detail-grid">
+                <div>
+                  <dt>Review id</dt>
+                  <dd>{selectedReview.id}</dd>
+                </div>
+                <div>
+                  <dt>Status</dt>
+                  <dd>{selectedReview.status}</dd>
+                </div>
+                <div>
+                  <dt>Selected slot</dt>
+                  <dd>
+                    {selectedReview.selectedSlot?.doctorName || "Mock doctor"} ·{" "}
+                    {selectedReview.selectedSlot?.dayLabel ||
+                      selectedReview.day ||
+                      "Gün bekleniyor"}{" "}
+                    · {selectedReview.selectedSlot?.time || "Saat bekleniyor"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Treatment</dt>
+                  <dd>{selectedReview.treatment || "Belirtilmedi"}</dd>
+                </div>
+                <div>
+                  <dt>Purpose</dt>
+                  <dd>
+                    {selectedReview.appointmentPurposeLabel ||
+                      selectedReview.appointmentPurpose ||
+                      "Belirtilmedi"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Read only</dt>
+                  <dd>{String(summary.safety?.readOnly === true)}</dd>
+                </div>
+                <div>
+                  <dt>Booking created</dt>
+                  <dd>{String(selectedReview.bookingCreated === true)}</dd>
+                </div>
+                <div>
+                  <dt>Calendar checked</dt>
+                  <dd>{String(selectedReview.calendarChecked === true)}</dd>
+                </div>
+                <div>
+                  <dt>Database persisted</dt>
+                  <dd>{String(summary.safety?.databasePersisted === true)}</dd>
+                </div>
+                <div>
+                  <dt>Booking actions</dt>
+                  <dd>{String(summary.safety?.bookingActionsEnabled === true)}</dd>
+                </div>
+                <div>
+                  <dt>Calendar actions</dt>
+                  <dd>{String(summary.safety?.calendarActionsEnabled === true)}</dd>
+                </div>
+              </dl>
+            ) : (
+              <div className="appointment-review-detail-empty">
+                <strong>No selected appointment review</strong>
+                <span>
+                  Select-ready preview is empty because the mock read-only queue
+                  has no pending review items.
+                </span>
+              </div>
+            )}
+          </section>
+        ) : null}
+
         {!loading && !loadError && reviews.length > 0 ? (
           <div className="appointment-reviews-list">
             {reviews.map((review) => (
@@ -142,6 +244,13 @@ export default function AppointmentReviewsWorkspace() {
                     {review.selectedSlot?.doctorName || "Mock doctor"} ·{" "}
                     {review.selectedSlot?.time || "Saat bekleniyor"}
                   </strong>
+                  <button
+                    type="button"
+                    className="appointment-review-preview-button"
+                    onClick={() => setSelectedReviewId(review.id)}
+                  >
+                    Preview details
+                  </button>
                 </div>
                 <dl>
                   <div>

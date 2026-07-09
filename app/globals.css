@@ -2006,13 +2006,15 @@ blockquote {
 
 .appointment-reviews-summary-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
 .appointment-reviews-summary-grid div,
 .appointment-reviews-safety-note,
 .appointment-reviews-empty-state,
+.appointment-review-detail-preview,
+.appointment-review-detail-empty,
 .appointment-review-item {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -2063,10 +2065,76 @@ blockquote {
   gap: 10px;
 }
 
+.appointment-review-detail-preview {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+}
+
+.appointment-review-detail-preview > div:first-child {
+  display: grid;
+  gap: 6px;
+}
+
+.appointment-review-detail-preview span,
+.appointment-review-detail-preview p,
+.appointment-review-detail-empty span {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.appointment-review-detail-preview > div:first-child > span {
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.appointment-review-detail-preview h3,
+.appointment-review-detail-preview p {
+  margin: 0;
+}
+
+.appointment-review-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.appointment-review-detail-grid div,
+.appointment-review-detail-empty {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.appointment-review-detail-empty {
+  display: grid;
+  gap: 6px;
+}
+
 .appointment-review-item {
   display: grid;
   gap: 12px;
   padding: 14px;
+}
+
+.appointment-review-item > div:first-child {
+  display: grid;
+  gap: 6px;
+}
+
+.appointment-review-preview-button {
+  justify-self: start;
+  width: fit-content;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font-weight: 800;
+  padding: 8px 10px;
+  cursor: pointer;
 }
 
 .appointment-review-item dl {
@@ -2078,6 +2146,7 @@ blockquote {
 
 @media (max-width: 900px) {
   .appointment-reviews-summary-grid,
+  .appointment-review-detail-grid,
   .appointment-review-item dl {
     grid-template-columns: 1fr;
   }
