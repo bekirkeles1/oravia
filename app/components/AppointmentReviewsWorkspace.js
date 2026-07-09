@@ -2,6 +2,23 @@
 
 import { useEffect, useState } from "react";
 
+const ACTION_INTENT_DRY_RUN = {
+  validationOnly: true,
+  actionPerformed: false,
+  bookingCreated: false,
+  calendarChecked: false,
+  databasePersisted: false,
+  appointmentCreated: false,
+  calendarEventCreated: false,
+  requiresSecretaryConfirmation: true,
+  allowedActionIntents: [
+    "approve_intent",
+    "reject_intent",
+    "needs_clinic_review",
+    "ask_patient_clarification"
+  ]
+};
+
 export default function AppointmentReviewsWorkspace() {
   const [reviews, setReviews] = useState([]);
   const [summary, setSummary] = useState({
@@ -229,6 +246,89 @@ export default function AppointmentReviewsWorkspace() {
                   {reviews.length > 0
                     ? "Select a review to inspect details."
                     : "Select-ready preview is empty because the mock read-only queue has no pending review items."}
+                </span>
+              </div>
+            )}
+          </section>
+        ) : null}
+
+        {!loading && !loadError ? (
+          <section
+            className="appointment-review-action-intent-preview"
+            aria-labelledby="appointment-review-action-intent-preview-title"
+          >
+            <div>
+              <span>Validation dry-run</span>
+              <h3 id="appointment-review-action-intent-preview-title">
+                Action intent dry-run preview
+              </h3>
+              <p>
+                This is validation-only metadata for the selected review. It
+                does not approve, reject, book, open appointment records, check
+                calendar availability, or persist data.
+              </p>
+            </div>
+
+            {selectedReview ? (
+              <>
+                <dl className="appointment-review-action-intent-grid">
+                  <div>
+                    <dt>Review id</dt>
+                    <dd>{selectedReview.id}</dd>
+                  </div>
+                  <div>
+                    <dt>validationOnly</dt>
+                    <dd>{String(ACTION_INTENT_DRY_RUN.validationOnly)}</dd>
+                  </div>
+                  <div>
+                    <dt>actionPerformed</dt>
+                    <dd>{String(ACTION_INTENT_DRY_RUN.actionPerformed)}</dd>
+                  </div>
+                  <div>
+                    <dt>bookingCreated</dt>
+                    <dd>{String(ACTION_INTENT_DRY_RUN.bookingCreated)}</dd>
+                  </div>
+                  <div>
+                    <dt>calendarChecked</dt>
+                    <dd>{String(ACTION_INTENT_DRY_RUN.calendarChecked)}</dd>
+                  </div>
+                  <div>
+                    <dt>databasePersisted</dt>
+                    <dd>{String(ACTION_INTENT_DRY_RUN.databasePersisted)}</dd>
+                  </div>
+                  <div>
+                    <dt>appointmentCreated</dt>
+                    <dd>{String(ACTION_INTENT_DRY_RUN.appointmentCreated)}</dd>
+                  </div>
+                  <div>
+                    <dt>calendarEventCreated</dt>
+                    <dd>
+                      {String(ACTION_INTENT_DRY_RUN.calendarEventCreated)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>requiresSecretaryConfirmation</dt>
+                    <dd>
+                      {String(
+                        ACTION_INTENT_DRY_RUN.requiresSecretaryConfirmation
+                      )}
+                    </dd>
+                  </div>
+                </dl>
+
+                <div className="appointment-review-action-intent-list">
+                  <strong>Controlled future intent names</strong>
+                  <span>
+                    {ACTION_INTENT_DRY_RUN.allowedActionIntents.join(", ")}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <div className="appointment-review-action-intent-empty">
+                <strong>No selected appointment review</strong>
+                <span>
+                  Select a review to inspect validation-only action intent
+                  details.
                 </span>
               </div>
             )}

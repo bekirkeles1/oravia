@@ -50,6 +50,39 @@ test("appointment reviews workspace keeps safety boundaries visible", () => {
   assert.match(workspaceSource, /takvim çakışması kontrolü yapmaz/);
 });
 
+test("appointment reviews workspace shows validation-only action intent dry-run preview", () => {
+  assert.match(workspaceSource, /ACTION_INTENT_DRY_RUN/);
+  assert.match(workspaceSource, /Action intent dry-run preview/);
+  assert.match(workspaceSource, /Validation dry-run/);
+  assert.match(workspaceSource, /selectedReview \?/);
+  assert.match(workspaceSource, /Review id/);
+  assert.match(workspaceSource, /selectedReview\.id/);
+  assert.match(workspaceSource, /validationOnly/);
+  assert.match(workspaceSource, /validationOnly:\s+true/);
+  assert.match(workspaceSource, /actionPerformed/);
+  assert.match(workspaceSource, /actionPerformed:\s+false/);
+  assert.match(workspaceSource, /bookingCreated/);
+  assert.match(workspaceSource, /bookingCreated:\s+false/);
+  assert.match(workspaceSource, /calendarChecked/);
+  assert.match(workspaceSource, /calendarChecked:\s+false/);
+  assert.match(workspaceSource, /databasePersisted/);
+  assert.match(workspaceSource, /databasePersisted:\s+false/);
+  assert.match(workspaceSource, /appointmentCreated/);
+  assert.match(workspaceSource, /appointmentCreated:\s+false/);
+  assert.match(workspaceSource, /calendarEventCreated/);
+  assert.match(workspaceSource, /calendarEventCreated:\s+false/);
+  assert.match(workspaceSource, /requiresSecretaryConfirmation/);
+  assert.match(workspaceSource, /requiresSecretaryConfirmation:\s+true/);
+  assert.match(workspaceSource, /approve_intent/);
+  assert.match(workspaceSource, /reject_intent/);
+  assert.match(workspaceSource, /needs_clinic_review/);
+  assert.match(workspaceSource, /ask_patient_clarification/);
+  assert.match(
+    workspaceSource,
+    /Select a review to inspect validation-only action intent\s+details/
+  );
+});
+
 test("appointment reviews workspace shows read-only detail preview states", () => {
   assert.match(workspaceSource, /selectedReviewId/);
   assert.match(workspaceSource, /setSelectedReviewId/);
@@ -85,14 +118,31 @@ test("appointment reviews workspace renders pending review data defensively", ()
 });
 
 test("appointment reviews workspace has no approval, booking, or calendar action buttons", () => {
-  assert.doesNotMatch(workspaceSource, /approve|reject/i);
   assert.match(workspaceSource, /<button/);
   assert.match(workspaceSource, /Preview details/);
-  assert.doesNotMatch(workspaceSource, /Approve details|Reject details/i);
-  assert.doesNotMatch(workspaceSource, /Book appointment|Create appointment/i);
-  assert.doesNotMatch(workspaceSource, /Calendar sync|Check calendar/i);
+  assert.doesNotMatch(workspaceSource, /<button[^>]*>\s*Approve\s*<\/button>/i);
+  assert.doesNotMatch(workspaceSource, /<button[^>]*>\s*Reject\s*<\/button>/i);
+  assert.doesNotMatch(
+    workspaceSource,
+    /<button[^>]*>\s*Book appointment\s*<\/button>/i
+  );
+  assert.doesNotMatch(
+    workspaceSource,
+    /<button[^>]*>\s*Create appointment\s*<\/button>/i
+  );
+  assert.doesNotMatch(
+    workspaceSource,
+    /<button[^>]*>\s*Sync calendar\s*<\/button>/i
+  );
+  assert.doesNotMatch(workspaceSource, /onClick=\{\(\) => approve/i);
+  assert.doesNotMatch(workspaceSource, /onClick=\{\(\) => reject/i);
+  assert.doesNotMatch(workspaceSource, /onClick=\{\(\) => book/i);
+  assert.doesNotMatch(workspaceSource, /onClick=\{\(\) => sync/i);
   assert.doesNotMatch(workspaceSource, /create appointment/i);
   assert.doesNotMatch(workspaceSource, /calendar sync/i);
+  assert.doesNotMatch(workspaceSource, /fetch\(.+action-intent/);
+  assert.doesNotMatch(workspaceSource, /Google Calendar/);
+  assert.doesNotMatch(workspaceSource, /prisma|supabase|redis/i);
   assert.doesNotMatch(workspaceSource, /randevunuz oluşturuldu/i);
 });
 
@@ -104,6 +154,10 @@ test("appointment reviews workspace styles are present", () => {
   assert.match(cssSource, /\.appointment-review-detail-preview/);
   assert.match(cssSource, /\.appointment-review-detail-grid/);
   assert.match(cssSource, /\.appointment-review-detail-empty/);
+  assert.match(cssSource, /\.appointment-review-action-intent-preview/);
+  assert.match(cssSource, /\.appointment-review-action-intent-grid/);
+  assert.match(cssSource, /\.appointment-review-action-intent-list/);
+  assert.match(cssSource, /\.appointment-review-action-intent-empty/);
   assert.match(cssSource, /\.appointment-review-item/);
   assert.match(cssSource, /\.appointment-review-preview-button/);
 });

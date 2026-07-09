@@ -2015,6 +2015,8 @@ blockquote {
 .appointment-reviews-empty-state,
 .appointment-review-detail-preview,
 .appointment-review-detail-empty,
+.appointment-review-action-intent-preview,
+.appointment-review-action-intent-empty,
 .appointment-review-item {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -2071,14 +2073,28 @@ blockquote {
   padding: 14px;
 }
 
+.appointment-review-action-intent-preview {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+}
+
 .appointment-review-detail-preview > div:first-child {
+  display: grid;
+  gap: 6px;
+}
+
+.appointment-review-action-intent-preview > div:first-child {
   display: grid;
   gap: 6px;
 }
 
 .appointment-review-detail-preview span,
 .appointment-review-detail-preview p,
-.appointment-review-detail-empty span {
+.appointment-review-detail-empty span,
+.appointment-review-action-intent-preview span,
+.appointment-review-action-intent-preview p,
+.appointment-review-action-intent-empty span {
   color: var(--muted);
   line-height: 1.45;
 }
@@ -2089,8 +2105,16 @@ blockquote {
   text-transform: uppercase;
 }
 
+.appointment-review-action-intent-preview > div:first-child > span {
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
 .appointment-review-detail-preview h3,
-.appointment-review-detail-preview p {
+.appointment-review-detail-preview p,
+.appointment-review-action-intent-preview h3,
+.appointment-review-action-intent-preview p {
   margin: 0;
 }
 
@@ -2101,8 +2125,18 @@ blockquote {
   margin: 0;
 }
 
+.appointment-review-action-intent-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
 .appointment-review-detail-grid div,
-.appointment-review-detail-empty {
+.appointment-review-detail-empty,
+.appointment-review-action-intent-grid div,
+.appointment-review-action-intent-list,
+.appointment-review-action-intent-empty {
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -2110,6 +2144,12 @@ blockquote {
 }
 
 .appointment-review-detail-empty {
+  display: grid;
+  gap: 6px;
+}
+
+.appointment-review-action-intent-list,
+.appointment-review-action-intent-empty {
   display: grid;
   gap: 6px;
 }
@@ -2147,6 +2187,7 @@ blockquote {
 @media (max-width: 900px) {
   .appointment-reviews-summary-grid,
   .appointment-review-detail-grid,
+  .appointment-review-action-intent-grid,
   .appointment-review-item dl {
     grid-template-columns: 1fr;
   }
