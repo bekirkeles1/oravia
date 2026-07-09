@@ -226,8 +226,9 @@ export default function AppointmentReviewsWorkspace() {
               <div className="appointment-review-detail-empty">
                 <strong>No selected appointment review</strong>
                 <span>
-                  Select-ready preview is empty because the mock read-only queue
-                  has no pending review items.
+                  {reviews.length > 0
+                    ? "Select a review to inspect details."
+                    : "Select-ready preview is empty because the mock read-only queue has no pending review items."}
                 </span>
               </div>
             )}

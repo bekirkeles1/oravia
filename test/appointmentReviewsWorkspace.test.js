@@ -54,11 +54,13 @@ test("appointment reviews workspace shows read-only detail preview states", () =
   assert.match(workspaceSource, /selectedReviewId/);
   assert.match(workspaceSource, /setSelectedReviewId/);
   assert.match(workspaceSource, /reviews\.find\(\(review\) => review\.id === selectedReviewId\)/);
+  assert.doesNotMatch(workspaceSource, /selectedReview = reviews\[0\]/);
   assert.match(workspaceSource, /nextReviews\[0\]\?\.id \|\| ""/);
   assert.match(workspaceSource, /Preview details/);
   assert.match(workspaceSource, /onClick=\{\(\) => setSelectedReviewId\(review\.id\)\}/);
   assert.match(workspaceSource, /Read-only review preview/);
   assert.match(workspaceSource, /No selected appointment review/);
+  assert.match(workspaceSource, /Select a review to inspect details/);
   assert.match(workspaceSource, /Review id/);
   assert.match(workspaceSource, /Selected slot/);
   assert.match(workspaceSource, /Database persisted/);
