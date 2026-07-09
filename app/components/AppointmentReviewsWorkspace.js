@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const ACTION_INTENT_DRY_RUN = {
   validationOnly: true,
@@ -30,8 +30,16 @@ export default function AppointmentReviewsWorkspace() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [selectedReviewId, setSelectedReviewId] = useState("");
+  const [actionIntentDryRunStatus, setActionIntentDryRunStatus] =
+    useState("idle");
+  const [actionIntentDryRunResult, setActionIntentDryRunResult] =
+    useState(null);
+  const [actionIntentDryRunError, setActionIntentDryRunError] = useState("");
+  const selectedReviewIdRef = useRef("");
   const selectedReview =
     reviews.find((review) => review.id === selectedReviewId) || null;
+  const displayedActionIntentDryRun =
+    actionIntentDryRunResult || ACTION_INTENT_DRY_RUN;
 
   useEffect(() => {
     let isMounted = true;
@@ -93,6 +101,80 @@ export default function AppointmentReviewsWorkspace() {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    selectedReviewIdRef.current = selectedReviewId;
+    setActionIntentDryRunStatus("idle");
+    setActionIntentDryRunResult(null);
+    setActionIntentDryRunError("");
+  }, [selectedReviewId]);
+
+  async function runActionIntentDryRun() {
+    if (!selectedReview) {
+      setActionIntentDryRunStatus("error");
+      setActionIntentDryRunResult(null);
+      setActionIntentDryRunError(
+        "Select a review before running validation-only preview."
+      );
+      return;
+    }
+
+    const reviewIdForRequest = selectedReview.id;
+
+    setActionIntentDryRunStatus("validating");
+    setActionIntentDryRunResult(null);
+    setActionIntentDryRunError("");
+
+    try {
+      const response = await fetch(
+        `/api/secretary/appointment-reviews/${encodeURIComponent(
+          reviewIdForRequest
+        )}/action-intent`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          body: JSON.stringify({
+            actionIntent: "needs_clinic_review"
+          })
+        }
+      );
+      const payload = await response.json();
+
+      if (!response.ok || payload.status !== "ok") {
+        throw new Error(
+          payload?.error?.message ||
+            "Validation-only action intent preview failed safely."
+        );
+      }
+
+      if (!isSafeActionIntentDryRunResponse(payload)) {
+        throw new Error(
+          "Validation-only route response was unsafe or incomplete."
+        );
+      }
+
+      if (selectedReviewIdRef.current !== reviewIdForRequest) {
+        return;
+      }
+
+      setActionIntentDryRunResult(payload);
+      setActionIntentDryRunStatus("success");
+    } catch (error) {
+      if (selectedReviewIdRef.current !== reviewIdForRequest) {
+        return;
+      }
+
+      setActionIntentDryRunResult(null);
+      setActionIntentDryRunStatus("error");
+      setActionIntentDryRunError(
+        error instanceof Error
+          ? error.message
+          : "Validation-only action intent preview failed safely."
+      );
+    }
+  }
 
   return (
     <section
@@ -271,46 +353,81 @@ export default function AppointmentReviewsWorkspace() {
 
             {selectedReview ? (
               <>
+                <button
+                  type="button"
+                  className="appointment-review-action-intent-button"
+                  onClick={runActionIntentDryRun}
+                  disabled={actionIntentDryRunStatus === "validating"}
+                >
+                  Run validation-only preview
+                </button>
+
+                <p className="appointment-review-action-intent-state">
+                  {actionIntentDryRunStatus === "validating"
+                    ? "Validation-only preview is running..."
+                    : null}
+                  {actionIntentDryRunStatus === "success"
+                    ? "Validation-only route result received. No action was performed."
+                    : null}
+                  {actionIntentDryRunStatus === "error"
+                    ? actionIntentDryRunError ||
+                      "Validation-only preview failed safely."
+                    : null}
+                  {actionIntentDryRunStatus === "idle"
+                    ? "Idle: route-backed validation-only preview has not run for this selected review."
+                    : null}
+                </p>
+
                 <dl className="appointment-review-action-intent-grid">
                   <div>
                     <dt>Review id</dt>
                     <dd>{selectedReview.id}</dd>
                   </div>
                   <div>
+                    <dt>Route action intent</dt>
+                    <dd>needs_clinic_review</dd>
+                  </div>
+                  <div>
                     <dt>validationOnly</dt>
-                    <dd>{String(ACTION_INTENT_DRY_RUN.validationOnly)}</dd>
+                    <dd>{String(displayedActionIntentDryRun.validationOnly)}</dd>
                   </div>
                   <div>
                     <dt>actionPerformed</dt>
-                    <dd>{String(ACTION_INTENT_DRY_RUN.actionPerformed)}</dd>
+                    <dd>
+                      {String(displayedActionIntentDryRun.actionPerformed)}
+                    </dd>
                   </div>
                   <div>
                     <dt>bookingCreated</dt>
-                    <dd>{String(ACTION_INTENT_DRY_RUN.bookingCreated)}</dd>
+                    <dd>{String(displayedActionIntentDryRun.bookingCreated)}</dd>
                   </div>
                   <div>
                     <dt>calendarChecked</dt>
-                    <dd>{String(ACTION_INTENT_DRY_RUN.calendarChecked)}</dd>
+                    <dd>{String(displayedActionIntentDryRun.calendarChecked)}</dd>
                   </div>
                   <div>
                     <dt>databasePersisted</dt>
-                    <dd>{String(ACTION_INTENT_DRY_RUN.databasePersisted)}</dd>
+                    <dd>
+                      {String(displayedActionIntentDryRun.databasePersisted)}
+                    </dd>
                   </div>
                   <div>
                     <dt>appointmentCreated</dt>
-                    <dd>{String(ACTION_INTENT_DRY_RUN.appointmentCreated)}</dd>
+                    <dd>
+                      {String(displayedActionIntentDryRun.appointmentCreated)}
+                    </dd>
                   </div>
                   <div>
                     <dt>calendarEventCreated</dt>
                     <dd>
-                      {String(ACTION_INTENT_DRY_RUN.calendarEventCreated)}
+                      {String(displayedActionIntentDryRun.calendarEventCreated)}
                     </dd>
                   </div>
                   <div>
                     <dt>requiresSecretaryConfirmation</dt>
                     <dd>
                       {String(
-                        ACTION_INTENT_DRY_RUN.requiresSecretaryConfirmation
+                        displayedActionIntentDryRun.requiresSecretaryConfirmation
                       )}
                     </dd>
                   </div>
@@ -319,7 +436,7 @@ export default function AppointmentReviewsWorkspace() {
                 <div className="appointment-review-action-intent-list">
                   <strong>Controlled future intent names</strong>
                   <span>
-                    {ACTION_INTENT_DRY_RUN.allowedActionIntents.join(", ")}
+                    {displayedActionIntentDryRun.allowedActionIntents.join(", ")}
                   </span>
                 </div>
               </>
@@ -381,5 +498,21 @@ export default function AppointmentReviewsWorkspace() {
         ) : null}
       </article>
     </section>
+  );
+}
+
+function isSafeActionIntentDryRunResponse(payload) {
+  return (
+    payload &&
+    payload.status === "ok" &&
+    payload.validationOnly === true &&
+    payload.actionPerformed === false &&
+    payload.bookingCreated === false &&
+    payload.calendarChecked === false &&
+    payload.databasePersisted === false &&
+    payload.appointmentCreated === false &&
+    payload.calendarEventCreated === false &&
+    payload.requiresSecretaryConfirmation === true &&
+    Array.isArray(payload.allowedActionIntents)
   );
 }

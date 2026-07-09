@@ -52,11 +52,23 @@ test("appointment reviews workspace keeps safety boundaries visible", () => {
 
 test("appointment reviews workspace shows validation-only action intent dry-run preview", () => {
   assert.match(workspaceSource, /ACTION_INTENT_DRY_RUN/);
+  assert.match(workspaceSource, /runActionIntentDryRun/);
+  assert.match(workspaceSource, /isSafeActionIntentDryRunResponse/);
+  assert.match(workspaceSource, /selectedReviewIdRef/);
   assert.match(workspaceSource, /Action intent dry-run preview/);
   assert.match(workspaceSource, /Validation dry-run/);
+  assert.match(workspaceSource, /Run validation-only preview/);
+  assert.match(
+    workspaceSource,
+    /\/api\/secretary\/appointment-reviews\/\$\{encodeURIComponent/
+  );
+  assert.match(workspaceSource, /\/action-intent`/);
+  assert.match(workspaceSource, /method: "POST"/);
+  assert.match(workspaceSource, /actionIntent: "needs_clinic_review"/);
   assert.match(workspaceSource, /selectedReview \?/);
   assert.match(workspaceSource, /Review id/);
   assert.match(workspaceSource, /selectedReview\.id/);
+  assert.match(workspaceSource, /Route action intent/);
   assert.match(workspaceSource, /validationOnly/);
   assert.match(workspaceSource, /validationOnly:\s+true/);
   assert.match(workspaceSource, /actionPerformed/);
@@ -77,6 +89,16 @@ test("appointment reviews workspace shows validation-only action intent dry-run 
   assert.match(workspaceSource, /reject_intent/);
   assert.match(workspaceSource, /needs_clinic_review/);
   assert.match(workspaceSource, /ask_patient_clarification/);
+  assert.match(workspaceSource, /actionIntentDryRunStatus/);
+  assert.match(workspaceSource, /setActionIntentDryRunStatus\("idle"\)/);
+  assert.match(workspaceSource, /setActionIntentDryRunResult\(null\)/);
+  assert.match(workspaceSource, /setActionIntentDryRunError\(""\)/);
+  assert.match(workspaceSource, /selectedReviewIdRef\.current !== reviewIdForRequest/);
+  assert.match(workspaceSource, /Validation-only preview is running/);
+  assert.match(workspaceSource, /Validation-only route result received/);
+  assert.match(workspaceSource, /Validation-only action intent preview failed safely/);
+  assert.match(workspaceSource, /Validation-only route response was unsafe or incomplete/);
+  assert.match(workspaceSource, /Idle: route-backed validation-only preview/);
   assert.match(
     workspaceSource,
     /Select a review to inspect validation-only action intent\s+details/
@@ -140,9 +162,13 @@ test("appointment reviews workspace has no approval, booking, or calendar action
   assert.doesNotMatch(workspaceSource, /onClick=\{\(\) => sync/i);
   assert.doesNotMatch(workspaceSource, /create appointment/i);
   assert.doesNotMatch(workspaceSource, /calendar sync/i);
-  assert.doesNotMatch(workspaceSource, /fetch\(.+action-intent/);
   assert.doesNotMatch(workspaceSource, /Google Calendar/);
   assert.doesNotMatch(workspaceSource, /prisma|supabase|redis/i);
+  assert.doesNotMatch(workspaceSource, /bookingCreated:\s+true/);
+  assert.doesNotMatch(workspaceSource, /calendarChecked:\s+true/);
+  assert.doesNotMatch(workspaceSource, /databasePersisted:\s+true/);
+  assert.doesNotMatch(workspaceSource, /appointmentCreated:\s+true/);
+  assert.doesNotMatch(workspaceSource, /calendarEventCreated:\s+true/);
   assert.doesNotMatch(workspaceSource, /randevunuz oluşturuldu/i);
 });
 
@@ -158,6 +184,8 @@ test("appointment reviews workspace styles are present", () => {
   assert.match(cssSource, /\.appointment-review-action-intent-grid/);
   assert.match(cssSource, /\.appointment-review-action-intent-list/);
   assert.match(cssSource, /\.appointment-review-action-intent-empty/);
+  assert.match(cssSource, /\.appointment-review-action-intent-button/);
+  assert.match(cssSource, /\.appointment-review-action-intent-state/);
   assert.match(cssSource, /\.appointment-review-item/);
   assert.match(cssSource, /\.appointment-review-preview-button/);
 });
