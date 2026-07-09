@@ -18,14 +18,22 @@ test("secretary appointment review queue GET route returns safe empty mock respo
   assert.equal(response.status, 200);
   assert.equal(body.status, "ok");
   assert.equal(body.source, "mock");
+  assert.equal(body.mode, "read_only");
   assert.equal(body.persistence, "not_persisted");
   assert.deepEqual(body.reviews, []);
   assert.equal(body.count, 0);
   assert.equal(body.safety.readOnly, true);
+  assert.equal(body.safety.mode, "read_only");
+  assert.equal(body.safety.bookingCreated, false);
+  assert.equal(body.safety.calendarChecked, false);
+  assert.equal(body.safety.requiresSecretaryConfirmation, true);
   assert.equal(body.safety.createsAppointment, false);
   assert.equal(body.safety.writesCalendar, false);
   assert.equal(body.safety.checksCalendarConflict, false);
   assert.equal(body.safety.usesDatabase, false);
+  assert.equal(body.safety.approvalActionsEnabled, false);
+  assert.equal(body.safety.bookingActionsEnabled, false);
+  assert.equal(body.safety.calendarActionsEnabled, false);
 });
 
 test("secretary appointment review queue GET route does not claim booking or calendar checks", async () => {
@@ -56,6 +64,8 @@ test("secretary appointment review queue route rejects non-read methods", async 
   assert.ok(responses.every((response) => response.status === 405));
   assert.ok(bodies.every((body) => body.status === "error"));
   assert.ok(bodies.every((body) => body.source === "mock"));
+  assert.ok(bodies.every((body) => body.mode === "read_only"));
+  assert.ok(bodies.every((body) => body.safety.readOnly === true));
   assert.ok(
     bodies.every((body) => body.error.code === "method_not_allowed")
   );
@@ -73,6 +83,7 @@ test("secretary appointment review queue route has no appointment or calendar si
   assert.equal(response.status, 200);
   assert.equal(body.safety.createsAppointment, false);
   assert.equal(body.safety.writesCalendar, false);
+  assert.equal(body.safety.usesDatabase, false);
   assert.equal(appointmentCreationCalled, false);
   assert.equal(calendarProviderCalled, false);
 });

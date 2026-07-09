@@ -1,3 +1,9 @@
+const {
+  buildAppointmentReviewDetailResponse,
+  buildAppointmentReviewListResponse,
+  createAppointmentReviewReadOnlySafety,
+} = require("../secretary/appointmentReviewReadOnlyContract");
+
 const READ_METHODS = new Set(["GET", "HEAD"]);
 
 function handleSecretaryAppointmentReviewQueueRequest(input = {}, options = {}) {
@@ -14,12 +20,7 @@ function handleSecretaryAppointmentReviewQueueRequest(input = {}, options = {}) 
   const queue = options.appointmentReviewQueue || null;
 
   if (!queue) {
-    return createSuccessResponse({
-      reviews: [],
-      count: 0,
-      persistence: "not_persisted",
-      safety: createReadOnlySafety(),
-    });
+    return createSuccessResponse(buildAppointmentReviewListResponse([]));
   }
 
   const reviewId = normalizeReviewId(input.id || input.reviewId);
@@ -37,12 +38,7 @@ function handleListAppointmentReviews(queue) {
       ? queue.listAppointmentReviews()
       : [];
 
-  return createSuccessResponse({
-    reviews: reviews.map(sanitizeReview),
-    count: reviews.length,
-    persistence: "not_persisted",
-    safety: createReadOnlySafety(),
-  });
+  return createSuccessResponse(buildAppointmentReviewListResponse(reviews));
 }
 
 function handleGetAppointmentReviewById(queue, reviewId) {
@@ -59,38 +55,13 @@ function handleGetAppointmentReviewById(queue, reviewId) {
     );
   }
 
-  return createSuccessResponse({
-    review: sanitizeReview(review),
-    persistence: "not_persisted",
-    safety: createReadOnlySafety(),
-  });
-}
-
-function sanitizeReview(review) {
-  return {
-    ...cloneValue(review),
-    requiresSecretaryConfirmation: true,
-    bookingCreated: false,
-    calendarChecked: false,
-  };
-}
-
-function createReadOnlySafety() {
-  return {
-    readOnly: true,
-    createsAppointment: false,
-    writesCalendar: false,
-    checksCalendarConflict: false,
-    usesDatabase: false,
-  };
+  return createSuccessResponse(buildAppointmentReviewDetailResponse(review));
 }
 
 function createSuccessResponse(payload) {
   return {
     statusCode: 200,
     body: {
-      status: "ok",
-      source: "mock",
       ...payload,
     },
   };
@@ -102,6 +73,8 @@ function createErrorResponse(statusCode, code, message) {
     body: {
       status: "error",
       source: "mock",
+      mode: "read_only",
+      safety: createAppointmentReviewReadOnlySafety(),
       error: {
         code,
         message,
@@ -116,10 +89,6 @@ function normalizeMethod(value) {
 
 function normalizeReviewId(value) {
   return String(value || "").trim();
-}
-
-function cloneValue(value) {
-  return value ? JSON.parse(JSON.stringify(value)) : value;
 }
 
 module.exports = {

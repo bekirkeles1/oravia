@@ -6,6 +6,7 @@ export default function AppointmentReviewsWorkspace() {
   const [reviews, setReviews] = useState([]);
   const [summary, setSummary] = useState({
     source: "mock",
+    mode: "read_only",
     persistence: "not_persisted",
     safety: null
   });
@@ -32,6 +33,7 @@ export default function AppointmentReviewsWorkspace() {
         setReviews(Array.isArray(payload.reviews) ? payload.reviews : []);
         setSummary({
           source: payload.source || "mock",
+          mode: payload.mode || payload.safety?.mode || "read_only",
           persistence: payload.persistence || "not_persisted",
           safety: payload.safety || null
         });
@@ -85,6 +87,10 @@ export default function AppointmentReviewsWorkspace() {
             <strong>{summary.source}</strong>
           </div>
           <div>
+            <span>Mod</span>
+            <strong>{summary.mode}</strong>
+          </div>
+          <div>
             <span>Kayıt</span>
             <strong>{summary.persistence}</strong>
           </div>
@@ -100,6 +106,12 @@ export default function AppointmentReviewsWorkspace() {
             No booking created. Calendar not checked. Secretary confirmation is
             required before any real booking workflow.
           </span>
+          <small>
+            Safety contract: bookingCreated=
+            {String(summary.safety?.bookingCreated === true)}, calendarChecked=
+            {String(summary.safety?.calendarChecked === true)}, usesDatabase=
+            {String(summary.safety?.usesDatabase === true)}.
+          </small>
         </div>
 
         {loading ? (
@@ -147,6 +159,10 @@ export default function AppointmentReviewsWorkspace() {
                   <div>
                     <dt>Calendar checked</dt>
                     <dd>{String(review.calendarChecked === true)}</dd>
+                  </div>
+                  <div>
+                    <dt>Secretary confirmation</dt>
+                    <dd>{String(review.requiresSecretaryConfirmation === true)}</dd>
                   </div>
                 </dl>
               </article>

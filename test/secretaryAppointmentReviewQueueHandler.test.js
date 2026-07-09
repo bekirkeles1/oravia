@@ -45,6 +45,7 @@ test("secretary appointment review queue handler lists injected pending reviews"
   assert.equal(response.statusCode, 200);
   assert.equal(response.body.status, "ok");
   assert.equal(response.body.source, "mock");
+  assert.equal(response.body.mode, "read_only");
   assert.equal(response.body.persistence, "not_persisted");
   assert.equal(response.body.count, 1);
   assert.equal(response.body.reviews[0].status, "pending_secretary_review");
@@ -52,9 +53,17 @@ test("secretary appointment review queue handler lists injected pending reviews"
   assert.equal(response.body.reviews[0].calendarChecked, false);
   assert.equal(response.body.reviews[0].requiresSecretaryConfirmation, true);
   assert.equal(response.body.safety.readOnly, true);
+  assert.equal(response.body.safety.mode, "read_only");
+  assert.equal(response.body.safety.bookingCreated, false);
+  assert.equal(response.body.safety.calendarChecked, false);
+  assert.equal(response.body.safety.requiresSecretaryConfirmation, true);
   assert.equal(response.body.safety.createsAppointment, false);
   assert.equal(response.body.safety.writesCalendar, false);
+  assert.equal(response.body.safety.checksCalendarConflict, false);
   assert.equal(response.body.safety.usesDatabase, false);
+  assert.equal(response.body.safety.approvalActionsEnabled, false);
+  assert.equal(response.body.safety.bookingActionsEnabled, false);
+  assert.equal(response.body.safety.calendarActionsEnabled, false);
 });
 
 test("secretary appointment review queue handler gets one review by id", () => {
@@ -69,6 +78,7 @@ test("secretary appointment review queue handler gets one review by id", () => {
 
   assert.equal(response.statusCode, 200);
   assert.equal(response.body.status, "ok");
+  assert.equal(response.body.mode, "read_only");
   assert.equal(response.body.review.id, review.id);
   assert.equal(response.body.review.selectedSlot.time, "10:30");
   assert.equal(response.body.review.bookingCreated, false);
@@ -88,6 +98,8 @@ test("secretary appointment review queue handler returns safe not found", () => 
   assert.equal(response.statusCode, 404);
   assert.equal(response.body.status, "error");
   assert.equal(response.body.source, "mock");
+  assert.equal(response.body.mode, "read_only");
+  assert.equal(response.body.safety.readOnly, true);
   assert.equal(response.body.error.code, "review_not_found");
 });
 
@@ -99,9 +111,12 @@ test("secretary appointment review queue handler returns empty mock response wit
   assert.equal(response.statusCode, 200);
   assert.equal(response.body.status, "ok");
   assert.equal(response.body.source, "mock");
+  assert.equal(response.body.mode, "read_only");
   assert.deepEqual(response.body.reviews, []);
   assert.equal(response.body.count, 0);
   assert.equal(response.body.safety.readOnly, true);
+  assert.equal(response.body.safety.bookingCreated, false);
+  assert.equal(response.body.safety.calendarChecked, false);
   assert.equal(response.body.safety.usesDatabase, false);
 });
 
@@ -157,6 +172,7 @@ test("secretary appointment review queue handler does not call appointment creat
   assert.equal(response.statusCode, 200);
   assert.equal(response.body.safety.createsAppointment, false);
   assert.equal(response.body.safety.writesCalendar, false);
+  assert.equal(response.body.safety.usesDatabase, false);
   assert.equal(appointmentCreationCalled, false);
   assert.equal(calendarProviderCalled, false);
 });
