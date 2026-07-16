@@ -1,10 +1,11 @@
-const PENDING_SECRETARY_REVIEW = "pending_secretary_review";
-const ALLOWED_REVIEW_STATUSES = new Set([
+const {
+  ALLOWED_REVIEW_STATUSES,
   PENDING_SECRETARY_REVIEW,
-  "approved_for_controlled_booking",
-  "needs_follow_up",
-  "rejected",
-]);
+  createInMemoryAppointmentReviewRepository,
+  validateAppointmentReviewRepository,
+} = require("./appointmentReviewRepository");
+
+const ALLOWED_REVIEW_STATUS_SET = new Set(ALLOWED_REVIEW_STATUSES);
 
 function createAppointmentReviewItem(appointmentSelectionReview, metadata = {}) {
   const validation = validateAppointmentSelectionReview(
@@ -47,16 +48,9 @@ function createAppointmentReviewItem(appointmentSelectionReview, metadata = {}) 
   };
 }
 
-function createInMemoryAppointmentReviewQueue(initialReviews = []) {
-  const reviews = new Map();
-
-  for (const review of initialReviews) {
-    const item = createAppointmentReviewItem(review);
-
-    if (item.status === "ok") {
-      reviews.set(item.review.id, cloneValue(item.review));
-    }
-  }
+function createInMemoryAppointmentReviewQueue(options = []) {
+  const queueOptions = normalizeQueueOptions(options);
+  let repository = queueOptions.repository;
 
   return {
     addAppointmentReview(appointmentSelectionReview, metadata = {}) {
@@ -69,23 +63,18 @@ function createInMemoryAppointmentReviewQueue(initialReviews = []) {
         return item;
       }
 
-      reviews.set(item.review.id, cloneValue(item.review));
-
-      return {
-        status: "ok",
-        review: cloneValue(item.review),
-      };
+      return repository.add(item.review);
     },
     listAppointmentReviews() {
-      return Array.from(reviews.values()).map(cloneValue);
+      return repository.list();
     },
     getAppointmentReviewById(id) {
-      return cloneValue(reviews.get(normalizeId(id)) || null);
+      return repository.getById(id);
     },
     updateAppointmentReviewStatus(id, status) {
       const reviewId = normalizeId(id);
 
-      if (!ALLOWED_REVIEW_STATUSES.has(status)) {
+      if (!ALLOWED_REVIEW_STATUS_SET.has(status)) {
         return {
           status: "error",
           error: {
@@ -95,7 +84,7 @@ function createInMemoryAppointmentReviewQueue(initialReviews = []) {
         };
       }
 
-      const review = reviews.get(reviewId);
+      const review = repository.getById(reviewId);
 
       if (!review) {
         return {
@@ -115,7 +104,13 @@ function createInMemoryAppointmentReviewQueue(initialReviews = []) {
         requiresSecretaryConfirmation: true,
       };
 
-      reviews.set(reviewId, cloneValue(updatedReview));
+      repository = createInMemoryAppointmentReviewRepository({
+        initialReviews: repository
+          .list()
+          .map((storedReview) =>
+            storedReview.id === reviewId ? updatedReview : storedReview
+          ),
+      });
 
       return {
         status: "ok",
@@ -123,6 +118,73 @@ function createInMemoryAppointmentReviewQueue(initialReviews = []) {
       };
     },
   };
+}
+
+function normalizeQueueOptions(options) {
+  if (Array.isArray(options)) {
+    return {
+      repository: createInMemoryAppointmentReviewRepository({
+        initialReviews: normalizeInitialReviews(options),
+      }),
+    };
+  }
+
+  const safeOptions =
+    options && typeof options === "object" && !Array.isArray(options)
+      ? options
+      : {};
+
+  if (safeOptions.repository) {
+    const validation = validateAppointmentReviewRepository(
+      safeOptions.repository
+    );
+
+    if (!validation.ok) {
+      throw new TypeError(validation.error.message);
+    }
+
+    return {
+      repository: validation.repository,
+    };
+  }
+
+  return {
+    repository: createInMemoryAppointmentReviewRepository({
+      initialReviews: normalizeInitialReviews(safeOptions.initialReviews || []),
+    }),
+  };
+}
+
+function normalizeInitialReviews(initialReviews) {
+  if (!Array.isArray(initialReviews)) {
+    return [];
+  }
+
+  return initialReviews.flatMap((review) => {
+    const item = createAppointmentReviewItem(review);
+
+    if (item.status === "ok") {
+      return [item.review];
+    }
+
+    if (isAppointmentReviewRecord(review)) {
+      return [review];
+    }
+
+    return [];
+  });
+}
+
+function isAppointmentReviewRecord(review) {
+  return Boolean(
+    review &&
+      typeof review === "object" &&
+      !Array.isArray(review) &&
+      typeof review.id === "string" &&
+      typeof review.status === "string" &&
+      review.selectedSlot &&
+      typeof review.selectedSlot === "object"
+  );
 }
 
 function validateAppointmentSelectionReview(review) {

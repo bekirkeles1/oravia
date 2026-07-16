@@ -11,6 +11,9 @@ const {
   createAppointmentReviewItem,
   createInMemoryAppointmentReviewQueue,
 } = require("../src/secretary/appointmentReviewQueue");
+const {
+  createInMemoryAppointmentReviewRepository,
+} = require("../src/secretary/appointmentReviewRepository");
 
 function createSampleAppointmentSelectionReview() {
   const flowState = createPendingAppointmentFlowState(
@@ -97,6 +100,38 @@ test("appointment review queue can add, list, and get review items", () => {
   assert.equal(listedReviews.length, 1);
   assert.deepEqual(listedReviews[0], addResult.review);
   assert.deepEqual(loadedReview, addResult.review);
+});
+
+test("appointment review queue can use an injected appointment review repository", () => {
+  const repository = createInMemoryAppointmentReviewRepository();
+  const queue = createInMemoryAppointmentReviewQueue({ repository });
+  const addResult = queue.addAppointmentReview(
+    createSampleAppointmentSelectionReview()
+  );
+
+  assert.equal(addResult.status, "ok");
+  assert.deepEqual(queue.listAppointmentReviews(), [addResult.review]);
+  assert.deepEqual(repository.list(), [addResult.review]);
+  assert.deepEqual(
+    queue.getAppointmentReviewById(addResult.review.id),
+    addResult.review
+  );
+});
+
+test("appointment review queue rejects duplicate review ids safely", () => {
+  const queue = createInMemoryAppointmentReviewQueue();
+  const appointmentSelectionReview = createSampleAppointmentSelectionReview();
+  const firstResult = queue.addAppointmentReview(appointmentSelectionReview, {
+    conversationKey: "whatsapp:+905322223333",
+  });
+  const duplicateResult = queue.addAppointmentReview(appointmentSelectionReview, {
+    conversationKey: "whatsapp:+905322223333",
+  });
+
+  assert.equal(firstResult.status, "ok");
+  assert.equal(duplicateResult.status, "error");
+  assert.equal(duplicateResult.error.code, "duplicate_review_id");
+  assert.equal(queue.listAppointmentReviews().length, 1);
 });
 
 test("appointment review queue returns defensive copies", () => {
