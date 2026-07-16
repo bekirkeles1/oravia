@@ -2,8 +2,8 @@ const {
   handleAppointmentReviewControlledActionValidationReceipt,
 } = require("../../../../../../src/api/secretaryAppointmentReviewControlledActionValidationReceiptHandler");
 const {
-  createMockAppointmentReviewControlledActionDependencies,
-} = require("../../../../../../src/secretary/appointmentReviewMockControlledActionDependencies");
+  createAppointmentReviewRouteRuntimeAdapter,
+} = require("../../../../../../src/secretary/appointmentReviewRouteRuntimeAdapter");
 
 const BODY_ALLOWED_FIELDS = Object.freeze([
   "actionIntent",
@@ -93,6 +93,17 @@ const ROUTE_SAFETY_FIELDS = Object.freeze({
 });
 
 async function POST(request, context = {}) {
+  return handleControlledActionValidationReceiptRouteRequest(request, context);
+}
+
+async function handleControlledActionValidationReceiptRouteRequest(
+  request,
+  context = {},
+  options = {}
+) {
+  const createRouteRuntimeAdapter =
+    options.createRouteRuntimeAdapter ||
+    createAppointmentReviewRouteRuntimeAdapter;
   const params = await Promise.resolve(context.params || {});
   const reviewId = normalizeText(params.id);
 
@@ -175,12 +186,16 @@ async function POST(request, context = {}) {
     );
   }
 
+  const routeRuntime = createRouteRuntimeAdapter({
+    resolveControlledActionState: resolveRouteControlledActionState,
+    initialReviews: [createRouteReviewSeed(reviewId)],
+  });
   const receiptHandlerResult =
     await handleAppointmentReviewControlledActionValidationReceipt({
       method: "POST",
       reviewId,
       body,
-      dependencies: createMockAppointmentReviewControlledActionDependencies(),
+      dependencies: routeRuntime.getControlledActionDependencies(),
     });
   const routeResult = sanitizeRouteResult(receiptHandlerResult);
 
@@ -254,6 +269,26 @@ function createRouteValidationError(code, message) {
 
 function createSafetyFields() {
   return { ...ROUTE_SAFETY_FIELDS };
+}
+
+function createRouteReviewSeed(reviewId) {
+  return {
+    id: reviewId,
+    status: "pending_secretary_review",
+    source: "mock",
+    selectedSlot: {
+      id: "route_validation_receipt_slot",
+      source: "mock",
+    },
+    requiresSecretaryConfirmation: true,
+    bookingCreated: false,
+    calendarChecked: false,
+    metadata: {},
+  };
+}
+
+function resolveRouteControlledActionState() {
+  return "validation_only_intent_checked";
 }
 
 function sanitizeRouteResult(value) {
@@ -355,4 +390,5 @@ module.exports = {
   PUT: rejectMethod,
   PATCH: rejectMethod,
   DELETE: rejectMethod,
+  handleControlledActionValidationReceiptRouteRequest,
 };

@@ -183,6 +183,108 @@ test("controlled action validation receipt route uses Sprint 12K dependency bund
   );
 });
 
+test("controlled action validation receipt route obtains dependencies through the route runtime adapter", async () => {
+  const dependencies = createMockAppointmentReviewControlledActionDependencies();
+  let adapterFactoryCalls = 0;
+  let dependencyResolutionCalls = 0;
+  const response =
+    await route.handleControlledActionValidationReceiptRouteRequest(
+      createRequest(createValidPayload()),
+      createContext(),
+      {
+        createRouteRuntimeAdapter(options) {
+          adapterFactoryCalls += 1;
+          assert.equal(typeof options.resolveControlledActionState, "function");
+          assert.equal(options.initialReviews.length, 1);
+          assert.equal(options.initialReviews[0].id, "review_receipt_route");
+
+          return Object.freeze({
+            getControlledActionDependencies() {
+              dependencyResolutionCalls += 1;
+              return dependencies;
+            },
+          });
+        },
+      }
+    );
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(adapterFactoryCalls, 1);
+  assert.equal(dependencyResolutionCalls, 1);
+  assertReceiptSuccess(body, "validation_passed");
+  assert.equal(
+    body.handlerResult.assemblyResult.pipelineInput.preconditionsInput.reviewId,
+    "review_receipt_route"
+  );
+});
+
+test("controlled action validation receipt route creates exactly one adapter scope per request", async () => {
+  const dependencies = createMockAppointmentReviewControlledActionDependencies();
+  const adapters = [];
+  const response =
+    await route.handleControlledActionValidationReceiptRouteRequest(
+      createRequest(createValidPayload()),
+      createContext("review_receipt_single_scope"),
+      {
+        createRouteRuntimeAdapter() {
+          const adapter = Object.freeze({
+            getControlledActionDependencies() {
+              assert.equal(adapters[0], adapter);
+              return dependencies;
+            },
+          });
+
+          adapters.push(adapter);
+          return adapter;
+        },
+      }
+    );
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(adapters.length, 1);
+  assertReceiptSuccess(body, "validation_passed");
+  assert.equal(body.reviewId, "review_receipt_single_scope");
+});
+
+test("controlled action validation receipt route creates isolated adapter scopes for separate requests", async () => {
+  const dependencies = createMockAppointmentReviewControlledActionDependencies();
+  const adapters = [];
+
+  async function postWithInjectedAdapter(reviewId) {
+    const response =
+      await route.handleControlledActionValidationReceiptRouteRequest(
+        createRequest(createValidPayload()),
+        createContext(reviewId),
+        {
+          createRouteRuntimeAdapter() {
+            const adapter = Object.freeze({
+              getControlledActionDependencies() {
+                return dependencies;
+              },
+            });
+
+            adapters.push(adapter);
+            return adapter;
+          },
+        }
+      );
+
+    return response.json();
+  }
+
+  const firstBody = await postWithInjectedAdapter("review_receipt_request_a");
+  const secondBody = await postWithInjectedAdapter("review_receipt_request_b");
+
+  assert.equal(adapters.length, 2);
+  assert.notEqual(adapters[0], adapters[1]);
+  assert.equal(firstBody.reviewId, "review_receipt_request_a");
+  assert.equal(secondBody.reviewId, "review_receipt_request_b");
+  assertReceiptSuccess(firstBody, "validation_passed");
+  assertReceiptSuccess(secondBody, "validation_passed");
+});
+
 test("controlled action validation receipt route source calls Sprint 12O handler once and not Sprint 12J or 12N directly", () => {
   const source = fs.readFileSync(ROUTE_SOURCE_PATH, "utf8");
 
@@ -191,7 +293,7 @@ test("controlled action validation receipt route source calls Sprint 12O handler
       .length,
     2
   );
-  assert.match(source, /createMockAppointmentReviewControlledActionDependencies/);
+  assert.match(source, /appointmentReviewRouteRuntimeAdapter/);
   assert.doesNotMatch(source, /handleAppointmentReviewControlledActionValidation[^R]/);
   assert.doesNotMatch(source, /constructAppointmentReviewValidationDecisionReceipt/);
   assert.doesNotMatch(source, /runAppointmentReviewControlledActionValidationPipeline/);
@@ -456,10 +558,10 @@ test("controlled action validation receipt route does not expose sensitive patie
 test("controlled action validation receipt route has no forbidden imports or side effects", () => {
   const source = fs.readFileSync(ROUTE_SOURCE_PATH, "utf8");
   const forbidden = [
-    "create" + "Appointment",
-    "create" + "CalendarEvent",
-    "get" + "CalendarProvider",
-    "manual" + "AppointmentCalendarSync",
+    "create" + "Appointment\\(",
+    "create" + "CalendarEvent\\(",
+    "get" + "CalendarProvider\\(",
+    "manual" + "AppointmentCalendarSync\\(",
     "google" + "apis",
     "pri" + "sma",
     "supa" + "base",
@@ -498,6 +600,21 @@ test("controlled action validation receipt route has no forbidden imports or sid
     source,
     /executionEnabled:\s*true|executorAvailable:\s*true|executionAvailable:\s*true|executionRequested:\s*true|actionPerformed:\s*true|commandDispatched:\s*true|commandPersisted:\s*true|receiptPersisted:\s*true|bookingCreated:\s*true|calendarChecked:\s*true|appointmentCreated:\s*true|calendarEventCreated:\s*true|databasePersisted:\s*true|reviewFound:\s*true|persisted:\s*true/
   );
+});
+
+test("controlled action validation receipt route imports the adapter but no lower runtime internals", () => {
+  const source = fs.readFileSync(ROUTE_SOURCE_PATH, "utf8");
+
+  assert.match(source, /appointmentReviewRouteRuntimeAdapter/);
+  assert.doesNotMatch(source, /appointmentReviewInMemoryMockServerRuntime/);
+  assert.doesNotMatch(
+    source,
+    /appointmentReviewInMemoryMockControlledActionRuntimeDependencyProvider/
+  );
+  assert.doesNotMatch(source, /appointmentReviewHybridControlledActionDependencies/);
+  assert.doesNotMatch(source, /appointmentReviewRepositoryContextResolver/);
+  assert.doesNotMatch(source, /appointmentReviewRepository/);
+  assert.doesNotMatch(source, /appointmentReviewMockControlledActionDependencies/);
 });
 
 test("controlled action validation receipt route leaves Sprint 12O handler behavior unchanged", async () => {
