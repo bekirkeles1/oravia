@@ -69,6 +69,10 @@ export default function AppointmentReviewsWorkspace() {
   const [selectedStateTransitionEvent, setSelectedStateTransitionEvent] =
     useState(INITIAL_PREVIEW_EVENT);
   const selectedReviewIdRef = useRef("");
+  const isMountedRef = useRef(false);
+  const stateTransitionRequestSequenceRef = useRef(0);
+  const activeStateTransitionRequestRef = useRef(null);
+  const activeStateTransitionAbortRef = useRef(null);
   const selectedReview =
     reviews.find((review) => review.id === selectedReviewId) || null;
   const displayedActionIntentDryRun =
@@ -138,7 +142,17 @@ export default function AppointmentReviewsWorkspace() {
   }, []);
 
   useEffect(() => {
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+      invalidateStateTransitionDryRunRequest();
+    };
+  }, []);
+
+  useEffect(() => {
     selectedReviewIdRef.current = selectedReviewId;
+    invalidateStateTransitionDryRunRequest();
     setActionIntentDryRunStatus("idle");
     setActionIntentDryRunResult(null);
     setActionIntentDryRunError("");
@@ -233,6 +247,12 @@ export default function AppointmentReviewsWorkspace() {
     const reviewIdForRequest = selectedReview.id;
     const currentStateForRequest = stateTransitionPreviewCurrentState;
     const eventForRequest = selectedStateTransitionEvent;
+    const requestId = createStateTransitionDryRunRequest({
+      reviewId: reviewIdForRequest,
+      currentState: currentStateForRequest,
+      event: eventForRequest
+    });
+    const activeAbortController = activeStateTransitionAbortRef.current;
 
     setStateTransitionDryRunStatus("loading");
     setStateTransitionDryRunResult(null);
@@ -248,6 +268,7 @@ export default function AppointmentReviewsWorkspace() {
           headers: {
             "content-type": "application/json"
           },
+          signal: activeAbortController?.signal,
           body: JSON.stringify({
             currentState: currentStateForRequest,
             event: eventForRequest
@@ -255,6 +276,17 @@ export default function AppointmentReviewsWorkspace() {
         }
       );
       const payload = await response.json();
+
+      if (
+        !isActiveStateTransitionDryRunRequest({
+          requestId,
+          reviewId: reviewIdForRequest,
+          currentState: currentStateForRequest,
+          event: eventForRequest
+        })
+      ) {
+        return;
+      }
 
       if (!response.ok) {
         throw new Error(
@@ -270,14 +302,21 @@ export default function AppointmentReviewsWorkspace() {
         );
       }
 
-      if (selectedReviewIdRef.current !== reviewIdForRequest) {
-        return;
-      }
-
       setStateTransitionDryRunResult(payload);
       setStateTransitionDryRunStatus("success");
     } catch (error) {
-      if (selectedReviewIdRef.current !== reviewIdForRequest) {
+      if (isAbortError(error)) {
+        return;
+      }
+
+      if (
+        !isActiveStateTransitionDryRunRequest({
+          requestId,
+          reviewId: reviewIdForRequest,
+          currentState: currentStateForRequest,
+          event: eventForRequest
+        })
+      ) {
         return;
       }
 
@@ -289,6 +328,53 @@ export default function AppointmentReviewsWorkspace() {
           : "State transition dry-run failed safely."
       );
     }
+  }
+
+  function createStateTransitionDryRunRequest({ reviewId, currentState, event }) {
+    invalidateStateTransitionDryRunRequest();
+
+    const requestId = stateTransitionRequestSequenceRef.current + 1;
+    const abortController = new AbortController();
+
+    stateTransitionRequestSequenceRef.current = requestId;
+    activeStateTransitionAbortRef.current = abortController;
+    activeStateTransitionRequestRef.current = {
+      requestId,
+      reviewId,
+      currentState,
+      event
+    };
+
+    return requestId;
+  }
+
+  function invalidateStateTransitionDryRunRequest() {
+    stateTransitionRequestSequenceRef.current += 1;
+    activeStateTransitionRequestRef.current = null;
+
+    if (activeStateTransitionAbortRef.current) {
+      activeStateTransitionAbortRef.current.abort();
+      activeStateTransitionAbortRef.current = null;
+    }
+  }
+
+  function isActiveStateTransitionDryRunRequest({
+    requestId,
+    reviewId,
+    currentState,
+    event
+  }) {
+    const activeRequest = activeStateTransitionRequestRef.current;
+
+    return (
+      isMountedRef.current &&
+      activeRequest &&
+      activeRequest.requestId === requestId &&
+      activeRequest.reviewId === reviewId &&
+      activeRequest.currentState === currentState &&
+      activeRequest.event === event &&
+      selectedReviewIdRef.current === reviewId
+    );
   }
 
   return (
@@ -836,4 +922,8 @@ function isSafeStateTransitionDryRunResponse(payload) {
     typeof payload.event === "string" &&
     typeof payload.code === "string"
   );
+}
+
+function isAbortError(error) {
+  return Boolean(error && typeof error === "object" && error.name === "AbortError");
 }

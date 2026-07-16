@@ -159,6 +159,83 @@ test("appointment reviews workspace shows route-backed state transition dry-run 
   );
 });
 
+test("appointment reviews workspace hardens state transition dry-run against stale responses", () => {
+  assert.match(workspaceSource, /stateTransitionRequestSequenceRef/);
+  assert.match(workspaceSource, /activeStateTransitionRequestRef/);
+  assert.match(workspaceSource, /activeStateTransitionAbortRef/);
+  assert.match(workspaceSource, /isMountedRef/);
+  assert.match(workspaceSource, /createStateTransitionDryRunRequest/);
+  assert.match(workspaceSource, /invalidateStateTransitionDryRunRequest/);
+  assert.match(workspaceSource, /isActiveStateTransitionDryRunRequest/);
+  assert.match(workspaceSource, /new AbortController\(\)/);
+  assert.match(workspaceSource, /activeStateTransitionAbortRef\.current\.abort\(\)/);
+  assert.match(workspaceSource, /signal: activeAbortController\?\.signal/);
+  assert.match(workspaceSource, /isAbortError/);
+  assert.match(workspaceSource, /typeof error === "object"/);
+  assert.match(workspaceSource, /error\.name === "AbortError"/);
+  assert.match(workspaceSource, /requestId/);
+  assert.match(workspaceSource, /reviewId: reviewIdForRequest/);
+  assert.match(workspaceSource, /currentState: currentStateForRequest/);
+  assert.match(workspaceSource, /event: eventForRequest/);
+  assert.match(workspaceSource, /activeRequest\.requestId === requestId/);
+  assert.match(workspaceSource, /activeRequest\.reviewId === reviewId/);
+  assert.match(workspaceSource, /activeRequest\.currentState === currentState/);
+  assert.match(workspaceSource, /activeRequest\.event === event/);
+  assert.match(workspaceSource, /selectedReviewIdRef\.current === reviewId/);
+  assert.match(workspaceSource, /isMountedRef\.current/);
+});
+
+test("appointment reviews workspace invalidates state transition requests on review change and unmount", () => {
+  assert.match(
+    workspaceSource,
+    /useEffect\(\(\) => \{\s+isMountedRef\.current = true;/
+  );
+  assert.match(workspaceSource, /isMountedRef\.current = false/);
+  assert.match(workspaceSource, /invalidateStateTransitionDryRunRequest\(\);/);
+  assert.match(
+    workspaceSource,
+    /selectedReviewIdRef\.current = selectedReviewId;\s+invalidateStateTransitionDryRunRequest\(\);/
+  );
+  assert.match(workspaceSource, /setStateTransitionDryRunStatus\("idle"\)/);
+  assert.match(workspaceSource, /setStateTransitionDryRunResult\(null\)/);
+  assert.match(workspaceSource, /setStateTransitionDryRunError\(""\)/);
+  assert.match(
+    workspaceSource,
+    /setStateTransitionPreviewCurrentState\(INITIAL_PREVIEW_CURRENT_STATE\)/
+  );
+  assert.match(
+    workspaceSource,
+    /setSelectedStateTransitionEvent\(INITIAL_PREVIEW_EVENT\)/
+  );
+});
+
+test("appointment reviews workspace ignores stale state transition success and failure", () => {
+  assert.match(
+    workspaceSource,
+    /if \(\s+!\s*isActiveStateTransitionDryRunRequest\(\{[\s\S]*requestId,[\s\S]*reviewId: reviewIdForRequest,[\s\S]*currentState: currentStateForRequest,[\s\S]*event: eventForRequest[\s\S]*\}\)\s+\) \{\s+return;\s+\}/
+  );
+  assert.match(
+    workspaceSource,
+    /if \(isAbortError\(error\)\) \{\s+return;\s+\}/
+  );
+  assert.match(
+    workspaceSource,
+    /setStateTransitionDryRunResult\(payload\);\s+setStateTransitionDryRunStatus\("success"\);/
+  );
+  assert.match(
+    workspaceSource,
+    /setStateTransitionDryRunResult\(null\);\s+setStateTransitionDryRunStatus\("failure"\);/
+  );
+  assert.match(
+    workspaceSource,
+    /setStateTransitionDryRunStatus\("loading"\);\s+setStateTransitionDryRunResult\(null\);\s+setStateTransitionDryRunError\(""\);/
+  );
+  assert.match(
+    workspaceSource,
+    /if \(stateTransitionDryRunStatus === "loading"\) \{\s+return;\s+\}/
+  );
+});
+
 test("appointment reviews workspace keeps state transition dry-run validation-only and not persisted", () => {
   assert.match(workspaceSource, /dryRun:\s+true/);
   assert.match(workspaceSource, /validationOnly:\s+true/);
@@ -177,6 +254,8 @@ test("appointment reviews workspace keeps state transition dry-run validation-on
   assert.doesNotMatch(workspaceSource, /setReviews\([^)]*stateTransition/i);
   assert.doesNotMatch(workspaceSource, /selectedReview\.status\s*=/);
   assert.doesNotMatch(workspaceSource, /status:\s*stateTransitionDryRunResult/);
+  assert.doesNotMatch(workspaceSource, /setStateTransitionPreviewCurrentState\(.*nextState/);
+  assert.doesNotMatch(workspaceSource, /setSelectedReviewId\(.*nextState/);
 });
 
 test("appointment reviews workspace shows read-only detail preview states", () => {
