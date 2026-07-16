@@ -2019,6 +2019,8 @@ blockquote {
 .appointment-review-action-intent-empty,
 .appointment-review-state-transition-preview,
 .appointment-review-state-transition-empty,
+.appointment-review-preconditions-preview,
+.appointment-review-preconditions-empty,
 .appointment-review-item {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -2088,6 +2090,13 @@ blockquote {
   background: #fbfaf6;
 }
 
+.appointment-review-preconditions-preview {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  background: #f7f9fd;
+}
+
 .appointment-review-detail-preview > div:first-child {
   display: grid;
   gap: 6px;
@@ -2103,6 +2112,11 @@ blockquote {
   gap: 6px;
 }
 
+.appointment-review-preconditions-preview > div:first-child {
+  display: grid;
+  gap: 6px;
+}
+
 .appointment-review-detail-preview span,
 .appointment-review-detail-preview p,
 .appointment-review-detail-empty span,
@@ -2111,7 +2125,10 @@ blockquote {
 .appointment-review-action-intent-empty span,
 .appointment-review-state-transition-preview span,
 .appointment-review-state-transition-preview p,
-.appointment-review-state-transition-empty span {
+.appointment-review-state-transition-empty span,
+.appointment-review-preconditions-preview span,
+.appointment-review-preconditions-preview p,
+.appointment-review-preconditions-empty span {
   color: var(--muted);
   line-height: 1.45;
 }
@@ -2134,12 +2151,20 @@ blockquote {
   text-transform: uppercase;
 }
 
+.appointment-review-preconditions-preview > div:first-child > span {
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
 .appointment-review-detail-preview h3,
 .appointment-review-detail-preview p,
 .appointment-review-action-intent-preview h3,
 .appointment-review-action-intent-preview p,
 .appointment-review-state-transition-preview h3,
-.appointment-review-state-transition-preview p {
+.appointment-review-state-transition-preview p,
+.appointment-review-preconditions-preview h3,
+.appointment-review-preconditions-preview p {
   margin: 0;
 }
 
@@ -2158,7 +2183,9 @@ blockquote {
 }
 
 .appointment-review-state-transition-grid,
-.appointment-review-state-transition-controls {
+.appointment-review-state-transition-controls,
+.appointment-review-preconditions-grid,
+.appointment-review-preconditions-controls {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
@@ -2172,7 +2199,10 @@ blockquote {
 .appointment-review-action-intent-empty,
 .appointment-review-state-transition-grid div,
 .appointment-review-state-transition-list,
-.appointment-review-state-transition-empty {
+.appointment-review-state-transition-empty,
+.appointment-review-preconditions-grid div,
+.appointment-review-preconditions-list,
+.appointment-review-preconditions-empty {
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -2196,7 +2226,14 @@ blockquote {
   gap: 6px;
 }
 
-.appointment-review-state-transition-controls label {
+.appointment-review-preconditions-list,
+.appointment-review-preconditions-empty {
+  display: grid;
+  gap: 6px;
+}
+
+.appointment-review-state-transition-controls label,
+.appointment-review-preconditions-controls label {
   display: grid;
   gap: 6px;
   color: var(--muted);
@@ -2206,7 +2243,9 @@ blockquote {
 }
 
 .appointment-review-state-transition-controls input,
-.appointment-review-state-transition-controls select {
+.appointment-review-state-transition-controls select,
+.appointment-review-preconditions-controls input,
+.appointment-review-preconditions-controls select {
   min-width: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -2244,12 +2283,26 @@ blockquote {
   cursor: pointer;
 }
 
+.appointment-review-preconditions-button {
+  align-self: end;
+  justify-self: start;
+  width: fit-content;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font-weight: 800;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
 .appointment-review-action-intent-button:disabled {
   cursor: not-allowed;
   opacity: 0.65;
 }
 
-.appointment-review-state-transition-button:disabled {
+.appointment-review-state-transition-button:disabled,
+.appointment-review-preconditions-button:disabled {
   cursor: not-allowed;
   opacity: 0.65;
 }
@@ -2267,6 +2320,14 @@ blockquote {
   border: 1px dashed rgba(127, 104, 43, 0.3);
   border-radius: 8px;
   background: rgba(127, 104, 43, 0.08);
+  font-weight: 800;
+}
+
+.appointment-review-preconditions-state {
+  padding: 10px 12px;
+  border: 1px dashed rgba(61, 90, 160, 0.28);
+  border-radius: 8px;
+  background: rgba(61, 90, 160, 0.08);
   font-weight: 800;
 }
 
@@ -2306,6 +2367,8 @@ blockquote {
   .appointment-review-action-intent-grid,
   .appointment-review-state-transition-grid,
   .appointment-review-state-transition-controls,
+  .appointment-review-preconditions-grid,
+  .appointment-review-preconditions-controls,
   .appointment-review-item dl {
     grid-template-columns: 1fr;
   }

@@ -41,6 +41,27 @@ const INITIAL_STATE_TRANSITION_DRY_RUN = {
 
 const INITIAL_PREVIEW_CURRENT_STATE = "pending_secretary_review";
 const INITIAL_PREVIEW_EVENT = "check_validation_only_intent";
+const PRECONDITIONS_ACTION_INTENTS = ["approve_intent", "reject_intent"];
+const INITIAL_PRECONDITIONS_CURRENT_STATE = "validation_only_intent_checked";
+const INITIAL_PRECONDITIONS_ACTOR_ID = "secretary-preview";
+const INITIAL_PRECONDITIONS_ACTOR_ROLE = "secretary";
+const INITIAL_PRECONDITIONS_REQUEST_ID = "preconditions-preview";
+
+const INITIAL_PRECONDITIONS_DRY_RUN = {
+  dryRun: true,
+  validationOnly: true,
+  preconditionsChecked: true,
+  controlledHandlingOnly: true,
+  executionAvailable: false,
+  executionRequested: false,
+  actionPerformed: false,
+  bookingCreated: false,
+  calendarChecked: false,
+  appointmentCreated: false,
+  calendarEventCreated: false,
+  databasePersisted: false,
+  persistence: "not_persisted"
+};
 
 export default function AppointmentReviewsWorkspace() {
   const [reviews, setReviews] = useState([]);
@@ -68,17 +89,41 @@ export default function AppointmentReviewsWorkspace() {
     useState(INITIAL_PREVIEW_CURRENT_STATE);
   const [selectedStateTransitionEvent, setSelectedStateTransitionEvent] =
     useState(INITIAL_PREVIEW_EVENT);
+  const [preconditionsDryRunStatus, setPreconditionsDryRunStatus] =
+    useState("idle");
+  const [preconditionsDryRunResult, setPreconditionsDryRunResult] =
+    useState(null);
+  const [preconditionsDryRunError, setPreconditionsDryRunError] = useState("");
+  const [selectedPreconditionsActionIntent, setSelectedPreconditionsActionIntent] =
+    useState(PRECONDITIONS_ACTION_INTENTS[0]);
+  const [preconditionsCurrentState, setPreconditionsCurrentState] = useState(
+    INITIAL_PRECONDITIONS_CURRENT_STATE
+  );
+  const [preconditionsActorId, setPreconditionsActorId] = useState(
+    INITIAL_PRECONDITIONS_ACTOR_ID
+  );
+  const [preconditionsActorRole, setPreconditionsActorRole] = useState(
+    INITIAL_PRECONDITIONS_ACTOR_ROLE
+  );
+  const [preconditionsRequestId, setPreconditionsRequestId] = useState(
+    INITIAL_PRECONDITIONS_REQUEST_ID
+  );
   const selectedReviewIdRef = useRef("");
   const isMountedRef = useRef(false);
   const stateTransitionRequestSequenceRef = useRef(0);
   const activeStateTransitionRequestRef = useRef(null);
   const activeStateTransitionAbortRef = useRef(null);
+  const preconditionsRequestSequenceRef = useRef(0);
+  const activePreconditionsRequestRef = useRef(null);
+  const activePreconditionsAbortRef = useRef(null);
   const selectedReview =
     reviews.find((review) => review.id === selectedReviewId) || null;
   const displayedActionIntentDryRun =
     actionIntentDryRunResult || ACTION_INTENT_DRY_RUN;
   const displayedStateTransitionDryRun =
     stateTransitionDryRunResult || INITIAL_STATE_TRANSITION_DRY_RUN;
+  const displayedPreconditionsDryRun =
+    preconditionsDryRunResult || INITIAL_PRECONDITIONS_DRY_RUN;
 
   useEffect(() => {
     let isMounted = true;
@@ -147,12 +192,14 @@ export default function AppointmentReviewsWorkspace() {
     return () => {
       isMountedRef.current = false;
       invalidateStateTransitionDryRunRequest();
+      invalidatePreconditionsDryRunRequest();
     };
   }, []);
 
   useEffect(() => {
     selectedReviewIdRef.current = selectedReviewId;
     invalidateStateTransitionDryRunRequest();
+    invalidatePreconditionsDryRunRequest();
     setActionIntentDryRunStatus("idle");
     setActionIntentDryRunResult(null);
     setActionIntentDryRunError("");
@@ -161,6 +208,14 @@ export default function AppointmentReviewsWorkspace() {
     setStateTransitionDryRunError("");
     setStateTransitionPreviewCurrentState(INITIAL_PREVIEW_CURRENT_STATE);
     setSelectedStateTransitionEvent(INITIAL_PREVIEW_EVENT);
+    setPreconditionsDryRunStatus("idle");
+    setPreconditionsDryRunResult(null);
+    setPreconditionsDryRunError("");
+    setSelectedPreconditionsActionIntent(PRECONDITIONS_ACTION_INTENTS[0]);
+    setPreconditionsCurrentState(INITIAL_PRECONDITIONS_CURRENT_STATE);
+    setPreconditionsActorId(INITIAL_PRECONDITIONS_ACTOR_ID);
+    setPreconditionsActorRole(INITIAL_PRECONDITIONS_ACTOR_ROLE);
+    setPreconditionsRequestId(INITIAL_PRECONDITIONS_REQUEST_ID);
   }, [selectedReviewId]);
 
   async function runActionIntentDryRun() {
@@ -373,6 +428,186 @@ export default function AppointmentReviewsWorkspace() {
       activeRequest.reviewId === reviewId &&
       activeRequest.currentState === currentState &&
       activeRequest.event === event &&
+      selectedReviewIdRef.current === reviewId
+    );
+  }
+
+  async function runPreconditionsDryRun() {
+    if (preconditionsDryRunStatus === "loading") {
+      return;
+    }
+
+    if (!selectedReview) {
+      setPreconditionsDryRunStatus("failure");
+      setPreconditionsDryRunResult(null);
+      setPreconditionsDryRunError(
+        "Select a review before running preconditions dry-run."
+      );
+      return;
+    }
+
+    const reviewIdForRequest = selectedReview.id;
+    const actionIntentForRequest = selectedPreconditionsActionIntent;
+    const currentStateForRequest = preconditionsCurrentState;
+    const actorIdForRequest = preconditionsActorId;
+    const actorRoleForRequest = preconditionsActorRole;
+    const requestIdForRequest = preconditionsRequestId;
+    const requestId = createPreconditionsDryRunRequest({
+      reviewId: reviewIdForRequest,
+      actionIntent: actionIntentForRequest,
+      currentState: currentStateForRequest,
+      actorId: actorIdForRequest,
+      actorRole: actorRoleForRequest,
+      requestId: requestIdForRequest
+    });
+    const activeAbortController = activePreconditionsAbortRef.current;
+
+    setPreconditionsDryRunStatus("loading");
+    setPreconditionsDryRunResult(null);
+    setPreconditionsDryRunError("");
+
+    try {
+      const response = await fetch(
+        `/api/secretary/appointment-reviews/${encodeURIComponent(
+          reviewIdForRequest
+        )}/action-preconditions`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          signal: activeAbortController?.signal,
+          body: JSON.stringify({
+            actionIntent: actionIntentForRequest,
+            currentState: currentStateForRequest,
+            actor: {
+              actorId: actorIdForRequest,
+              role: actorRoleForRequest
+            },
+            requestId: requestIdForRequest
+          })
+        }
+      );
+      const payload = await response.json();
+
+      if (
+        !isActivePreconditionsDryRunRequest({
+          requestId,
+          reviewId: reviewIdForRequest,
+          actionIntent: actionIntentForRequest,
+          currentState: currentStateForRequest,
+          actorId: actorIdForRequest,
+          actorRole: actorRoleForRequest,
+          preconditionsRequestId: requestIdForRequest
+        })
+      ) {
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          payload?.reason ||
+            payload?.error?.message ||
+            "Preconditions dry-run failed safely."
+        );
+      }
+
+      if (!isSafePreconditionsDryRunResponse(payload)) {
+        throw new Error(
+          "Preconditions dry-run response was unsafe or incomplete."
+        );
+      }
+
+      setPreconditionsDryRunResult(payload);
+      setPreconditionsDryRunStatus("success");
+    } catch (error) {
+      if (isAbortError(error)) {
+        return;
+      }
+
+      if (
+        !isActivePreconditionsDryRunRequest({
+          requestId,
+          reviewId: reviewIdForRequest,
+          actionIntent: actionIntentForRequest,
+          currentState: currentStateForRequest,
+          actorId: actorIdForRequest,
+          actorRole: actorRoleForRequest,
+          preconditionsRequestId: requestIdForRequest
+        })
+      ) {
+        return;
+      }
+
+      setPreconditionsDryRunResult(null);
+      setPreconditionsDryRunStatus("failure");
+      setPreconditionsDryRunError(
+        error instanceof Error
+          ? error.message
+          : "Preconditions dry-run failed safely."
+      );
+    }
+  }
+
+  function createPreconditionsDryRunRequest({
+    reviewId,
+    actionIntent,
+    currentState,
+    actorId,
+    actorRole,
+    requestId
+  }) {
+    invalidatePreconditionsDryRunRequest();
+
+    const sequenceId = preconditionsRequestSequenceRef.current + 1;
+    const abortController = new AbortController();
+
+    preconditionsRequestSequenceRef.current = sequenceId;
+    activePreconditionsAbortRef.current = abortController;
+    activePreconditionsRequestRef.current = {
+      requestId: sequenceId,
+      reviewId,
+      actionIntent,
+      currentState,
+      actorId,
+      actorRole,
+      preconditionsRequestId: requestId
+    };
+
+    return sequenceId;
+  }
+
+  function invalidatePreconditionsDryRunRequest() {
+    preconditionsRequestSequenceRef.current += 1;
+    activePreconditionsRequestRef.current = null;
+
+    if (activePreconditionsAbortRef.current) {
+      activePreconditionsAbortRef.current.abort();
+      activePreconditionsAbortRef.current = null;
+    }
+  }
+
+  function isActivePreconditionsDryRunRequest({
+    requestId,
+    reviewId,
+    actionIntent,
+    currentState,
+    actorId,
+    actorRole,
+    preconditionsRequestId
+  }) {
+    const activeRequest = activePreconditionsRequestRef.current;
+
+    return (
+      isMountedRef.current &&
+      activeRequest &&
+      activeRequest.requestId === requestId &&
+      activeRequest.reviewId === reviewId &&
+      activeRequest.actionIntent === actionIntent &&
+      activeRequest.currentState === currentState &&
+      activeRequest.actorId === actorId &&
+      activeRequest.actorRole === actorRole &&
+      activeRequest.preconditionsRequestId === preconditionsRequestId &&
       selectedReviewIdRef.current === reviewId
     );
   }
@@ -839,6 +1074,277 @@ export default function AppointmentReviewsWorkspace() {
           </section>
         ) : null}
 
+        {!loading && !loadError ? (
+          <section
+            className="appointment-review-preconditions-preview"
+            aria-labelledby="appointment-review-preconditions-preview-title"
+          >
+            <div>
+              <span>
+                Validation only · Controlled handling only · Not persisted
+              </span>
+              <h3 id="appointment-review-preconditions-preview-title">
+                Controlled Action Preconditions Dry-run
+              </h3>
+              <p>
+                Route-backed structural preview for future controlled handling.
+                Not authenticated. Not authorized. No action executed. No
+                booking, calendar, appointment, database, or persistence work is
+                performed.
+              </p>
+            </div>
+
+            {selectedReview ? (
+              <>
+                <div className="appointment-review-preconditions-controls">
+                  <label>
+                    Proposed action intent
+                    <select
+                      value={selectedPreconditionsActionIntent}
+                      onChange={(event) =>
+                        setSelectedPreconditionsActionIntent(event.target.value)
+                      }
+                    >
+                      {PRECONDITIONS_ACTION_INTENTS.map((actionIntent) => (
+                        <option key={actionIntent} value={actionIntent}>
+                          {actionIntent}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Preview current state
+                    <input
+                      type="text"
+                      value={preconditionsCurrentState}
+                      onChange={(event) =>
+                        setPreconditionsCurrentState(event.target.value)
+                      }
+                    />
+                  </label>
+                  <label>
+                    Actor id
+                    <input
+                      type="text"
+                      value={preconditionsActorId}
+                      onChange={(event) =>
+                        setPreconditionsActorId(event.target.value)
+                      }
+                    />
+                  </label>
+                  <label>
+                    Actor role
+                    <input
+                      type="text"
+                      value={preconditionsActorRole}
+                      onChange={(event) =>
+                        setPreconditionsActorRole(event.target.value)
+                      }
+                    />
+                  </label>
+                  <label>
+                    Request id
+                    <input
+                      type="text"
+                      value={preconditionsRequestId}
+                      onChange={(event) =>
+                        setPreconditionsRequestId(event.target.value)
+                      }
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="appointment-review-preconditions-button"
+                    onClick={runPreconditionsDryRun}
+                    disabled={preconditionsDryRunStatus === "loading"}
+                  >
+                    Run preconditions dry-run
+                  </button>
+                </div>
+
+                <p className="appointment-review-preconditions-state">
+                  {preconditionsDryRunStatus === "loading"
+                    ? "Preconditions dry-run is running. No action executed."
+                    : null}
+                  {preconditionsDryRunStatus === "success"
+                    ? "Preconditions result received. Structural validation only; not authenticated, not authorized, not execution-ready."
+                    : null}
+                  {preconditionsDryRunStatus === "failure"
+                    ? preconditionsDryRunError ||
+                      "Preconditions dry-run failed safely. No action occurred."
+                    : null}
+                  {preconditionsDryRunStatus === "idle"
+                    ? "Idle: no preconditions result for this selected review."
+                    : null}
+                </p>
+
+                <dl className="appointment-review-preconditions-grid">
+                  <div>
+                    <dt>Review id</dt>
+                    <dd>
+                      {preconditionsDryRunResult?.reviewId || selectedReview.id}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>accepted</dt>
+                    <dd>
+                      {preconditionsDryRunResult
+                        ? String(preconditionsDryRunResult.accepted)
+                        : "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>eligibleForControlledHandling</dt>
+                    <dd>
+                      {preconditionsDryRunResult
+                        ? String(
+                            preconditionsDryRunResult.eligibleForControlledHandling
+                          )
+                        : "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>controlledHandlingOnly</dt>
+                    <dd>
+                      {String(displayedPreconditionsDryRun.controlledHandlingOnly)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>actionIntent</dt>
+                    <dd>
+                      {preconditionsDryRunResult?.actionIntent ||
+                        selectedPreconditionsActionIntent}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>currentState</dt>
+                    <dd>
+                      {preconditionsDryRunResult?.currentState ||
+                        preconditionsCurrentState}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>actorId</dt>
+                    <dd>
+                      {preconditionsDryRunResult?.actorId ||
+                        preconditionsActorId}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>actorRole</dt>
+                    <dd>
+                      {preconditionsDryRunResult?.actorRole ||
+                        preconditionsActorRole}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>requestId</dt>
+                    <dd>
+                      {preconditionsDryRunResult?.requestId ||
+                        preconditionsRequestId}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>code</dt>
+                    <dd>{preconditionsDryRunResult?.code || "not_run"}</dd>
+                  </div>
+                  <div>
+                    <dt>reason</dt>
+                    <dd>{preconditionsDryRunResult?.reason || "none"}</dd>
+                  </div>
+                  <div>
+                    <dt>dryRun</dt>
+                    <dd>{String(displayedPreconditionsDryRun.dryRun)}</dd>
+                  </div>
+                  <div>
+                    <dt>validationOnly</dt>
+                    <dd>
+                      {String(displayedPreconditionsDryRun.validationOnly)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>preconditionsChecked</dt>
+                    <dd>
+                      {String(displayedPreconditionsDryRun.preconditionsChecked)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>executionAvailable</dt>
+                    <dd>
+                      {String(displayedPreconditionsDryRun.executionAvailable)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>executionRequested</dt>
+                    <dd>
+                      {String(displayedPreconditionsDryRun.executionRequested)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>actionPerformed</dt>
+                    <dd>
+                      {String(displayedPreconditionsDryRun.actionPerformed)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>bookingCreated</dt>
+                    <dd>
+                      {String(displayedPreconditionsDryRun.bookingCreated)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>calendarChecked</dt>
+                    <dd>
+                      {String(displayedPreconditionsDryRun.calendarChecked)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>appointmentCreated</dt>
+                    <dd>
+                      {String(displayedPreconditionsDryRun.appointmentCreated)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>calendarEventCreated</dt>
+                    <dd>
+                      {String(displayedPreconditionsDryRun.calendarEventCreated)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>databasePersisted</dt>
+                    <dd>
+                      {String(displayedPreconditionsDryRun.databasePersisted)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>persistence</dt>
+                    <dd>{displayedPreconditionsDryRun.persistence}</dd>
+                  </div>
+                </dl>
+
+                <div className="appointment-review-preconditions-list">
+                  <strong>Preconditions result</strong>
+                  <span>{PRECONDITIONS_ACTION_INTENTS.join(", ")}</span>
+                  <small>
+                    eligibleForControlledHandling true only means this structural
+                    dry-run validation passed. It is not approval, rejection,
+                    authentication, authorization, execution readiness, booking
+                    readiness, or calendar readiness.
+                  </small>
+                </div>
+              </>
+            ) : (
+              <div className="appointment-review-preconditions-empty">
+                <strong>No selected appointment review</strong>
+                <span>
+                  Select a review to inspect controlled action preconditions
+                  dry-run details.
+                </span>
+              </div>
+            )}
+          </section>
+        ) : null}
+
         {!loading && !loadError && reviews.length > 0 ? (
           <div className="appointment-reviews-list">
             {reviews.map((review) => (
@@ -920,6 +1426,29 @@ function isSafeStateTransitionDryRunResponse(payload) {
     typeof payload.accepted === "boolean" &&
     typeof payload.currentState === "string" &&
     typeof payload.event === "string" &&
+    typeof payload.code === "string"
+  );
+}
+
+function isSafePreconditionsDryRunResponse(payload) {
+  return (
+    payload &&
+    payload.dryRun === true &&
+    payload.validationOnly === true &&
+    payload.preconditionsChecked === true &&
+    payload.controlledHandlingOnly === true &&
+    payload.executionAvailable === false &&
+    payload.executionRequested === false &&
+    payload.actionPerformed === false &&
+    payload.bookingCreated === false &&
+    payload.calendarChecked === false &&
+    payload.databasePersisted === false &&
+    payload.appointmentCreated === false &&
+    payload.calendarEventCreated === false &&
+    payload.persistence === "not_persisted" &&
+    typeof payload.accepted === "boolean" &&
+    typeof payload.eligibleForControlledHandling === "boolean" &&
+    typeof payload.reviewId === "string" &&
     typeof payload.code === "string"
   );
 }

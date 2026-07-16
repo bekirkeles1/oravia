@@ -159,6 +159,192 @@ test("appointment reviews workspace shows route-backed state transition dry-run 
   );
 });
 
+test("appointment reviews workspace shows controlled action preconditions dry-run preview", () => {
+  const preconditionsRequestSource = workspaceSource.slice(
+    workspaceSource.indexOf(")}/action-preconditions`"),
+    workspaceSource.indexOf("const payload = await response.json();", workspaceSource.indexOf(")}/action-preconditions`"))
+  );
+
+  assert.match(workspaceSource, /PRECONDITIONS_ACTION_INTENTS/);
+  assert.match(workspaceSource, /INITIAL_PRECONDITIONS_CURRENT_STATE/);
+  assert.match(workspaceSource, /INITIAL_PRECONDITIONS_ACTOR_ID/);
+  assert.match(workspaceSource, /INITIAL_PRECONDITIONS_ACTOR_ROLE/);
+  assert.match(workspaceSource, /INITIAL_PRECONDITIONS_REQUEST_ID/);
+  assert.match(workspaceSource, /INITIAL_PRECONDITIONS_DRY_RUN/);
+  assert.match(workspaceSource, /runPreconditionsDryRun/);
+  assert.match(workspaceSource, /isSafePreconditionsDryRunResponse/);
+  assert.match(workspaceSource, /Controlled Action Preconditions Dry-run/);
+  assert.match(workspaceSource, /Validation only/);
+  assert.match(workspaceSource, /Controlled handling only/);
+  assert.match(workspaceSource, /Not authenticated/);
+  assert.match(workspaceSource, /Not authorized/);
+  assert.match(workspaceSource, /Not persisted/);
+  assert.match(workspaceSource, /No action executed/);
+  assert.match(workspaceSource, /Proposed action intent/);
+  assert.match(workspaceSource, /Run preconditions dry-run/);
+  assert.match(workspaceSource, /Preconditions result/);
+  assert.match(workspaceSource, /approve_intent/);
+  assert.match(workspaceSource, /reject_intent/);
+  assert.match(workspaceSource, /validation_only_intent_checked/);
+  assert.match(workspaceSource, /secretary-preview/);
+  assert.match(workspaceSource, /preconditions-preview/);
+  assert.match(workspaceSource, /INITIAL_PRECONDITIONS_ACTOR_ROLE = "secretary"/);
+  assert.match(
+    workspaceSource,
+    /\/api\/secretary\/appointment-reviews\/\$\{encodeURIComponent/
+  );
+  assert.match(workspaceSource, /\/action-preconditions`/);
+  assert.match(workspaceSource, /method: "POST"/);
+  assert.match(workspaceSource, /actionIntent: actionIntentForRequest/);
+  assert.match(workspaceSource, /currentState: currentStateForRequest/);
+  assert.match(workspaceSource, /actor:\s+\{\s+actorId: actorIdForRequest,\s+role: actorRoleForRequest\s+\}/);
+  assert.match(workspaceSource, /requestId: requestIdForRequest/);
+  assert.match(preconditionsRequestSource, /body: JSON\.stringify\(/);
+  assert.doesNotMatch(preconditionsRequestSource, /reviewId:/);
+  assert.match(workspaceSource, /accepted/);
+  assert.match(workspaceSource, /eligibleForControlledHandling/);
+  assert.match(workspaceSource, /controlledHandlingOnly/);
+  assert.match(workspaceSource, /actorId/);
+  assert.match(workspaceSource, /actorRole/);
+  assert.match(workspaceSource, /requestId/);
+  assert.match(workspaceSource, /code/);
+  assert.match(workspaceSource, /reason/);
+  assert.match(workspaceSource, /dryRun/);
+  assert.match(workspaceSource, /preconditionsChecked/);
+  assert.match(workspaceSource, /executionRequested/);
+  assert.match(workspaceSource, /executionAvailable/);
+  assert.match(workspaceSource, /persistence/);
+  assert.match(workspaceSource, /Preconditions dry-run is running/);
+  assert.match(workspaceSource, /Preconditions result received/);
+  assert.match(workspaceSource, /Preconditions dry-run failed safely/);
+  assert.match(workspaceSource, /No action occurred/);
+  assert.match(workspaceSource, /not authenticated, not authorized, not execution-ready/);
+  assert.match(
+    workspaceSource,
+    /eligibleForControlledHandling true only means this structural\s+dry-run validation passed/
+  );
+  assert.match(workspaceSource, /not approval, rejection,\s+authentication, authorization, execution readiness, booking\s+readiness, or calendar readiness/);
+});
+
+test("appointment reviews workspace hardens preconditions dry-run against stale responses", () => {
+  assert.match(workspaceSource, /preconditionsRequestSequenceRef/);
+  assert.match(workspaceSource, /activePreconditionsRequestRef/);
+  assert.match(workspaceSource, /activePreconditionsAbortRef/);
+  assert.match(workspaceSource, /createPreconditionsDryRunRequest/);
+  assert.match(workspaceSource, /invalidatePreconditionsDryRunRequest/);
+  assert.match(workspaceSource, /isActivePreconditionsDryRunRequest/);
+  assert.match(workspaceSource, /new AbortController\(\)/);
+  assert.match(workspaceSource, /activePreconditionsAbortRef\.current\.abort\(\)/);
+  assert.match(workspaceSource, /signal: activeAbortController\?\.signal/);
+  assert.match(workspaceSource, /requestId: sequenceId/);
+  assert.match(workspaceSource, /reviewId: reviewIdForRequest/);
+  assert.match(workspaceSource, /actionIntent: actionIntentForRequest/);
+  assert.match(workspaceSource, /currentState: currentStateForRequest/);
+  assert.match(workspaceSource, /actorId: actorIdForRequest/);
+  assert.match(workspaceSource, /actorRole: actorRoleForRequest/);
+  assert.match(workspaceSource, /preconditionsRequestId: requestIdForRequest/);
+  assert.match(workspaceSource, /activeRequest\.requestId === requestId/);
+  assert.match(workspaceSource, /activeRequest\.reviewId === reviewId/);
+  assert.match(workspaceSource, /activeRequest\.actionIntent === actionIntent/);
+  assert.match(workspaceSource, /activeRequest\.currentState === currentState/);
+  assert.match(workspaceSource, /activeRequest\.actorId === actorId/);
+  assert.match(workspaceSource, /activeRequest\.actorRole === actorRole/);
+  assert.match(
+    workspaceSource,
+    /activeRequest\.preconditionsRequestId === preconditionsRequestId/
+  );
+  assert.match(workspaceSource, /selectedReviewIdRef\.current === reviewId/);
+  assert.match(
+    workspaceSource,
+    /if \(\s+!\s*isActivePreconditionsDryRunRequest\(\{[\s\S]*requestId,[\s\S]*reviewId: reviewIdForRequest,[\s\S]*actionIntent: actionIntentForRequest,[\s\S]*currentState: currentStateForRequest,[\s\S]*actorId: actorIdForRequest,[\s\S]*actorRole: actorRoleForRequest,[\s\S]*preconditionsRequestId: requestIdForRequest[\s\S]*\}\)\s+\) \{\s+return;\s+\}/
+  );
+  assert.match(workspaceSource, /if \(isAbortError\(error\)\) \{\s+return;\s+\}/);
+  assert.match(
+    workspaceSource,
+    /setPreconditionsDryRunResult\(payload\);\s+setPreconditionsDryRunStatus\("success"\);/
+  );
+  assert.match(
+    workspaceSource,
+    /setPreconditionsDryRunResult\(null\);\s+setPreconditionsDryRunStatus\("failure"\);/
+  );
+  assert.match(
+    workspaceSource,
+    /setPreconditionsDryRunStatus\("loading"\);\s+setPreconditionsDryRunResult\(null\);\s+setPreconditionsDryRunError\(""\);/
+  );
+  assert.match(
+    workspaceSource,
+    /if \(preconditionsDryRunStatus === "loading"\) \{\s+return;\s+\}/
+  );
+  assert.match(
+    workspaceSource,
+    /disabled=\{preconditionsDryRunStatus === "loading"\}/
+  );
+});
+
+test("appointment reviews workspace resets preconditions preview on review change and unmount", () => {
+  assert.match(workspaceSource, /invalidatePreconditionsDryRunRequest\(\);/);
+  assert.match(
+    workspaceSource,
+    /selectedReviewIdRef\.current = selectedReviewId;\s+invalidateStateTransitionDryRunRequest\(\);\s+invalidatePreconditionsDryRunRequest\(\);/
+  );
+  assert.match(workspaceSource, /setPreconditionsDryRunStatus\("idle"\)/);
+  assert.match(workspaceSource, /setPreconditionsDryRunResult\(null\)/);
+  assert.match(workspaceSource, /setPreconditionsDryRunError\(""\)/);
+  assert.match(
+    workspaceSource,
+    /setSelectedPreconditionsActionIntent\(PRECONDITIONS_ACTION_INTENTS\[0\]\)/
+  );
+  assert.match(
+    workspaceSource,
+    /setPreconditionsCurrentState\(INITIAL_PRECONDITIONS_CURRENT_STATE\)/
+  );
+  assert.match(
+    workspaceSource,
+    /setPreconditionsActorId\(INITIAL_PRECONDITIONS_ACTOR_ID\)/
+  );
+  assert.match(
+    workspaceSource,
+    /setPreconditionsActorRole\(INITIAL_PRECONDITIONS_ACTOR_ROLE\)/
+  );
+  assert.match(
+    workspaceSource,
+    /setPreconditionsRequestId\(INITIAL_PRECONDITIONS_REQUEST_ID\)/
+  );
+  assert.match(
+    workspaceSource,
+    /isMountedRef\.current = false;\s+invalidateStateTransitionDryRunRequest\(\);\s+invalidatePreconditionsDryRunRequest\(\);/
+  );
+});
+
+test("appointment reviews workspace keeps preconditions dry-run validation-only and not executable", () => {
+  assert.match(workspaceSource, /dryRun:\s+true/);
+  assert.match(workspaceSource, /validationOnly:\s+true/);
+  assert.match(workspaceSource, /preconditionsChecked:\s+true/);
+  assert.match(workspaceSource, /controlledHandlingOnly:\s+true/);
+  assert.match(workspaceSource, /executionAvailable:\s+false/);
+  assert.match(workspaceSource, /executionRequested:\s+false/);
+  assert.match(workspaceSource, /actionPerformed:\s+false/);
+  assert.match(workspaceSource, /bookingCreated:\s+false/);
+  assert.match(workspaceSource, /calendarChecked:\s+false/);
+  assert.match(workspaceSource, /appointmentCreated:\s+false/);
+  assert.match(workspaceSource, /calendarEventCreated:\s+false/);
+  assert.match(workspaceSource, /databasePersisted:\s+false/);
+  assert.match(workspaceSource, /persistence:\s+"not_persisted"/);
+  assert.match(workspaceSource, /payload\.preconditionsChecked === true/);
+  assert.match(workspaceSource, /payload\.controlledHandlingOnly === true/);
+  assert.match(workspaceSource, /payload\.executionRequested === false/);
+  assert.match(workspaceSource, /payload\.executionAvailable === false/);
+  assert.match(workspaceSource, /payload\.persistence === "not_persisted"/);
+  assert.doesNotMatch(workspaceSource, /setReviews\([^)]*preconditions/i);
+  assert.doesNotMatch(workspaceSource, /selectedReview\.status\s*=/);
+  assert.doesNotMatch(workspaceSource, /appointmentReviewActionPreconditionsContract/);
+  assert.doesNotMatch(workspaceSource, /authenticated:\s+true/);
+  assert.doesNotMatch(workspaceSource, /authorized:\s+true/);
+  assert.doesNotMatch(workspaceSource, /executionAvailable:\s+true/);
+  assert.doesNotMatch(workspaceSource, /executionRequested:\s+true/);
+  assert.doesNotMatch(workspaceSource, /actionPerformed:\s+true/);
+});
+
 test("appointment reviews workspace hardens state transition dry-run against stale responses", () => {
   assert.match(workspaceSource, /stateTransitionRequestSequenceRef/);
   assert.match(workspaceSource, /activeStateTransitionRequestRef/);
@@ -296,8 +482,13 @@ test("appointment reviews workspace has no approval, booking, or calendar action
   assert.match(workspaceSource, /<button/);
   assert.match(workspaceSource, /Preview details/);
   assert.match(workspaceSource, /Run state transition dry-run/);
+  assert.match(workspaceSource, /Run preconditions dry-run/);
   assert.doesNotMatch(workspaceSource, /<button[^>]*>\s*Approve\s*<\/button>/i);
   assert.doesNotMatch(workspaceSource, /<button[^>]*>\s*Reject\s*<\/button>/i);
+  assert.doesNotMatch(workspaceSource, /<button[^>]*>\s*Confirm\s*<\/button>/i);
+  assert.doesNotMatch(workspaceSource, /<button[^>]*>\s*Execute\s*<\/button>/i);
+  assert.doesNotMatch(workspaceSource, /<button[^>]*>\s*Save\s*<\/button>/i);
+  assert.doesNotMatch(workspaceSource, /<button[^>]*>\s*Apply\s*<\/button>/i);
   assert.doesNotMatch(workspaceSource, /Confirm appointment/i);
   assert.doesNotMatch(
     workspaceSource,
@@ -325,10 +516,18 @@ test("appointment reviews workspace has no approval, booking, or calendar action
     workspaceSource,
     /appointmentReviewActionIntentStateMachine/
   );
+  assert.doesNotMatch(
+    workspaceSource,
+    /appointmentReviewActionPreconditionsContract/
+  );
   assert.doesNotMatch(workspaceSource, /transitionAppointmentReviewActionIntentState/);
   assert.doesNotMatch(workspaceSource, /createAppointment|createCalendarEvent|getCalendarProvider/);
   assert.doesNotMatch(workspaceSource, /manualAppointmentCalendarSync/);
   assert.doesNotMatch(workspaceSource, /googleapis/i);
+  assert.doesNotMatch(workspaceSource, /authenticated:\s+true/);
+  assert.doesNotMatch(workspaceSource, /authorized:\s+true/);
+  assert.doesNotMatch(workspaceSource, /executionAvailable:\s+true/);
+  assert.doesNotMatch(workspaceSource, /executionRequested:\s+true/);
   assert.doesNotMatch(workspaceSource, /bookingCreated:\s+true/);
   assert.doesNotMatch(workspaceSource, /calendarChecked:\s+true/);
   assert.doesNotMatch(workspaceSource, /databasePersisted:\s+true/);
@@ -358,6 +557,13 @@ test("appointment reviews workspace styles are present", () => {
   assert.match(cssSource, /\.appointment-review-state-transition-empty/);
   assert.match(cssSource, /\.appointment-review-state-transition-button/);
   assert.match(cssSource, /\.appointment-review-state-transition-state/);
+  assert.match(cssSource, /\.appointment-review-preconditions-preview/);
+  assert.match(cssSource, /\.appointment-review-preconditions-grid/);
+  assert.match(cssSource, /\.appointment-review-preconditions-controls/);
+  assert.match(cssSource, /\.appointment-review-preconditions-list/);
+  assert.match(cssSource, /\.appointment-review-preconditions-empty/);
+  assert.match(cssSource, /\.appointment-review-preconditions-button/);
+  assert.match(cssSource, /\.appointment-review-preconditions-state/);
   assert.match(cssSource, /\.appointment-review-item/);
   assert.match(cssSource, /\.appointment-review-preview-button/);
 });
