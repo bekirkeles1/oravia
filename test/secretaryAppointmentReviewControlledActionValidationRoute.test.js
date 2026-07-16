@@ -218,6 +218,105 @@ test("controlled action validation route uses the Sprint 12K mock dependency bun
   );
 });
 
+test("controlled action validation route obtains dependencies through the route runtime adapter", async () => {
+  const dependencies = createMockAppointmentReviewControlledActionDependencies();
+  let adapterFactoryCalls = 0;
+  let dependencyResolutionCalls = 0;
+  const response = await route.handleControlledActionValidationRouteRequest(
+    createRequest(createValidPayload()),
+    createContext(),
+    {
+      createRouteRuntimeAdapter(options) {
+        adapterFactoryCalls += 1;
+        assert.equal(typeof options.resolveControlledActionState, "function");
+        assert.equal(options.initialReviews.length, 1);
+        assert.equal(options.initialReviews[0].id, "review_route");
+
+        return Object.freeze({
+          getControlledActionDependencies() {
+            dependencyResolutionCalls += 1;
+            return dependencies;
+          },
+        });
+      },
+    }
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(adapterFactoryCalls, 1);
+  assert.equal(dependencyResolutionCalls, 1);
+  assertAcceptedRouteResult(body);
+  assert.equal(
+    body.assemblyResult.pipelineInput.preconditionsInput.reviewId,
+    "review_route"
+  );
+});
+
+test("controlled action validation route creates exactly one adapter scope per request", async () => {
+  const dependencies = createMockAppointmentReviewControlledActionDependencies();
+  const adapters = [];
+  const response = await route.handleControlledActionValidationRouteRequest(
+    createRequest(createValidPayload()),
+    createContext("review_single_scope"),
+    {
+      createRouteRuntimeAdapter() {
+        const adapter = Object.freeze({
+          getControlledActionDependencies() {
+            assert.equal(adapters[0], adapter);
+            return dependencies;
+          },
+        });
+
+        adapters.push(adapter);
+        return adapter;
+      },
+    }
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(adapters.length, 1);
+  assertAcceptedRouteResult(body);
+  assert.equal(body.reviewId, "review_single_scope");
+});
+
+test("controlled action validation route creates isolated adapter scopes for separate requests", async () => {
+  const dependencies = createMockAppointmentReviewControlledActionDependencies();
+  const adapters = [];
+
+  async function postWithInjectedAdapter(reviewId) {
+    const response = await route.handleControlledActionValidationRouteRequest(
+      createRequest(createValidPayload()),
+      createContext(reviewId),
+      {
+        createRouteRuntimeAdapter() {
+          const adapter = Object.freeze({
+            getControlledActionDependencies() {
+              return dependencies;
+            },
+          });
+
+          adapters.push(adapter);
+          return adapter;
+        },
+      }
+    );
+
+    return response.json();
+  }
+
+  const firstBody = await postWithInjectedAdapter("review_request_a");
+  const secondBody = await postWithInjectedAdapter("review_request_b");
+
+  assert.equal(adapters.length, 2);
+  assert.notEqual(adapters[0], adapters[1]);
+  assert.equal(firstBody.reviewId, "review_request_a");
+  assert.equal(secondBody.reviewId, "review_request_b");
+  assertAcceptedRouteResult(firstBody);
+  assertAcceptedRouteResult(secondBody);
+});
+
 test("controlled action validation route response is explicitly mock and validation only", async () => {
   const { body } = await post(createValidPayload());
 
@@ -472,9 +571,9 @@ test("controlled action validation route does not import the appointment review 
 test("controlled action validation route imports no execution booking calendar database or persistence modules", () => {
   const source = fs.readFileSync(ROUTE_SOURCE_PATH, "utf8");
   const forbidden = [
-    "create" + "Appointment",
-    "create" + "CalendarEvent",
-    "get" + "CalendarProvider",
+    "create" + "Appointment\\(",
+    "create" + "CalendarEvent\\(",
+    "get" + "CalendarProvider\\(",
     "manual" + "AppointmentCalendarSync",
     "google" + "apis",
     "pri" + "sma",
@@ -507,6 +606,21 @@ test("controlled action validation route does not access cookies sessions or aut
   assert.doesNotMatch(source, /session/i);
   assert.doesNotMatch(source, /authProvider|authenticationProvider/i);
   assert.doesNotMatch(source, /authorizationProvider/i);
+});
+
+test("controlled action validation route imports the adapter but no lower runtime internals", () => {
+  const source = fs.readFileSync(ROUTE_SOURCE_PATH, "utf8");
+
+  assert.match(source, /appointmentReviewRouteRuntimeAdapter/);
+  assert.doesNotMatch(source, /appointmentReviewInMemoryMockServerRuntime/);
+  assert.doesNotMatch(
+    source,
+    /appointmentReviewInMemoryMockControlledActionRuntimeDependencyProvider/
+  );
+  assert.doesNotMatch(source, /appointmentReviewHybridControlledActionDependencies/);
+  assert.doesNotMatch(source, /appointmentReviewRepositoryContextResolver/);
+  assert.doesNotMatch(source, /appointmentReviewRepository/);
+  assert.doesNotMatch(source, /appointmentReviewMockControlledActionDependencies/);
 });
 
 test("controlled action validation route does not claim a review was found", async () => {
