@@ -138,3 +138,13 @@ dist
 # macOS
 .DS_Store
 **/.DS_Store
+
+# Oravia secrets and credentials
+credentials.json
+**/credentials.json
+token.json
+**/token.json
+service-account.json
+**/service-account.json
+oravia-secrets/
+**/oravia-secrets/
