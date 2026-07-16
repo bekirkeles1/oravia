@@ -105,6 +105,80 @@ test("appointment reviews workspace shows validation-only action intent dry-run 
   );
 });
 
+test("appointment reviews workspace shows route-backed state transition dry-run preview", () => {
+  assert.match(workspaceSource, /STATE_TRANSITION_DRY_RUN_EVENTS/);
+  assert.match(workspaceSource, /INITIAL_PREVIEW_CURRENT_STATE/);
+  assert.match(workspaceSource, /INITIAL_PREVIEW_EVENT/);
+  assert.match(workspaceSource, /INITIAL_STATE_TRANSITION_DRY_RUN/);
+  assert.match(workspaceSource, /runStateTransitionDryRun/);
+  assert.match(workspaceSource, /isSafeStateTransitionDryRunResponse/);
+  assert.match(workspaceSource, /State Transition Dry-run/);
+  assert.match(workspaceSource, /Validation only · Not persisted/);
+  assert.match(workspaceSource, /No action executed/);
+  assert.match(workspaceSource, /Preview current state/);
+  assert.match(workspaceSource, /Preview next state/);
+  assert.match(workspaceSource, /pending_secretary_review/);
+  assert.match(workspaceSource, /check_validation_only_intent/);
+  assert.match(workspaceSource, /require_clinic_review/);
+  assert.match(workspaceSource, /reject_action_intent/);
+  assert.match(
+    workspaceSource,
+    /\/api\/secretary\/appointment-reviews\/\$\{encodeURIComponent/
+  );
+  assert.match(workspaceSource, /\/state-transition`/);
+  assert.match(workspaceSource, /method: "POST"/);
+  assert.match(workspaceSource, /currentState: currentStateForRequest/);
+  assert.match(workspaceSource, /event: eventForRequest/);
+  assert.match(workspaceSource, /accepted/);
+  assert.match(workspaceSource, /nextState/);
+  assert.match(workspaceSource, /code/);
+  assert.match(workspaceSource, /reason/);
+  assert.match(workspaceSource, /executionAvailable/);
+  assert.match(workspaceSource, /persistence/);
+  assert.match(workspaceSource, /stateTransitionDryRunStatus === "loading"/);
+  assert.match(workspaceSource, /disabled=\{stateTransitionDryRunStatus === "loading"\}/);
+  assert.match(workspaceSource, /State transition dry-run is running/);
+  assert.match(workspaceSource, /State transition dry-run result received/);
+  assert.match(workspaceSource, /State transition dry-run failed safely/);
+  assert.match(workspaceSource, /No transition occurred/);
+  assert.match(workspaceSource, /setStateTransitionDryRunStatus\("idle"\)/);
+  assert.match(workspaceSource, /setStateTransitionDryRunResult\(null\)/);
+  assert.match(workspaceSource, /setStateTransitionDryRunError\(""\)/);
+  assert.match(
+    workspaceSource,
+    /setStateTransitionPreviewCurrentState\(INITIAL_PREVIEW_CURRENT_STATE\)/
+  );
+  assert.match(
+    workspaceSource,
+    /setSelectedStateTransitionEvent\(INITIAL_PREVIEW_EVENT\)/
+  );
+  assert.match(workspaceSource, /selectedReviewIdRef\.current !== reviewIdForRequest/);
+  assert.match(
+    workspaceSource,
+    /Preview\s+result does not update the selected review object/
+  );
+});
+
+test("appointment reviews workspace keeps state transition dry-run validation-only and not persisted", () => {
+  assert.match(workspaceSource, /dryRun:\s+true/);
+  assert.match(workspaceSource, /validationOnly:\s+true/);
+  assert.match(workspaceSource, /executionAvailable:\s+false/);
+  assert.match(workspaceSource, /actionPerformed:\s+false/);
+  assert.match(workspaceSource, /bookingCreated:\s+false/);
+  assert.match(workspaceSource, /calendarChecked:\s+false/);
+  assert.match(workspaceSource, /appointmentCreated:\s+false/);
+  assert.match(workspaceSource, /calendarEventCreated:\s+false/);
+  assert.match(workspaceSource, /databasePersisted:\s+false/);
+  assert.match(workspaceSource, /persistence:\s+"not_persisted"/);
+  assert.match(workspaceSource, /payload\.executionAvailable === false/);
+  assert.match(workspaceSource, /payload\.persistence === "not_persisted"/);
+  assert.match(workspaceSource, /Not persisted/);
+  assert.match(workspaceSource, /Validation only/);
+  assert.doesNotMatch(workspaceSource, /setReviews\([^)]*stateTransition/i);
+  assert.doesNotMatch(workspaceSource, /selectedReview\.status\s*=/);
+  assert.doesNotMatch(workspaceSource, /status:\s*stateTransitionDryRunResult/);
+});
+
 test("appointment reviews workspace shows read-only detail preview states", () => {
   assert.match(workspaceSource, /selectedReviewId/);
   assert.match(workspaceSource, /setSelectedReviewId/);
@@ -142,8 +216,10 @@ test("appointment reviews workspace renders pending review data defensively", ()
 test("appointment reviews workspace has no approval, booking, or calendar action buttons", () => {
   assert.match(workspaceSource, /<button/);
   assert.match(workspaceSource, /Preview details/);
+  assert.match(workspaceSource, /Run state transition dry-run/);
   assert.doesNotMatch(workspaceSource, /<button[^>]*>\s*Approve\s*<\/button>/i);
   assert.doesNotMatch(workspaceSource, /<button[^>]*>\s*Reject\s*<\/button>/i);
+  assert.doesNotMatch(workspaceSource, /Confirm appointment/i);
   assert.doesNotMatch(
     workspaceSource,
     /<button[^>]*>\s*Book appointment\s*<\/button>/i
@@ -160,10 +236,20 @@ test("appointment reviews workspace has no approval, booking, or calendar action
   assert.doesNotMatch(workspaceSource, /onClick=\{\(\) => reject/i);
   assert.doesNotMatch(workspaceSource, /onClick=\{\(\) => book/i);
   assert.doesNotMatch(workspaceSource, /onClick=\{\(\) => sync/i);
+  assert.doesNotMatch(workspaceSource, /Save state/i);
+  assert.doesNotMatch(workspaceSource, /Apply transition/i);
   assert.doesNotMatch(workspaceSource, /create appointment/i);
   assert.doesNotMatch(workspaceSource, /calendar sync/i);
   assert.doesNotMatch(workspaceSource, /Google Calendar/);
   assert.doesNotMatch(workspaceSource, /prisma|supabase|redis/i);
+  assert.doesNotMatch(
+    workspaceSource,
+    /appointmentReviewActionIntentStateMachine/
+  );
+  assert.doesNotMatch(workspaceSource, /transitionAppointmentReviewActionIntentState/);
+  assert.doesNotMatch(workspaceSource, /createAppointment|createCalendarEvent|getCalendarProvider/);
+  assert.doesNotMatch(workspaceSource, /manualAppointmentCalendarSync/);
+  assert.doesNotMatch(workspaceSource, /googleapis/i);
   assert.doesNotMatch(workspaceSource, /bookingCreated:\s+true/);
   assert.doesNotMatch(workspaceSource, /calendarChecked:\s+true/);
   assert.doesNotMatch(workspaceSource, /databasePersisted:\s+true/);
@@ -186,6 +272,13 @@ test("appointment reviews workspace styles are present", () => {
   assert.match(cssSource, /\.appointment-review-action-intent-empty/);
   assert.match(cssSource, /\.appointment-review-action-intent-button/);
   assert.match(cssSource, /\.appointment-review-action-intent-state/);
+  assert.match(cssSource, /\.appointment-review-state-transition-preview/);
+  assert.match(cssSource, /\.appointment-review-state-transition-grid/);
+  assert.match(cssSource, /\.appointment-review-state-transition-controls/);
+  assert.match(cssSource, /\.appointment-review-state-transition-list/);
+  assert.match(cssSource, /\.appointment-review-state-transition-empty/);
+  assert.match(cssSource, /\.appointment-review-state-transition-button/);
+  assert.match(cssSource, /\.appointment-review-state-transition-state/);
   assert.match(cssSource, /\.appointment-review-item/);
   assert.match(cssSource, /\.appointment-review-preview-button/);
 });

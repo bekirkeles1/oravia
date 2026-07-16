@@ -19,6 +19,29 @@ const ACTION_INTENT_DRY_RUN = {
   ]
 };
 
+const STATE_TRANSITION_DRY_RUN_EVENTS = [
+  "check_validation_only_intent",
+  "require_clinic_review",
+  "reject_action_intent"
+];
+
+const INITIAL_STATE_TRANSITION_DRY_RUN = {
+  dryRun: true,
+  validationOnly: true,
+  executionAvailable: false,
+  actionPerformed: false,
+  bookingCreated: false,
+  calendarChecked: false,
+  appointmentCreated: false,
+  calendarEventCreated: false,
+  databasePersisted: false,
+  persistence: "not_persisted",
+  requiresSecretaryConfirmation: true
+};
+
+const INITIAL_PREVIEW_CURRENT_STATE = "pending_secretary_review";
+const INITIAL_PREVIEW_EVENT = "check_validation_only_intent";
+
 export default function AppointmentReviewsWorkspace() {
   const [reviews, setReviews] = useState([]);
   const [summary, setSummary] = useState({
@@ -35,11 +58,23 @@ export default function AppointmentReviewsWorkspace() {
   const [actionIntentDryRunResult, setActionIntentDryRunResult] =
     useState(null);
   const [actionIntentDryRunError, setActionIntentDryRunError] = useState("");
+  const [stateTransitionDryRunStatus, setStateTransitionDryRunStatus] =
+    useState("idle");
+  const [stateTransitionDryRunResult, setStateTransitionDryRunResult] =
+    useState(null);
+  const [stateTransitionDryRunError, setStateTransitionDryRunError] =
+    useState("");
+  const [stateTransitionPreviewCurrentState, setStateTransitionPreviewCurrentState] =
+    useState(INITIAL_PREVIEW_CURRENT_STATE);
+  const [selectedStateTransitionEvent, setSelectedStateTransitionEvent] =
+    useState(INITIAL_PREVIEW_EVENT);
   const selectedReviewIdRef = useRef("");
   const selectedReview =
     reviews.find((review) => review.id === selectedReviewId) || null;
   const displayedActionIntentDryRun =
     actionIntentDryRunResult || ACTION_INTENT_DRY_RUN;
+  const displayedStateTransitionDryRun =
+    stateTransitionDryRunResult || INITIAL_STATE_TRANSITION_DRY_RUN;
 
   useEffect(() => {
     let isMounted = true;
@@ -107,6 +142,11 @@ export default function AppointmentReviewsWorkspace() {
     setActionIntentDryRunStatus("idle");
     setActionIntentDryRunResult(null);
     setActionIntentDryRunError("");
+    setStateTransitionDryRunStatus("idle");
+    setStateTransitionDryRunResult(null);
+    setStateTransitionDryRunError("");
+    setStateTransitionPreviewCurrentState(INITIAL_PREVIEW_CURRENT_STATE);
+    setSelectedStateTransitionEvent(INITIAL_PREVIEW_EVENT);
   }, [selectedReviewId]);
 
   async function runActionIntentDryRun() {
@@ -172,6 +212,81 @@ export default function AppointmentReviewsWorkspace() {
         error instanceof Error
           ? error.message
           : "Validation-only action intent preview failed safely."
+      );
+    }
+  }
+
+  async function runStateTransitionDryRun() {
+    if (stateTransitionDryRunStatus === "loading") {
+      return;
+    }
+
+    if (!selectedReview) {
+      setStateTransitionDryRunStatus("failure");
+      setStateTransitionDryRunResult(null);
+      setStateTransitionDryRunError(
+        "Select a review before running state transition dry-run."
+      );
+      return;
+    }
+
+    const reviewIdForRequest = selectedReview.id;
+    const currentStateForRequest = stateTransitionPreviewCurrentState;
+    const eventForRequest = selectedStateTransitionEvent;
+
+    setStateTransitionDryRunStatus("loading");
+    setStateTransitionDryRunResult(null);
+    setStateTransitionDryRunError("");
+
+    try {
+      const response = await fetch(
+        `/api/secretary/appointment-reviews/${encodeURIComponent(
+          reviewIdForRequest
+        )}/state-transition`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          body: JSON.stringify({
+            currentState: currentStateForRequest,
+            event: eventForRequest
+          })
+        }
+      );
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          payload?.reason ||
+            payload?.error?.message ||
+            "State transition dry-run failed safely."
+        );
+      }
+
+      if (!isSafeStateTransitionDryRunResponse(payload)) {
+        throw new Error(
+          "State transition dry-run response was unsafe or incomplete."
+        );
+      }
+
+      if (selectedReviewIdRef.current !== reviewIdForRequest) {
+        return;
+      }
+
+      setStateTransitionDryRunResult(payload);
+      setStateTransitionDryRunStatus("success");
+    } catch (error) {
+      if (selectedReviewIdRef.current !== reviewIdForRequest) {
+        return;
+      }
+
+      setStateTransitionDryRunResult(null);
+      setStateTransitionDryRunStatus("failure");
+      setStateTransitionDryRunError(
+        error instanceof Error
+          ? error.message
+          : "State transition dry-run failed safely."
       );
     }
   }
@@ -346,8 +461,8 @@ export default function AppointmentReviewsWorkspace() {
               </h3>
               <p>
                 This is validation-only metadata for the selected review. It
-                does not approve, reject, book, open appointment records, check
-                calendar availability, or persist data.
+                does not execute clinic decisions, book, open appointment
+                records, check calendar availability, or persist data.
               </p>
             </div>
 
@@ -452,6 +567,192 @@ export default function AppointmentReviewsWorkspace() {
           </section>
         ) : null}
 
+        {!loading && !loadError ? (
+          <section
+            className="appointment-review-state-transition-preview"
+            aria-labelledby="appointment-review-state-transition-preview-title"
+          >
+            <div>
+              <span>Validation only · Not persisted</span>
+              <h3 id="appointment-review-state-transition-preview-title">
+                State Transition Dry-run
+              </h3>
+              <p>
+                Route-backed validation-only preview for the selected review.
+                No action executed, no queue state changed, and no database
+                persistence is used.
+              </p>
+            </div>
+
+            {selectedReview ? (
+              <>
+                <div className="appointment-review-state-transition-controls">
+                  <label>
+                    Preview current state
+                    <input
+                      type="text"
+                      value={stateTransitionPreviewCurrentState}
+                      onChange={(event) =>
+                        setStateTransitionPreviewCurrentState(event.target.value)
+                      }
+                    />
+                  </label>
+                  <label>
+                    Dry-run event
+                    <select
+                      value={selectedStateTransitionEvent}
+                      onChange={(event) =>
+                        setSelectedStateTransitionEvent(event.target.value)
+                      }
+                    >
+                      {STATE_TRANSITION_DRY_RUN_EVENTS.map((eventName) => (
+                        <option key={eventName} value={eventName}>
+                          {eventName}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    className="appointment-review-state-transition-button"
+                    onClick={runStateTransitionDryRun}
+                    disabled={stateTransitionDryRunStatus === "loading"}
+                  >
+                    Run state transition dry-run
+                  </button>
+                </div>
+
+                <p className="appointment-review-state-transition-state">
+                  {stateTransitionDryRunStatus === "loading"
+                    ? "State transition dry-run is running. No action executed."
+                    : null}
+                  {stateTransitionDryRunStatus === "success"
+                    ? "State transition dry-run result received. Validation only. Not persisted."
+                    : null}
+                  {stateTransitionDryRunStatus === "failure"
+                    ? stateTransitionDryRunError ||
+                      "State transition dry-run failed safely. No transition occurred."
+                    : null}
+                  {stateTransitionDryRunStatus === "idle"
+                    ? "Idle: no state transition dry-run result for this selected review."
+                    : null}
+                </p>
+
+                <dl className="appointment-review-state-transition-grid">
+                  <div>
+                    <dt>Review id</dt>
+                    <dd>{selectedReview.id}</dd>
+                  </div>
+                  <div>
+                    <dt>accepted</dt>
+                    <dd>
+                      {stateTransitionDryRunResult
+                        ? String(stateTransitionDryRunResult.accepted)
+                        : "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>currentState</dt>
+                    <dd>
+                      {stateTransitionDryRunResult?.currentState ||
+                        stateTransitionPreviewCurrentState}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>event</dt>
+                    <dd>
+                      {stateTransitionDryRunResult?.event ||
+                        selectedStateTransitionEvent}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Preview next state</dt>
+                    <dd>{stateTransitionDryRunResult?.nextState || "not_run"}</dd>
+                  </div>
+                  <div>
+                    <dt>code</dt>
+                    <dd>{stateTransitionDryRunResult?.code || "not_run"}</dd>
+                  </div>
+                  <div>
+                    <dt>reason</dt>
+                    <dd>{stateTransitionDryRunResult?.reason || "none"}</dd>
+                  </div>
+                  <div>
+                    <dt>validationOnly</dt>
+                    <dd>
+                      {String(displayedStateTransitionDryRun.validationOnly)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>executionAvailable</dt>
+                    <dd>
+                      {String(displayedStateTransitionDryRun.executionAvailable)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>actionPerformed</dt>
+                    <dd>
+                      {String(displayedStateTransitionDryRun.actionPerformed)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>bookingCreated</dt>
+                    <dd>
+                      {String(displayedStateTransitionDryRun.bookingCreated)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>calendarChecked</dt>
+                    <dd>
+                      {String(displayedStateTransitionDryRun.calendarChecked)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>appointmentCreated</dt>
+                    <dd>
+                      {String(displayedStateTransitionDryRun.appointmentCreated)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>calendarEventCreated</dt>
+                    <dd>
+                      {String(
+                        displayedStateTransitionDryRun.calendarEventCreated
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>databasePersisted</dt>
+                    <dd>
+                      {String(displayedStateTransitionDryRun.databasePersisted)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>persistence</dt>
+                    <dd>{displayedStateTransitionDryRun.persistence}</dd>
+                  </div>
+                </dl>
+
+                <div className="appointment-review-state-transition-list">
+                  <strong>Dry-run event metadata</strong>
+                  <span>{STATE_TRANSITION_DRY_RUN_EVENTS.join(", ")}</span>
+                  <small>
+                    Validation only. Not persisted. No action executed. Preview
+                    result does not update the selected review object.
+                  </small>
+                </div>
+              </>
+            ) : (
+              <div className="appointment-review-state-transition-empty">
+                <strong>No selected appointment review</strong>
+                <span>
+                  Select a review to inspect state transition dry-run details.
+                </span>
+              </div>
+            )}
+          </section>
+        ) : null}
+
         {!loading && !loadError && reviews.length > 0 ? (
           <div className="appointment-reviews-list">
             {reviews.map((review) => (
@@ -514,5 +815,25 @@ function isSafeActionIntentDryRunResponse(payload) {
     payload.calendarEventCreated === false &&
     payload.requiresSecretaryConfirmation === true &&
     Array.isArray(payload.allowedActionIntents)
+  );
+}
+
+function isSafeStateTransitionDryRunResponse(payload) {
+  return (
+    payload &&
+    payload.dryRun === true &&
+    payload.validationOnly === true &&
+    payload.executionAvailable === false &&
+    payload.actionPerformed === false &&
+    payload.bookingCreated === false &&
+    payload.calendarChecked === false &&
+    payload.databasePersisted === false &&
+    payload.appointmentCreated === false &&
+    payload.calendarEventCreated === false &&
+    payload.persistence === "not_persisted" &&
+    typeof payload.accepted === "boolean" &&
+    typeof payload.currentState === "string" &&
+    typeof payload.event === "string" &&
+    typeof payload.code === "string"
   );
 }

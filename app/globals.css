@@ -2017,6 +2017,8 @@ blockquote {
 .appointment-review-detail-empty,
 .appointment-review-action-intent-preview,
 .appointment-review-action-intent-empty,
+.appointment-review-state-transition-preview,
+.appointment-review-state-transition-empty,
 .appointment-review-item {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -2079,6 +2081,13 @@ blockquote {
   padding: 14px;
 }
 
+.appointment-review-state-transition-preview {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  background: #fbfaf6;
+}
+
 .appointment-review-detail-preview > div:first-child {
   display: grid;
   gap: 6px;
@@ -2089,12 +2098,20 @@ blockquote {
   gap: 6px;
 }
 
+.appointment-review-state-transition-preview > div:first-child {
+  display: grid;
+  gap: 6px;
+}
+
 .appointment-review-detail-preview span,
 .appointment-review-detail-preview p,
 .appointment-review-detail-empty span,
 .appointment-review-action-intent-preview span,
 .appointment-review-action-intent-preview p,
-.appointment-review-action-intent-empty span {
+.appointment-review-action-intent-empty span,
+.appointment-review-state-transition-preview span,
+.appointment-review-state-transition-preview p,
+.appointment-review-state-transition-empty span {
   color: var(--muted);
   line-height: 1.45;
 }
@@ -2111,10 +2128,18 @@ blockquote {
   text-transform: uppercase;
 }
 
+.appointment-review-state-transition-preview > div:first-child > span {
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
 .appointment-review-detail-preview h3,
 .appointment-review-detail-preview p,
 .appointment-review-action-intent-preview h3,
-.appointment-review-action-intent-preview p {
+.appointment-review-action-intent-preview p,
+.appointment-review-state-transition-preview h3,
+.appointment-review-state-transition-preview p {
   margin: 0;
 }
 
@@ -2132,11 +2157,22 @@ blockquote {
   margin: 0;
 }
 
+.appointment-review-state-transition-grid,
+.appointment-review-state-transition-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
 .appointment-review-detail-grid div,
 .appointment-review-detail-empty,
 .appointment-review-action-intent-grid div,
 .appointment-review-action-intent-list,
-.appointment-review-action-intent-empty {
+.appointment-review-action-intent-empty,
+.appointment-review-state-transition-grid div,
+.appointment-review-state-transition-list,
+.appointment-review-state-transition-empty {
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -2154,7 +2190,49 @@ blockquote {
   gap: 6px;
 }
 
+.appointment-review-state-transition-list,
+.appointment-review-state-transition-empty {
+  display: grid;
+  gap: 6px;
+}
+
+.appointment-review-state-transition-controls label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.appointment-review-state-transition-controls input,
+.appointment-review-state-transition-controls select {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  padding: 8px 10px;
+  text-transform: none;
+}
+
 .appointment-review-action-intent-button {
+  justify-self: start;
+  width: fit-content;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font-weight: 800;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.appointment-review-state-transition-button {
+  align-self: end;
   justify-self: start;
   width: fit-content;
   border: 1px solid var(--line);
@@ -2171,11 +2249,24 @@ blockquote {
   opacity: 0.65;
 }
 
+.appointment-review-state-transition-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
 .appointment-review-action-intent-state {
   padding: 10px 12px;
   border: 1px dashed rgba(43, 111, 99, 0.28);
   border-radius: 8px;
   background: rgba(43, 111, 99, 0.06);
+  font-weight: 800;
+}
+
+.appointment-review-state-transition-state {
+  padding: 10px 12px;
+  border: 1px dashed rgba(127, 104, 43, 0.3);
+  border-radius: 8px;
+  background: rgba(127, 104, 43, 0.08);
   font-weight: 800;
 }
 
@@ -2213,6 +2304,8 @@ blockquote {
   .appointment-reviews-summary-grid,
   .appointment-review-detail-grid,
   .appointment-review-action-intent-grid,
+  .appointment-review-state-transition-grid,
+  .appointment-review-state-transition-controls,
   .appointment-review-item dl {
     grid-template-columns: 1fr;
   }
