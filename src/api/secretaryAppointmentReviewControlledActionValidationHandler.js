@@ -174,6 +174,7 @@ async function handleAppointmentReviewControlledActionValidation(input) {
       code: HANDLER_CODES.INVALID_BODY,
       reason: "Request body must be an object.",
       failedStage: null,
+      reviewId,
     });
   }
 
@@ -187,6 +188,7 @@ async function handleAppointmentReviewControlledActionValidation(input) {
           : HANDLER_CODES.CLIENT_TRUSTED_CONTEXT_INJECTION,
       reason: `Request body must not provide trusted context field ${bodyInjectionField}.`,
       failedStage: null,
+      reviewId,
     });
   }
 
@@ -197,6 +199,7 @@ async function handleAppointmentReviewControlledActionValidation(input) {
       code: HANDLER_CODES.CLIENT_TRUSTED_CONTEXT_INJECTION,
       reason: `Request body must not claim unsafe ${unsafeBodyField}.`,
       failedStage: null,
+      reviewId,
     });
   }
 
@@ -209,6 +212,7 @@ async function handleAppointmentReviewControlledActionValidation(input) {
       code: HANDLER_CODES.INVALID_BODY,
       reason: `Request body field ${invalidBodyField} is not supported.`,
       failedStage: null,
+      reviewId,
     });
   }
 
@@ -219,6 +223,7 @@ async function handleAppointmentReviewControlledActionValidation(input) {
       code: dependenciesError.code,
       reason: dependenciesError.reason,
       failedStage: null,
+      reviewId,
     });
   }
 
@@ -302,6 +307,7 @@ async function handleAppointmentReviewControlledActionValidation(input) {
       reason: assemblyIssue.reason,
       failedStage: "server_context_assembly",
       assemblyResult,
+      reviewId,
     });
   }
 
@@ -312,6 +318,7 @@ async function handleAppointmentReviewControlledActionValidation(input) {
       failedStage: "server_context_assembly",
       stageCode: normalizeText(assemblyResult.code),
       assemblyResult,
+      reviewId,
     });
   }
 
@@ -327,6 +334,7 @@ async function handleAppointmentReviewControlledActionValidation(input) {
       failedStage: "validation_pipeline",
       assemblyResult,
       pipelineResult,
+      reviewId,
     });
   }
 
@@ -338,6 +346,7 @@ async function handleAppointmentReviewControlledActionValidation(input) {
       stageCode: normalizeText(pipelineResult.code),
       assemblyResult,
       pipelineResult,
+      reviewId,
     });
   }
 
@@ -405,6 +414,7 @@ async function resolveDependency({ dependency, stage, input }) {
         code: stage.failedCode,
         reason: `${stage.failedStage} resolver failed.`,
         failedStage: stage.failedStage,
+        reviewId: input.reviewId,
       }),
     };
   }
@@ -416,6 +426,7 @@ async function resolveDependency({ dependency, stage, input }) {
         code: stage.failedCode,
         reason: `${stage.failedStage} resolver returned malformed output.`,
         failedStage: stage.failedStage,
+        reviewId: input.reviewId,
       }),
     };
   }
@@ -429,6 +440,7 @@ async function resolveDependency({ dependency, stage, input }) {
         code: HANDLER_CODES.UNSAFE_DEPENDENCY_RESULT,
         reason: `${stage.failedStage} resolver returned unsafe ${unsafeField}.`,
         failedStage: stage.failedStage,
+        reviewId: input.reviewId,
       }),
     };
   }
@@ -480,6 +492,7 @@ function rejectHandler({
   stageCode = "",
   assemblyResult,
   pipelineResult,
+  reviewId = "",
 }) {
   const result = {
     accepted: false,
@@ -493,6 +506,11 @@ function rejectHandler({
     stageCode: stageCode || null,
     ...createSafetyFields(),
   };
+  const normalizedReviewId = normalizeText(reviewId);
+
+  if (normalizedReviewId) {
+    result.reviewId = normalizedReviewId;
+  }
 
   if (assemblyResult) {
     result.assemblyResult = assemblyResult;
