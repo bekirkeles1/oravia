@@ -6,6 +6,13 @@ const ALLOWED_REVIEW_STATUSES = Object.freeze([
   "rejected",
 ]);
 const REQUIRED_REPOSITORY_METHODS = Object.freeze(["add", "list", "getById"]);
+const VERSIONED_SNAPSHOT_METHOD = "getVersionedSnapshotById";
+const APPOINTMENT_REVIEW_REPOSITORY_SNAPSHOT_TYPE =
+  "appointment_review_repository_snapshot_v1";
+const APPOINTMENT_REVIEW_REPOSITORY_SNAPSHOT_SCHEMA_VERSION = 1;
+const IN_MEMORY_REPOSITORY_TYPE = "in_memory";
+const NOT_PERSISTED = "not_persisted";
+const INITIAL_REPOSITORY_VERSION = 1;
 
 function createInMemoryAppointmentReviewRepository(options = {}) {
   const initialReviews = Array.isArray(options.initialReviews)
@@ -17,7 +24,7 @@ function createInMemoryAppointmentReviewRepository(options = {}) {
     const validation = validateAppointmentReviewRecord(review);
 
     if (validation.ok && !reviews.has(validation.review.id)) {
-      reviews.set(validation.review.id, cloneValue(validation.review));
+      reviews.set(validation.review.id, createStoredReview(validation.review));
     }
   }
 
@@ -42,7 +49,7 @@ function createInMemoryAppointmentReviewRepository(options = {}) {
         };
       }
 
-      reviews.set(validation.review.id, cloneValue(validation.review));
+      reviews.set(validation.review.id, createStoredReview(validation.review));
 
       return {
         status: "ok",
@@ -50,7 +57,9 @@ function createInMemoryAppointmentReviewRepository(options = {}) {
       };
     },
     list() {
-      return Array.from(reviews.values()).map(cloneValue);
+      return Array.from(reviews.values()).map((storedReview) =>
+        cloneValue(storedReview.review)
+      );
     },
     getById(reviewId) {
       const normalizedReviewId = normalizeReviewId(reviewId);
@@ -59,7 +68,33 @@ function createInMemoryAppointmentReviewRepository(options = {}) {
         return null;
       }
 
-      return cloneValue(reviews.get(normalizedReviewId) || null);
+      const storedReview = reviews.get(normalizedReviewId);
+
+      return storedReview ? cloneValue(storedReview.review) : null;
+    },
+    getVersionedSnapshotById(reviewId) {
+      const normalizedReviewId = normalizeReviewId(reviewId);
+
+      if (!normalizedReviewId) {
+        return null;
+      }
+
+      const storedReview = reviews.get(normalizedReviewId);
+
+      if (!storedReview) {
+        return null;
+      }
+
+      return deepFreeze({
+        snapshotType: APPOINTMENT_REVIEW_REPOSITORY_SNAPSHOT_TYPE,
+        schemaVersion: APPOINTMENT_REVIEW_REPOSITORY_SNAPSHOT_SCHEMA_VERSION,
+        reviewId: storedReview.review.id,
+        version: storedReview.version,
+        review: cloneValue(storedReview.review),
+        repositoryType: IN_MEMORY_REPOSITORY_TYPE,
+        persistence: NOT_PERSISTED,
+        databasePersisted: false,
+      });
     },
   });
 }
@@ -80,6 +115,27 @@ function validateAppointmentReviewRepository(repository) {
     return repositoryValidationError(
       "missing_repository_method",
       `Appointment review repository is missing required ${missingMethod} method.`
+    );
+  }
+
+  return {
+    ok: true,
+    repository,
+  };
+}
+
+function assertAppointmentReviewVersionedSnapshotCapability(repository) {
+  if (!repository || typeof repository !== "object") {
+    return repositoryValidationError(
+      "invalid_appointment_review_repository",
+      "Appointment review repository must be an object."
+    );
+  }
+
+  if (typeof repository[VERSIONED_SNAPSHOT_METHOD] !== "function") {
+    return repositoryValidationError(
+      "missing_versioned_snapshot_capability",
+      "Appointment review repository is missing required getVersionedSnapshotById method."
     );
   }
 
@@ -134,15 +190,25 @@ function validateAppointmentReviewRecord(review) {
     );
   }
 
+  const normalizedReview = cloneValue(review);
+  delete normalizedReview.version;
+
   return {
     ok: true,
     review: {
-      ...cloneValue(review),
+      ...normalizedReview,
       id: reviewId,
       requiresSecretaryConfirmation: true,
       bookingCreated: false,
       calendarChecked: false,
     },
+  };
+}
+
+function createStoredReview(review) {
+  return {
+    review: cloneValue(review),
+    version: INITIAL_REPOSITORY_VERSION,
   };
 }
 
@@ -178,9 +244,26 @@ function cloneValue(value) {
   return value ? JSON.parse(JSON.stringify(value)) : value;
 }
 
+function deepFreeze(value) {
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  Object.freeze(value);
+
+  for (const nestedValue of Object.values(value)) {
+    deepFreeze(nestedValue);
+  }
+
+  return value;
+}
+
 module.exports = {
   ALLOWED_REVIEW_STATUSES,
+  APPOINTMENT_REVIEW_REPOSITORY_SNAPSHOT_SCHEMA_VERSION,
+  APPOINTMENT_REVIEW_REPOSITORY_SNAPSHOT_TYPE,
   PENDING_SECRETARY_REVIEW,
+  assertAppointmentReviewVersionedSnapshotCapability,
   createInMemoryAppointmentReviewRepository,
   validateAppointmentReviewRecord,
   validateAppointmentReviewRepository,
