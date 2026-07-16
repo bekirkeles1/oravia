@@ -505,6 +505,288 @@ test("appointment reviews workspace keeps controlled action validation UI non-ex
   assert.doesNotMatch(workspaceSource, /Date\.now|Math\.random|randomUUID|crypto/);
 });
 
+test("appointment reviews workspace shows validation decision receipt dry-run preview", () => {
+  assert.match(workspaceSource, /VALIDATION_RECEIPT_ACTION_INTENTS/);
+  assert.match(workspaceSource, /INITIAL_VALIDATION_RECEIPT_REQUEST_ID/);
+  assert.match(workspaceSource, /INITIAL_VALIDATION_RECEIPT_IDEMPOTENCY_KEY/);
+  assert.match(
+    workspaceSource,
+    /INITIAL_VALIDATION_RECEIPT_EXPECTED_REVIEW_VERSION = 1/
+  );
+  assert.match(workspaceSource, /INITIAL_VALIDATION_RECEIPT_PREVIEW/);
+  assert.match(workspaceSource, /runValidationReceiptDryRun/);
+  assert.match(workspaceSource, /isSafeValidationReceiptResponse/);
+  assert.match(workspaceSource, /Validation Decision Receipt Dry-run/);
+  assert.match(workspaceSource, /Mock server context/);
+  assert.match(workspaceSource, /Validation only/);
+  assert.match(workspaceSource, /Read-only receipt/);
+  assert.match(workspaceSource, /Receipt not persisted/);
+  assert.match(workspaceSource, /No action executed/);
+  assert.match(workspaceSource, /No command dispatched/);
+  assert.match(workspaceSource, /No audit record stored/);
+  assert.match(workspaceSource, /Proposed action intent/);
+  assert.match(workspaceSource, /Request id preview/);
+  assert.match(workspaceSource, /Idempotency key preview/);
+  assert.match(workspaceSource, /Expected review version preview/);
+  assert.match(workspaceSource, /Run validation receipt dry-run/);
+  assert.match(workspaceSource, /approve_intent/);
+  assert.match(workspaceSource, /reject_intent/);
+  assert.match(workspaceSource, /validation-receipt-preview/);
+  assert.match(workspaceSource, /validation-receipt-preview-key/);
+});
+
+test("appointment reviews workspace posts validation receipt request with client-safe metadata only", () => {
+  const validationReceiptRequestSource = workspaceSource.slice(
+    workspaceSource.indexOf(")}/controlled-action-validation-receipt`"),
+    workspaceSource.indexOf(
+      "const payload = await response.json();",
+      workspaceSource.indexOf(")}/controlled-action-validation-receipt`")
+    )
+  );
+
+  assert.match(
+    workspaceSource,
+    /\/api\/secretary\/appointment-reviews\/\$\{encodeURIComponent/
+  );
+  assert.match(workspaceSource, /\/controlled-action-validation-receipt`/);
+  assert.match(workspaceSource, /reviewIdForRequest = selectedReview\.id/);
+  assert.match(workspaceSource, /method: "POST"/);
+  assert.match(workspaceSource, /signal: activeAbortController\?\.signal/);
+  assert.match(validationReceiptRequestSource, /body: JSON\.stringify\(/);
+  assert.match(
+    validationReceiptRequestSource,
+    /actionIntent: actionIntentForRequest/
+  );
+  assert.match(validationReceiptRequestSource, /requestId: requestIdForRequest/);
+  assert.match(
+    validationReceiptRequestSource,
+    /idempotencyKey: idempotencyKeyForRequest/
+  );
+  assert.match(
+    validationReceiptRequestSource,
+    /expectedReviewVersion: expectedReviewVersionForRequest/
+  );
+  assert.doesNotMatch(validationReceiptRequestSource, /reviewId:/);
+  assert.doesNotMatch(validationReceiptRequestSource, /currentState:/);
+  assert.doesNotMatch(validationReceiptRequestSource, /actor:/);
+  assert.doesNotMatch(validationReceiptRequestSource, /actorId:/);
+  assert.doesNotMatch(validationReceiptRequestSource, /actorRole:/);
+  assert.doesNotMatch(validationReceiptRequestSource, /role:/);
+  assert.doesNotMatch(validationReceiptRequestSource, /permissions:/);
+  assert.doesNotMatch(validationReceiptRequestSource, /verifiedActorContext/);
+  assert.doesNotMatch(validationReceiptRequestSource, /authenticationVerified/);
+  assert.doesNotMatch(validationReceiptRequestSource, /authorizationVerified/);
+  assert.doesNotMatch(validationReceiptRequestSource, /observedReviewVersion/);
+  assert.doesNotMatch(validationReceiptRequestSource, /priorIdempotencyObservation/);
+  assert.doesNotMatch(validationReceiptRequestSource, /executionPolicyContext/);
+  assert.doesNotMatch(validationReceiptRequestSource, /executionEnabled/);
+  assert.doesNotMatch(validationReceiptRequestSource, /bookingCreated/);
+  assert.doesNotMatch(validationReceiptRequestSource, /calendarChecked/);
+});
+
+test("appointment reviews workspace displays validation receipt outcome stages correlation and safety fields", () => {
+  assert.match(workspaceSource, /receiptHandlerCompleted/);
+  assert.match(workspaceSource, /validationReceiptConstructed/);
+  assert.match(workspaceSource, /receiptOutcome/);
+  assert.match(workspaceSource, /receiptPersisted/);
+  assert.match(workspaceSource, /handlerResult\.accepted/);
+  assert.match(workspaceSource, /handlerResult\.handlerCompleted/);
+  assert.match(workspaceSource, /handlerResult\.failedStage/);
+  assert.match(workspaceSource, /handlerResult\.matchingReplay/);
+  assert.match(workspaceSource, /handlerResult\.replayExistingResultOnly/);
+  assert.match(workspaceSource, /handlerResult\.eligibleForExecutorBoundary/);
+  assert.match(workspaceSource, /handlerResult\.code/);
+  assert.match(workspaceSource, /receiptType/);
+  assert.match(workspaceSource, /schemaVersion/);
+  assert.match(workspaceSource, /outcome/);
+  assert.match(workspaceSource, /handlerCode/);
+  assert.match(workspaceSource, /handlerCompleted/);
+  assert.match(workspaceSource, /failedStage/);
+  assert.match(workspaceSource, /matchingReplay/);
+  assert.match(workspaceSource, /replayExistingResultOnly/);
+  assert.match(workspaceSource, /eligibleForExecutorBoundary/);
+  assert.match(workspaceSource, /pipelineCode/);
+  assert.match(workspaceSource, /validation_passed/);
+  assert.match(workspaceSource, /validation_rejected/);
+  assert.match(workspaceSource, /matching_replay/);
+  assert.match(
+    workspaceSource,
+    /immutable in-memory decision receipt was constructed/
+  );
+  assert.match(
+    workspaceSource,
+    /immutable rejection receipt was constructed/
+  );
+  assert.match(workspaceSource, /no new command or action was created/);
+  assert.doesNotMatch(workspaceSource, /matchingReplay:\s+true/);
+  assert.doesNotMatch(workspaceSource, /replayExistingResultOnly:\s+true/);
+  assert.match(workspaceSource, /VALIDATION_RECEIPT_STAGE_LABELS/);
+  assert.match(workspaceSource, /getValidationReceiptStages/);
+  assert.match(workspaceSource, /Preconditions/);
+  assert.match(workspaceSource, /Authorization/);
+  assert.match(workspaceSource, /Idempotency and Version Guard/);
+  assert.match(workspaceSource, /Command Envelope/);
+  assert.match(workspaceSource, /Execution Policy/);
+  assert.match(workspaceSource, /validationReceipt\?\.stages\?\.\[key\]/);
+  assert.match(workspaceSource, /return \[\];/);
+  assert.match(workspaceSource, /status: stage\.status/);
+  assert.match(
+    workspaceSource,
+    /code: typeof stage\.code === "string" \? stage\.code : "not_run"/
+  );
+  assert.doesNotMatch(workspaceSource, /validationReceiptStages\s*=\s*\[/);
+  assert.match(workspaceSource, /VALIDATION_RECEIPT_CORRELATION_FIELDS/);
+  assert.match(workspaceSource, /getValidationReceiptCorrelation/);
+  assert.match(workspaceSource, /Validation correlation metadata/);
+  assert.match(workspaceSource, /Mock \/ dry-run context/);
+  assert.match(workspaceSource, /Not persisted/);
+  assert.match(workspaceSource, /actionIntent/);
+  assert.match(workspaceSource, /actorId/);
+  assert.match(workspaceSource, /actorRole/);
+  assert.match(workspaceSource, /requestId/);
+  assert.match(workspaceSource, /idempotencyKey/);
+  assert.match(workspaceSource, /expectedReviewVersion/);
+  assert.match(workspaceSource, /observedReviewVersion/);
+  assert.match(workspaceSource, /requestFingerprint/);
+  assert.match(workspaceSource, /requiredPermission/);
+  assert.match(workspaceSource, /mock:\s+true/);
+  assert.match(workspaceSource, /dryRun:\s+true/);
+  assert.match(workspaceSource, /validationOnly:\s+true/);
+  assert.match(workspaceSource, /controlledHandlingOnly:\s+true/);
+  assert.match(workspaceSource, /receiptPersisted:\s+false/);
+  assert.match(workspaceSource, /executionEnabled:\s+false/);
+  assert.match(workspaceSource, /executorAvailable:\s+false/);
+  assert.match(workspaceSource, /executionAvailable:\s+false/);
+  assert.match(workspaceSource, /executionRequested:\s+false/);
+  assert.match(workspaceSource, /actionPerformed:\s+false/);
+  assert.match(workspaceSource, /commandDispatched:\s+false/);
+  assert.match(workspaceSource, /commandPersisted:\s+false/);
+  assert.match(workspaceSource, /bookingCreated:\s+false/);
+  assert.match(workspaceSource, /calendarChecked:\s+false/);
+  assert.match(workspaceSource, /appointmentCreated:\s+false/);
+  assert.match(workspaceSource, /calendarEventCreated:\s+false/);
+  assert.match(workspaceSource, /databasePersisted:\s+false/);
+  assert.match(workspaceSource, /persistence:\s+"not_persisted"/);
+});
+
+test("appointment reviews workspace hardens validation receipt preview against stale responses", () => {
+  assert.match(workspaceSource, /validationReceiptStatus/);
+  assert.match(workspaceSource, /validationReceiptRequestSequenceRef/);
+  assert.match(workspaceSource, /activeValidationReceiptRequestRef/);
+  assert.match(workspaceSource, /activeValidationReceiptAbortRef/);
+  assert.match(workspaceSource, /createValidationReceiptRequest/);
+  assert.match(workspaceSource, /invalidateValidationReceiptRequest/);
+  assert.match(workspaceSource, /isActiveValidationReceiptRequest/);
+  assert.match(workspaceSource, /new AbortController\(\)/);
+  assert.match(workspaceSource, /activeValidationReceiptAbortRef\.current\.abort\(\)/);
+  assert.match(workspaceSource, /requestId,/);
+  assert.match(workspaceSource, /reviewId: reviewIdForRequest/);
+  assert.match(workspaceSource, /actionIntent: actionIntentForRequest/);
+  assert.match(workspaceSource, /previewRequestId: requestIdForRequest/);
+  assert.match(workspaceSource, /idempotencyKey: idempotencyKeyForRequest/);
+  assert.match(
+    workspaceSource,
+    /expectedReviewVersion: expectedReviewVersionForRequest/
+  );
+  assert.match(workspaceSource, /activeRequest\.requestId === requestId/);
+  assert.match(workspaceSource, /activeRequest\.reviewId === reviewId/);
+  assert.match(workspaceSource, /activeRequest\.actionIntent === actionIntent/);
+  assert.match(workspaceSource, /activeRequest\.previewRequestId === previewRequestId/);
+  assert.match(workspaceSource, /activeRequest\.idempotencyKey === idempotencyKey/);
+  assert.match(
+    workspaceSource,
+    /activeRequest\.expectedReviewVersion === expectedReviewVersion/
+  );
+  assert.match(workspaceSource, /selectedReviewIdRef\.current === reviewId/);
+  assert.match(
+    workspaceSource,
+    /if \(\s+!\s*isActiveValidationReceiptRequest\(\{[\s\S]*requestId,[\s\S]*reviewId: reviewIdForRequest,[\s\S]*actionIntent: actionIntentForRequest,[\s\S]*previewRequestId: requestIdForRequest,[\s\S]*idempotencyKey: idempotencyKeyForRequest,[\s\S]*expectedReviewVersion: expectedReviewVersionForRequest[\s\S]*\}\)\s+\) \{\s+return;\s+\}/
+  );
+  assert.match(workspaceSource, /if \(isAbortError\(error\)\) \{\s+return;\s+\}/);
+  assert.match(
+    workspaceSource,
+    /setValidationReceiptResult\(payload\);\s+setValidationReceiptStatus\("success"\);/
+  );
+  assert.match(
+    workspaceSource,
+    /setValidationReceiptResult\(null\);\s+setValidationReceiptStatus\("failure"\);/
+  );
+  assert.match(
+    workspaceSource,
+    /setValidationReceiptStatus\("loading"\);\s+setValidationReceiptResult\(null\);\s+setValidationReceiptError\(""\);/
+  );
+  assert.match(
+    workspaceSource,
+    /if \(validationReceiptStatus === "loading"\) \{\s+return;\s+\}/
+  );
+  assert.match(
+    workspaceSource,
+    /disabled=\{validationReceiptStatus === "loading"\}/
+  );
+});
+
+test("appointment reviews workspace resets validation receipt preview on review change and unmount", () => {
+  assert.match(workspaceSource, /invalidateValidationReceiptRequest\(\);/);
+  assert.match(
+    workspaceSource,
+    /selectedReviewIdRef\.current = selectedReviewId;[\s\S]*invalidateValidationReceiptRequest\(\);/
+  );
+  assert.match(workspaceSource, /setValidationReceiptStatus\("idle"\)/);
+  assert.match(workspaceSource, /setValidationReceiptResult\(null\)/);
+  assert.match(workspaceSource, /setValidationReceiptError\(""\)/);
+  assert.match(
+    workspaceSource,
+    /setSelectedValidationReceiptActionIntent\(VALIDATION_RECEIPT_ACTION_INTENTS\[0\]\)/
+  );
+  assert.match(
+    workspaceSource,
+    /setValidationReceiptRequestId\(INITIAL_VALIDATION_RECEIPT_REQUEST_ID\)/
+  );
+  assert.match(
+    workspaceSource,
+    /setValidationReceiptIdempotencyKey\(\s+INITIAL_VALIDATION_RECEIPT_IDEMPOTENCY_KEY\s+\)/
+  );
+  assert.match(
+    workspaceSource,
+    /setValidationReceiptExpectedReviewVersion\(\s+INITIAL_VALIDATION_RECEIPT_EXPECTED_REVIEW_VERSION\s+\)/
+  );
+  assert.match(
+    workspaceSource,
+    /isMountedRef\.current = false;[\s\S]*invalidateValidationReceiptRequest\(\);/
+  );
+});
+
+test("appointment reviews workspace keeps validation receipt preview sensitive-data safe and non-executable", () => {
+  assert.match(workspaceSource, /Patient data, clinical data/);
+  assert.match(workspaceSource, /appointment details, calendar data/);
+  assert.match(workspaceSource, /secrets, credentials/);
+  assert.match(workspaceSource, /tokens, cookies, headers, sessions/);
+  assert.match(workspaceSource, /complete verified actor\s+context/);
+  assert.match(workspaceSource, /complete execution policy context/);
+  assert.match(workspaceSource, /raw\s+dependency outputs are excluded/);
+  assert.doesNotMatch(workspaceSource, /JSON\.stringify\(validationReceiptResult/);
+  assert.doesNotMatch(workspaceSource, /dangerouslySetInnerHTML/);
+  assert.doesNotMatch(workspaceSource, /appointmentReviewControlledActionValidationReceiptHandler/);
+  assert.doesNotMatch(workspaceSource, /appointmentReviewValidationDecisionReceiptContract/);
+  assert.doesNotMatch(workspaceSource, /appointmentReviewControlledActionValidationHandler/);
+  assert.doesNotMatch(workspaceSource, /appointmentReviewTrustedServerContextAssemblyContract/);
+  assert.doesNotMatch(workspaceSource, /appointmentReviewControlledActionValidationPipelineContract/);
+  assert.doesNotMatch(workspaceSource, /appointmentReviewControlledActionExecutionPolicyContract/);
+  assert.doesNotMatch(workspaceSource, /appointmentReviewControlledActionCommandEnvelopeContract/);
+  assert.doesNotMatch(workspaceSource, /appointmentReviewControlledActionGuardContract/);
+  assert.doesNotMatch(workspaceSource, /appointmentReviewVerifiedActorAuthorizationContract/);
+  assert.doesNotMatch(workspaceSource, /appointmentReviewActionIntentStateMachine/);
+  assert.doesNotMatch(workspaceSource, /setReviews\([^)]*validationReceipt/i);
+  assert.doesNotMatch(workspaceSource, /selectedReview\.status\s*=/);
+  assert.doesNotMatch(workspaceSource, /receiptPersisted:\s+true/);
+  assert.doesNotMatch(workspaceSource, /commandDispatched:\s+true/);
+  assert.doesNotMatch(workspaceSource, /actionPerformed:\s+true/);
+  assert.doesNotMatch(workspaceSource, /bookingCreated:\s+true/);
+  assert.doesNotMatch(workspaceSource, /calendarChecked:\s+true/);
+  assert.doesNotMatch(workspaceSource, /databasePersisted:\s+true/);
+  assert.doesNotMatch(workspaceSource, /Date\.now|Math\.random|randomUUID|crypto/);
+});
+
 test("appointment reviews workspace hardens preconditions dry-run against stale responses", () => {
   assert.match(workspaceSource, /preconditionsRequestSequenceRef/);
   assert.match(workspaceSource, /activePreconditionsRequestRef/);
@@ -836,6 +1118,16 @@ test("appointment reviews workspace styles are present", () => {
   assert.match(cssSource, /\.appointment-review-state-transition-empty/);
   assert.match(cssSource, /\.appointment-review-state-transition-button/);
   assert.match(cssSource, /\.appointment-review-state-transition-state/);
+  assert.match(cssSource, /\.appointment-review-validation-receipt-preview/);
+  assert.match(cssSource, /\.appointment-review-validation-receipt-grid/);
+  assert.match(cssSource, /\.appointment-review-validation-receipt-controls/);
+  assert.match(cssSource, /\.appointment-review-validation-receipt-stages/);
+  assert.match(cssSource, /\.appointment-review-validation-receipt-badges/);
+  assert.match(cssSource, /\.appointment-review-validation-receipt-correlation/);
+  assert.match(cssSource, /\.appointment-review-validation-receipt-list/);
+  assert.match(cssSource, /\.appointment-review-validation-receipt-empty/);
+  assert.match(cssSource, /\.appointment-review-validation-receipt-button/);
+  assert.match(cssSource, /\.appointment-review-validation-receipt-state/);
   assert.match(cssSource, /\.appointment-review-preconditions-preview/);
   assert.match(cssSource, /\.appointment-review-preconditions-grid/);
   assert.match(cssSource, /\.appointment-review-preconditions-controls/);

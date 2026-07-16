@@ -52,6 +52,11 @@ const INITIAL_CONTROLLED_ACTION_VALIDATION_REQUEST_ID =
 const INITIAL_CONTROLLED_ACTION_VALIDATION_IDEMPOTENCY_KEY =
   "controlled-action-preview-key";
 const INITIAL_CONTROLLED_ACTION_VALIDATION_EXPECTED_REVIEW_VERSION = 1;
+const VALIDATION_RECEIPT_ACTION_INTENTS = ["approve_intent", "reject_intent"];
+const INITIAL_VALIDATION_RECEIPT_REQUEST_ID = "validation-receipt-preview";
+const INITIAL_VALIDATION_RECEIPT_IDEMPOTENCY_KEY =
+  "validation-receipt-preview-key";
+const INITIAL_VALIDATION_RECEIPT_EXPECTED_REVIEW_VERSION = 1;
 
 const INITIAL_PRECONDITIONS_DRY_RUN = {
   dryRun: true,
@@ -89,12 +94,53 @@ const INITIAL_CONTROLLED_ACTION_VALIDATION_PREVIEW = {
   persistence: "not_persisted"
 };
 
+const INITIAL_VALIDATION_RECEIPT_PREVIEW = {
+  mock: true,
+  dryRun: true,
+  validationOnly: true,
+  controlledHandlingOnly: true,
+  executionEnabled: false,
+  executorAvailable: false,
+  executionAvailable: false,
+  executionRequested: false,
+  actionPerformed: false,
+  commandDispatched: false,
+  commandPersisted: false,
+  receiptPersisted: false,
+  bookingCreated: false,
+  calendarChecked: false,
+  appointmentCreated: false,
+  calendarEventCreated: false,
+  databasePersisted: false,
+  persistence: "not_persisted"
+};
+
 const CONTROLLED_ACTION_VALIDATION_STAGE_LABELS = [
   ["preconditions", "Preconditions"],
   ["authorization", "Authorization"],
   ["idempotencyAndVersionGuard", "Idempotency and Version Guard"],
   ["commandEnvelope", "Command Envelope"],
   ["executionPolicy", "Execution Policy"]
+];
+
+const VALIDATION_RECEIPT_STAGE_LABELS = [
+  ["preconditions", "Preconditions"],
+  ["authorization", "Authorization"],
+  ["idempotencyAndVersionGuard", "Idempotency and Version Guard"],
+  ["commandEnvelope", "Command Envelope"],
+  ["executionPolicy", "Execution Policy"]
+];
+
+const VALIDATION_RECEIPT_CORRELATION_FIELDS = [
+  "actionIntent",
+  "actorId",
+  "actorRole",
+  "requestId",
+  "idempotencyKey",
+  "expectedReviewVersion",
+  "observedReviewVersion",
+  "requestFingerprint",
+  "requiredPermission"
 ];
 
 export default function AppointmentReviewsWorkspace() {
@@ -170,6 +216,24 @@ export default function AppointmentReviewsWorkspace() {
     controlledActionValidationExpectedReviewVersion,
     setControlledActionValidationExpectedReviewVersion
   ] = useState(INITIAL_CONTROLLED_ACTION_VALIDATION_EXPECTED_REVIEW_VERSION);
+  const [validationReceiptStatus, setValidationReceiptStatus] = useState("idle");
+  const [validationReceiptResult, setValidationReceiptResult] = useState(null);
+  const [validationReceiptError, setValidationReceiptError] = useState("");
+  const [
+    selectedValidationReceiptActionIntent,
+    setSelectedValidationReceiptActionIntent
+  ] = useState(VALIDATION_RECEIPT_ACTION_INTENTS[0]);
+  const [validationReceiptRequestId, setValidationReceiptRequestId] = useState(
+    INITIAL_VALIDATION_RECEIPT_REQUEST_ID
+  );
+  const [
+    validationReceiptIdempotencyKey,
+    setValidationReceiptIdempotencyKey
+  ] = useState(INITIAL_VALIDATION_RECEIPT_IDEMPOTENCY_KEY);
+  const [
+    validationReceiptExpectedReviewVersion,
+    setValidationReceiptExpectedReviewVersion
+  ] = useState(INITIAL_VALIDATION_RECEIPT_EXPECTED_REVIEW_VERSION);
   const selectedReviewIdRef = useRef("");
   const isMountedRef = useRef(false);
   const stateTransitionRequestSequenceRef = useRef(0);
@@ -181,6 +245,9 @@ export default function AppointmentReviewsWorkspace() {
   const controlledActionValidationRequestSequenceRef = useRef(0);
   const activeControlledActionValidationRequestRef = useRef(null);
   const activeControlledActionValidationAbortRef = useRef(null);
+  const validationReceiptRequestSequenceRef = useRef(0);
+  const activeValidationReceiptRequestRef = useRef(null);
+  const activeValidationReceiptAbortRef = useRef(null);
   const selectedReview =
     reviews.find((review) => review.id === selectedReviewId) || null;
   const displayedActionIntentDryRun =
@@ -194,6 +261,12 @@ export default function AppointmentReviewsWorkspace() {
     INITIAL_CONTROLLED_ACTION_VALIDATION_PREVIEW;
   const controlledActionValidationStages =
     getControlledActionValidationStages(controlledActionValidationResult);
+  const displayedValidationReceipt =
+    validationReceiptResult || INITIAL_VALIDATION_RECEIPT_PREVIEW;
+  const validationReceiptStages =
+    getValidationReceiptStages(validationReceiptResult);
+  const validationReceiptCorrelation =
+    getValidationReceiptCorrelation(validationReceiptResult);
 
   useEffect(() => {
     let isMounted = true;
@@ -264,6 +337,7 @@ export default function AppointmentReviewsWorkspace() {
       invalidateStateTransitionDryRunRequest();
       invalidatePreconditionsDryRunRequest();
       invalidateControlledActionValidationRequest();
+      invalidateValidationReceiptRequest();
     };
   }, []);
 
@@ -272,6 +346,7 @@ export default function AppointmentReviewsWorkspace() {
     invalidateStateTransitionDryRunRequest();
     invalidatePreconditionsDryRunRequest();
     invalidateControlledActionValidationRequest();
+    invalidateValidationReceiptRequest();
     setActionIntentDryRunStatus("idle");
     setActionIntentDryRunResult(null);
     setActionIntentDryRunError("");
@@ -302,6 +377,17 @@ export default function AppointmentReviewsWorkspace() {
     );
     setControlledActionValidationExpectedReviewVersion(
       INITIAL_CONTROLLED_ACTION_VALIDATION_EXPECTED_REVIEW_VERSION
+    );
+    setValidationReceiptStatus("idle");
+    setValidationReceiptResult(null);
+    setValidationReceiptError("");
+    setSelectedValidationReceiptActionIntent(VALIDATION_RECEIPT_ACTION_INTENTS[0]);
+    setValidationReceiptRequestId(INITIAL_VALIDATION_RECEIPT_REQUEST_ID);
+    setValidationReceiptIdempotencyKey(
+      INITIAL_VALIDATION_RECEIPT_IDEMPOTENCY_KEY
+    );
+    setValidationReceiptExpectedReviewVersion(
+      INITIAL_VALIDATION_RECEIPT_EXPECTED_REVIEW_VERSION
     );
   }, [selectedReviewId]);
 
@@ -855,6 +941,177 @@ export default function AppointmentReviewsWorkspace() {
     expectedReviewVersion
   }) {
     const activeRequest = activeControlledActionValidationRequestRef.current;
+
+    return (
+      isMountedRef.current &&
+      activeRequest &&
+      activeRequest.requestId === requestId &&
+      activeRequest.reviewId === reviewId &&
+      activeRequest.actionIntent === actionIntent &&
+      activeRequest.previewRequestId === previewRequestId &&
+      activeRequest.idempotencyKey === idempotencyKey &&
+      activeRequest.expectedReviewVersion === expectedReviewVersion &&
+      selectedReviewIdRef.current === reviewId
+    );
+  }
+
+  async function runValidationReceiptDryRun() {
+    if (validationReceiptStatus === "loading") {
+      return;
+    }
+
+    if (!selectedReview) {
+      setValidationReceiptStatus("failure");
+      setValidationReceiptResult(null);
+      setValidationReceiptError(
+        "Select a review before running validation receipt dry-run."
+      );
+      return;
+    }
+
+    const reviewIdForRequest = selectedReview.id;
+    const actionIntentForRequest = selectedValidationReceiptActionIntent;
+    const requestIdForRequest = validationReceiptRequestId;
+    const idempotencyKeyForRequest = validationReceiptIdempotencyKey;
+    const expectedReviewVersionForRequest = Number(
+      validationReceiptExpectedReviewVersion
+    );
+    const requestId = createValidationReceiptRequest({
+      reviewId: reviewIdForRequest,
+      actionIntent: actionIntentForRequest,
+      previewRequestId: requestIdForRequest,
+      idempotencyKey: idempotencyKeyForRequest,
+      expectedReviewVersion: expectedReviewVersionForRequest
+    });
+    const activeAbortController = activeValidationReceiptAbortRef.current;
+
+    setValidationReceiptStatus("loading");
+    setValidationReceiptResult(null);
+    setValidationReceiptError("");
+
+    try {
+      const response = await fetch(
+        `/api/secretary/appointment-reviews/${encodeURIComponent(
+          reviewIdForRequest
+        )}/controlled-action-validation-receipt`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          signal: activeAbortController?.signal,
+          body: JSON.stringify({
+            actionIntent: actionIntentForRequest,
+            requestId: requestIdForRequest,
+            idempotencyKey: idempotencyKeyForRequest,
+            expectedReviewVersion: expectedReviewVersionForRequest
+          })
+        }
+      );
+      const payload = await response.json();
+
+      if (
+        !isActiveValidationReceiptRequest({
+          requestId,
+          reviewId: reviewIdForRequest,
+          actionIntent: actionIntentForRequest,
+          previewRequestId: requestIdForRequest,
+          idempotencyKey: idempotencyKeyForRequest,
+          expectedReviewVersion: expectedReviewVersionForRequest
+        })
+      ) {
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          payload?.reason ||
+            payload?.error?.message ||
+            "Validation receipt dry-run failed safely."
+        );
+      }
+
+      if (!isSafeValidationReceiptResponse(payload)) {
+        throw new Error(
+          "Validation receipt route response was unsafe or incomplete."
+        );
+      }
+
+      setValidationReceiptResult(payload);
+      setValidationReceiptStatus("success");
+    } catch (error) {
+      if (isAbortError(error)) {
+        return;
+      }
+
+      if (
+        !isActiveValidationReceiptRequest({
+          requestId,
+          reviewId: reviewIdForRequest,
+          actionIntent: actionIntentForRequest,
+          previewRequestId: requestIdForRequest,
+          idempotencyKey: idempotencyKeyForRequest,
+          expectedReviewVersion: expectedReviewVersionForRequest
+        })
+      ) {
+        return;
+      }
+
+      setValidationReceiptResult(null);
+      setValidationReceiptStatus("failure");
+      setValidationReceiptError(
+        error instanceof Error
+          ? error.message
+          : "Validation receipt dry-run failed safely."
+      );
+    }
+  }
+
+  function createValidationReceiptRequest({
+    reviewId,
+    actionIntent,
+    previewRequestId,
+    idempotencyKey,
+    expectedReviewVersion
+  }) {
+    invalidateValidationReceiptRequest();
+
+    const requestId = validationReceiptRequestSequenceRef.current + 1;
+    const abortController = new AbortController();
+
+    validationReceiptRequestSequenceRef.current = requestId;
+    activeValidationReceiptAbortRef.current = abortController;
+    activeValidationReceiptRequestRef.current = {
+      requestId,
+      reviewId,
+      actionIntent,
+      previewRequestId,
+      idempotencyKey,
+      expectedReviewVersion
+    };
+
+    return requestId;
+  }
+
+  function invalidateValidationReceiptRequest() {
+    validationReceiptRequestSequenceRef.current += 1;
+    activeValidationReceiptRequestRef.current = null;
+
+    if (activeValidationReceiptAbortRef.current) {
+      activeValidationReceiptAbortRef.current.abort();
+      activeValidationReceiptAbortRef.current = null;
+    }
+  }
+
+  function isActiveValidationReceiptRequest({
+    requestId,
+    reviewId,
+    actionIntent,
+    previewRequestId,
+    idempotencyKey,
+    expectedReviewVersion
+  }) {
+    const activeRequest = activeValidationReceiptRequestRef.current;
 
     return (
       isMountedRef.current &&
@@ -1679,6 +1936,441 @@ export default function AppointmentReviewsWorkspace() {
 
         {!loading && !loadError ? (
           <section
+            className="appointment-review-validation-receipt-preview"
+            aria-labelledby="appointment-review-validation-receipt-preview-title"
+          >
+            <div>
+              <span>Mock / dry-run context · Not persisted</span>
+              <h3 id="appointment-review-validation-receipt-preview-title">
+                Validation Decision Receipt Dry-run
+              </h3>
+              <p>
+                Route-backed read-only receipt preview for the selected review.
+                It displays the immutable validation decision receipt separately
+                from the full pipeline preview.
+              </p>
+            </div>
+
+            {selectedReview ? (
+              <>
+                <div className="appointment-review-validation-receipt-badges">
+                  <span>Mock server context</span>
+                  <span>Validation only</span>
+                  <span>Read-only receipt</span>
+                  <span>Receipt not persisted</span>
+                  <span>No action executed</span>
+                  <span>No command dispatched</span>
+                  <span>No audit record stored</span>
+                </div>
+
+                <div className="appointment-review-validation-receipt-controls">
+                  <label>
+                    Proposed action intent
+                    <select
+                      value={selectedValidationReceiptActionIntent}
+                      onChange={(event) =>
+                        setSelectedValidationReceiptActionIntent(
+                          event.target.value
+                        )
+                      }
+                    >
+                      {VALIDATION_RECEIPT_ACTION_INTENTS.map((actionIntent) => (
+                        <option key={actionIntent} value={actionIntent}>
+                          {actionIntent}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Request id preview
+                    <input
+                      type="text"
+                      value={validationReceiptRequestId}
+                      onChange={(event) =>
+                        setValidationReceiptRequestId(event.target.value)
+                      }
+                    />
+                  </label>
+                  <label>
+                    Idempotency key preview
+                    <input
+                      type="text"
+                      value={validationReceiptIdempotencyKey}
+                      onChange={(event) =>
+                        setValidationReceiptIdempotencyKey(event.target.value)
+                      }
+                    />
+                  </label>
+                  <label>
+                    Expected review version preview
+                    <input
+                      type="number"
+                      min="1"
+                      value={validationReceiptExpectedReviewVersion}
+                      onChange={(event) =>
+                        setValidationReceiptExpectedReviewVersion(
+                          event.target.value
+                        )
+                      }
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="appointment-review-validation-receipt-button"
+                    onClick={runValidationReceiptDryRun}
+                    disabled={validationReceiptStatus === "loading"}
+                  >
+                    Run validation receipt dry-run
+                  </button>
+                </div>
+
+                <p className="appointment-review-validation-receipt-state">
+                  {validationReceiptStatus === "loading"
+                    ? "Validation receipt dry-run is running. No action executed and no command dispatched."
+                    : null}
+                  {validationReceiptStatus === "success" &&
+                  validationReceiptResult?.receiptOutcome === "validation_passed"
+                    ? "The validation-only pipeline passed and an immutable in-memory decision receipt was constructed. No executor exists, no action was executed, and the receipt was not persisted."
+                    : null}
+                  {validationReceiptStatus === "success" &&
+                  validationReceiptResult?.receiptOutcome === "validation_rejected"
+                    ? "The validation request was rejected and an immutable rejection receipt was constructed. No action or state change occurred."
+                    : null}
+                  {validationReceiptStatus === "success" &&
+                  validationReceiptResult?.receiptOutcome === "matching_replay"
+                    ? "Matching replay returned by the route. replayExistingResultOnly is shown below; no new command or action was created."
+                    : null}
+                  {validationReceiptStatus === "failure"
+                    ? validationReceiptError ||
+                      "Validation receipt dry-run failed safely."
+                    : null}
+                  {validationReceiptStatus === "idle"
+                    ? "Idle: no validation decision receipt result for this selected review."
+                    : null}
+                </p>
+
+                <dl className="appointment-review-validation-receipt-grid">
+                  <div>
+                    <dt>reviewId</dt>
+                    <dd>{validationReceiptResult?.reviewId || selectedReview.id}</dd>
+                  </div>
+                  <div>
+                    <dt>accepted</dt>
+                    <dd>
+                      {validationReceiptResult
+                        ? String(validationReceiptResult.accepted)
+                        : "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>receiptHandlerCompleted</dt>
+                    <dd>
+                      {validationReceiptResult
+                        ? String(validationReceiptResult.receiptHandlerCompleted)
+                        : "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>validationReceiptConstructed</dt>
+                    <dd>
+                      {validationReceiptResult
+                        ? String(
+                            validationReceiptResult.validationReceiptConstructed
+                          )
+                        : "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>receiptOutcome</dt>
+                    <dd>{validationReceiptResult?.receiptOutcome || "not_run"}</dd>
+                  </div>
+                  <div>
+                    <dt>code</dt>
+                    <dd>{validationReceiptResult?.code || "not_run"}</dd>
+                  </div>
+                  <div>
+                    <dt>reason</dt>
+                    <dd>{validationReceiptResult?.reason || "none"}</dd>
+                  </div>
+                  <div>
+                    <dt>receiptPersisted</dt>
+                    <dd>{String(displayedValidationReceipt.receiptPersisted)}</dd>
+                  </div>
+                  <div>
+                    <dt>handlerResult.accepted</dt>
+                    <dd>
+                      {validationReceiptResult?.handlerResult
+                        ? String(validationReceiptResult.handlerResult.accepted)
+                        : "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>handlerResult.handlerCompleted</dt>
+                    <dd>
+                      {validationReceiptResult?.handlerResult
+                        ? String(
+                            validationReceiptResult.handlerResult.handlerCompleted
+                          )
+                        : "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>handlerResult.failedStage</dt>
+                    <dd>
+                      {validationReceiptResult?.handlerResult?.failedStage ||
+                        "none"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>handlerResult.matchingReplay</dt>
+                    <dd>
+                      {String(
+                        validationReceiptResult?.handlerResult
+                          ?.matchingReplay === true
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>handlerResult.replayExistingResultOnly</dt>
+                    <dd>
+                      {String(
+                        validationReceiptResult?.handlerResult
+                          ?.replayExistingResultOnly === true
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>handlerResult.eligibleForExecutorBoundary</dt>
+                    <dd>
+                      {validationReceiptResult?.handlerResult
+                        ? String(
+                            validationReceiptResult.handlerResult
+                              .eligibleForExecutorBoundary
+                          )
+                        : "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>handlerResult.code</dt>
+                    <dd>
+                      {validationReceiptResult?.handlerResult?.code || "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>receiptType</dt>
+                    <dd>
+                      {validationReceiptResult?.validationReceipt?.receiptType ||
+                        "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>schemaVersion</dt>
+                    <dd>
+                      {validationReceiptResult?.validationReceipt?.schemaVersion ||
+                        "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>outcome</dt>
+                    <dd>
+                      {validationReceiptResult?.validationReceipt?.outcome ||
+                        "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>handlerCode</dt>
+                    <dd>
+                      {validationReceiptResult?.validationReceipt?.handlerCode ||
+                        "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>handlerCompleted</dt>
+                    <dd>
+                      {validationReceiptResult?.validationReceipt
+                        ? String(
+                            validationReceiptResult.validationReceipt
+                              .handlerCompleted
+                          )
+                        : "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>failedStage</dt>
+                    <dd>
+                      {validationReceiptResult?.validationReceipt?.failedStage ||
+                        "none"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>matchingReplay</dt>
+                    <dd>
+                      {String(
+                        validationReceiptResult?.validationReceipt
+                          ?.matchingReplay === true
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>replayExistingResultOnly</dt>
+                    <dd>
+                      {String(
+                        validationReceiptResult?.validationReceipt
+                          ?.replayExistingResultOnly === true
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>eligibleForExecutorBoundary</dt>
+                    <dd>
+                      {validationReceiptResult?.validationReceipt
+                        ? String(
+                            validationReceiptResult.validationReceipt
+                              .eligibleForExecutorBoundary
+                          )
+                        : "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>pipelineCode</dt>
+                    <dd>
+                      {validationReceiptResult?.validationReceipt?.pipelineCode ||
+                        "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>mock</dt>
+                    <dd>{String(displayedValidationReceipt.mock)}</dd>
+                  </div>
+                  <div>
+                    <dt>dryRun</dt>
+                    <dd>{String(displayedValidationReceipt.dryRun)}</dd>
+                  </div>
+                  <div>
+                    <dt>validationOnly</dt>
+                    <dd>{String(displayedValidationReceipt.validationOnly)}</dd>
+                  </div>
+                  <div>
+                    <dt>controlledHandlingOnly</dt>
+                    <dd>
+                      {String(displayedValidationReceipt.controlledHandlingOnly)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>executionEnabled</dt>
+                    <dd>{String(displayedValidationReceipt.executionEnabled)}</dd>
+                  </div>
+                  <div>
+                    <dt>executorAvailable</dt>
+                    <dd>{String(displayedValidationReceipt.executorAvailable)}</dd>
+                  </div>
+                  <div>
+                    <dt>executionAvailable</dt>
+                    <dd>{String(displayedValidationReceipt.executionAvailable)}</dd>
+                  </div>
+                  <div>
+                    <dt>executionRequested</dt>
+                    <dd>{String(displayedValidationReceipt.executionRequested)}</dd>
+                  </div>
+                  <div>
+                    <dt>actionPerformed</dt>
+                    <dd>{String(displayedValidationReceipt.actionPerformed)}</dd>
+                  </div>
+                  <div>
+                    <dt>commandDispatched</dt>
+                    <dd>{String(displayedValidationReceipt.commandDispatched)}</dd>
+                  </div>
+                  <div>
+                    <dt>commandPersisted</dt>
+                    <dd>{String(displayedValidationReceipt.commandPersisted)}</dd>
+                  </div>
+                  <div>
+                    <dt>bookingCreated</dt>
+                    <dd>{String(displayedValidationReceipt.bookingCreated)}</dd>
+                  </div>
+                  <div>
+                    <dt>calendarChecked</dt>
+                    <dd>{String(displayedValidationReceipt.calendarChecked)}</dd>
+                  </div>
+                  <div>
+                    <dt>appointmentCreated</dt>
+                    <dd>{String(displayedValidationReceipt.appointmentCreated)}</dd>
+                  </div>
+                  <div>
+                    <dt>calendarEventCreated</dt>
+                    <dd>
+                      {String(displayedValidationReceipt.calendarEventCreated)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>databasePersisted</dt>
+                    <dd>{String(displayedValidationReceipt.databasePersisted)}</dd>
+                  </div>
+                  <div>
+                    <dt>persistence</dt>
+                    <dd>{displayedValidationReceipt.persistence}</dd>
+                  </div>
+                </dl>
+
+                <div className="appointment-review-validation-receipt-stages">
+                  {validationReceiptStages.map((stage) => (
+                    <div key={stage.key}>
+                      <strong>{stage.label}</strong>
+                      <span>status: {stage.status}</span>
+                      <small>code: {stage.code}</small>
+                    </div>
+                  ))}
+                </div>
+
+                {validationReceiptCorrelation.length > 0 ? (
+                  <div className="appointment-review-validation-receipt-correlation">
+                    <strong>Validation correlation metadata</strong>
+                    <span>Mock / dry-run context</span>
+                    <small>Not persisted</small>
+                    <dl>
+                      {validationReceiptCorrelation.map(([fieldName, value]) => (
+                        <div key={fieldName}>
+                          <dt>{fieldName}</dt>
+                          <dd>{String(value)}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
+                ) : null}
+
+                <div className="appointment-review-validation-receipt-list">
+                  <strong>Receipt display boundary</strong>
+                  <span>{VALIDATION_RECEIPT_ACTION_INTENTS.join(", ")}</span>
+                  <small>
+                    The request body contains only actionIntent, requestId,
+                    idempotencyKey, and expectedReviewVersion. It never includes
+                    reviewId, currentState, actor, actorId, actorRole, role,
+                    permissions, verifiedActorContext,
+                    authenticationVerified, authorizationVerified,
+                    observedReviewVersion, priorIdempotencyObservation,
+                    executionPolicyContext, policy fields, execution claims, or
+                    side-effect claims. Patient data, clinical data,
+                    appointment details, calendar data, secrets, credentials,
+                    tokens, cookies, headers, sessions, complete verified actor
+                    context, complete execution policy context, and raw
+                    dependency outputs are excluded.
+                  </small>
+                </div>
+              </>
+            ) : (
+              <div className="appointment-review-validation-receipt-empty">
+                <strong>No selected appointment review</strong>
+                <span>
+                  Select a review to inspect validation decision receipt
+                  dry-run details.
+                </span>
+              </div>
+            )}
+          </section>
+        ) : null}
+
+        {!loading && !loadError ? (
+          <section
             className="appointment-review-preconditions-preview"
             aria-labelledby="appointment-review-preconditions-preview-title"
           >
@@ -2086,6 +2778,38 @@ function isSafeControlledActionValidationResponse(payload) {
   );
 }
 
+function isSafeValidationReceiptResponse(payload) {
+  return (
+    payload &&
+    payload.mock === true &&
+    payload.dryRun === true &&
+    payload.validationOnly === true &&
+    payload.controlledHandlingOnly === true &&
+    payload.executionEnabled === false &&
+    payload.executorAvailable === false &&
+    payload.executionAvailable === false &&
+    payload.executionRequested === false &&
+    payload.actionPerformed === false &&
+    payload.commandDispatched === false &&
+    payload.commandPersisted === false &&
+    payload.receiptPersisted === false &&
+    payload.bookingCreated === false &&
+    payload.calendarChecked === false &&
+    payload.appointmentCreated === false &&
+    payload.calendarEventCreated === false &&
+    payload.databasePersisted === false &&
+    payload.persistence === "not_persisted" &&
+    typeof payload.accepted === "boolean" &&
+    typeof payload.receiptHandlerCompleted === "boolean" &&
+    typeof payload.validationReceiptConstructed === "boolean" &&
+    typeof payload.receiptOutcome === "string" &&
+    typeof payload.reviewId === "string" &&
+    typeof payload.code === "string" &&
+    payload.validationReceipt &&
+    typeof payload.validationReceipt === "object"
+  );
+}
+
 function getControlledActionValidationStages(result) {
   return CONTROLLED_ACTION_VALIDATION_STAGE_LABELS.map(([key, label]) => {
     const stage = result?.pipelineResult?.stages?.[key];
@@ -2097,6 +2821,47 @@ function getControlledActionValidationStages(result) {
         stage && typeof stage.status === "string" ? stage.status : "not_run",
       code: stage && typeof stage.code === "string" ? stage.code : "not_run"
     };
+  });
+}
+
+function getValidationReceiptStages(result) {
+  return VALIDATION_RECEIPT_STAGE_LABELS.flatMap(([key, label]) => {
+    const stage = result?.validationReceipt?.stages?.[key];
+
+    if (!stage || typeof stage.status !== "string") {
+      return [];
+    }
+
+    return [
+      {
+        key,
+        label,
+        status: stage.status,
+        code: typeof stage.code === "string" ? stage.code : "not_run"
+      }
+    ];
+  });
+}
+
+function getValidationReceiptCorrelation(result) {
+  const correlation = result?.validationReceipt?.correlation;
+
+  if (!correlation || typeof correlation !== "object") {
+    return [];
+  }
+
+  return VALIDATION_RECEIPT_CORRELATION_FIELDS.flatMap((fieldName) => {
+    const value = correlation[fieldName];
+
+    if (
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean"
+    ) {
+      return [[fieldName, value]];
+    }
+
+    return [];
   });
 }
 
