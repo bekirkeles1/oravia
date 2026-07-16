@@ -226,6 +226,285 @@ test("appointment reviews workspace shows controlled action preconditions dry-ru
   assert.match(workspaceSource, /not approval, rejection,\s+authentication, authorization, execution readiness, booking\s+readiness, or calendar readiness/);
 });
 
+test("appointment reviews workspace shows controlled action validation pipeline preview", () => {
+  assert.match(workspaceSource, /CONTROLLED_ACTION_VALIDATION_INTENTS/);
+  assert.match(workspaceSource, /INITIAL_CONTROLLED_ACTION_VALIDATION_REQUEST_ID/);
+  assert.match(
+    workspaceSource,
+    /INITIAL_CONTROLLED_ACTION_VALIDATION_IDEMPOTENCY_KEY/
+  );
+  assert.match(
+    workspaceSource,
+    /INITIAL_CONTROLLED_ACTION_VALIDATION_EXPECTED_REVIEW_VERSION/
+  );
+  assert.match(workspaceSource, /INITIAL_CONTROLLED_ACTION_VALIDATION_PREVIEW/);
+  assert.match(workspaceSource, /runControlledActionValidationDryRun/);
+  assert.match(workspaceSource, /isSafeControlledActionValidationResponse/);
+  assert.match(
+    workspaceSource,
+    /Controlled Action Validation Pipeline Dry-run/
+  );
+  assert.match(workspaceSource, /Mock server context/);
+  assert.match(workspaceSource, /Validation only/);
+  assert.match(workspaceSource, /Controlled handling only/);
+  assert.match(workspaceSource, /Execution disabled/);
+  assert.match(workspaceSource, /Executor unavailable/);
+  assert.match(workspaceSource, /Not persisted/);
+  assert.match(workspaceSource, /No action executed/);
+  assert.match(workspaceSource, /Action intent metadata/);
+  assert.match(workspaceSource, /Request id preview/);
+  assert.match(workspaceSource, /Idempotency key preview/);
+  assert.match(workspaceSource, /Expected review version preview/);
+  assert.match(workspaceSource, /Run controlled action validation dry-run/);
+  assert.match(workspaceSource, /approve_intent/);
+  assert.match(workspaceSource, /reject_intent/);
+  assert.match(workspaceSource, /controlled-action-preview/);
+  assert.match(workspaceSource, /controlled-action-preview-key/);
+  assert.match(
+    workspaceSource,
+    /INITIAL_CONTROLLED_ACTION_VALIDATION_EXPECTED_REVIEW_VERSION = 1/
+  );
+});
+
+test("appointment reviews workspace posts controlled action validation to the selected review route with client-safe metadata only", () => {
+  const controlledActionRequestSource = workspaceSource.slice(
+    workspaceSource.indexOf(")}/controlled-action-validation`"),
+    workspaceSource.indexOf(
+      "const payload = await response.json();",
+      workspaceSource.indexOf(")}/controlled-action-validation`")
+    )
+  );
+
+  assert.match(
+    workspaceSource,
+    /\/api\/secretary\/appointment-reviews\/\$\{encodeURIComponent/
+  );
+  assert.match(workspaceSource, /\/controlled-action-validation`/);
+  assert.match(workspaceSource, /reviewIdForRequest = selectedReview\.id/);
+  assert.match(workspaceSource, /method: "POST"/);
+  assert.match(workspaceSource, /signal: activeAbortController\?\.signal/);
+  assert.match(controlledActionRequestSource, /body: JSON\.stringify\(/);
+  assert.match(
+    controlledActionRequestSource,
+    /actionIntent: actionIntentForRequest/
+  );
+  assert.match(controlledActionRequestSource, /requestId: requestIdForRequest/);
+  assert.match(
+    controlledActionRequestSource,
+    /idempotencyKey: idempotencyKeyForRequest/
+  );
+  assert.match(
+    controlledActionRequestSource,
+    /expectedReviewVersion: expectedReviewVersionForRequest/
+  );
+  assert.doesNotMatch(controlledActionRequestSource, /reviewId:/);
+  assert.doesNotMatch(controlledActionRequestSource, /currentState:/);
+  assert.doesNotMatch(controlledActionRequestSource, /actor:/);
+  assert.doesNotMatch(controlledActionRequestSource, /actorId:/);
+  assert.doesNotMatch(controlledActionRequestSource, /role:/);
+  assert.doesNotMatch(controlledActionRequestSource, /permissions:/);
+  assert.doesNotMatch(controlledActionRequestSource, /verifiedActorContext/);
+  assert.doesNotMatch(controlledActionRequestSource, /observedReviewVersion/);
+  assert.doesNotMatch(controlledActionRequestSource, /priorIdempotencyObservation/);
+  assert.doesNotMatch(controlledActionRequestSource, /executionPolicyContext/);
+});
+
+test("appointment reviews workspace displays controlled action validation handler result and safety fields", () => {
+  assert.match(workspaceSource, /accepted/);
+  assert.match(workspaceSource, /handlerCompleted/);
+  assert.match(workspaceSource, /failedStage/);
+  assert.match(workspaceSource, /matchingReplay/);
+  assert.match(workspaceSource, /replayExistingResultOnly/);
+  assert.match(workspaceSource, /eligibleForExecutorBoundary/);
+  assert.match(workspaceSource, /code/);
+  assert.match(workspaceSource, /reason/);
+  assert.match(workspaceSource, /reviewId/);
+  assert.match(workspaceSource, /mock/);
+  assert.match(workspaceSource, /dryRun/);
+  assert.match(workspaceSource, /validationOnly/);
+  assert.match(workspaceSource, /controlledHandlingOnly/);
+  assert.match(workspaceSource, /executionEnabled/);
+  assert.match(workspaceSource, /executorAvailable/);
+  assert.match(workspaceSource, /executionAvailable/);
+  assert.match(workspaceSource, /executionRequested/);
+  assert.match(workspaceSource, /actionPerformed/);
+  assert.match(workspaceSource, /commandDispatched/);
+  assert.match(workspaceSource, /commandPersisted/);
+  assert.match(workspaceSource, /bookingCreated/);
+  assert.match(workspaceSource, /calendarChecked/);
+  assert.match(workspaceSource, /appointmentCreated/);
+  assert.match(workspaceSource, /calendarEventCreated/);
+  assert.match(workspaceSource, /databasePersisted/);
+  assert.match(workspaceSource, /persistence/);
+  assert.match(workspaceSource, /This validation-only mock pipeline passed all configured safety contracts/);
+  assert.match(workspaceSource, /No executor exists and no action was executed/);
+  assert.match(workspaceSource, /safe rejection/);
+  assert.match(workspaceSource, /No state or action changed/);
+  assert.doesNotMatch(workspaceSource, /Authorized for production/);
+  assert.doesNotMatch(workspaceSource, /Ready to execute/);
+  assert.doesNotMatch(workspaceSource, /Execution approved/);
+  assert.doesNotMatch(workspaceSource, /Appointment approved/);
+  assert.doesNotMatch(workspaceSource, /Appointment rejected/);
+  assert.doesNotMatch(workspaceSource, /Booking ready/);
+  assert.doesNotMatch(workspaceSource, /Calendar ready/);
+});
+
+test("appointment reviews workspace displays controlled action validation pipeline stages without fabricating decisions", () => {
+  assert.match(workspaceSource, /CONTROLLED_ACTION_VALIDATION_STAGE_LABELS/);
+  assert.match(workspaceSource, /getControlledActionValidationStages/);
+  assert.match(workspaceSource, /Preconditions/);
+  assert.match(workspaceSource, /Authorization/);
+  assert.match(workspaceSource, /Idempotency and Version Guard/);
+  assert.match(workspaceSource, /Command Envelope/);
+  assert.match(workspaceSource, /Execution Policy/);
+  assert.match(workspaceSource, /pipelineResult\?\.stages\?\.\[key\]/);
+  assert.match(workspaceSource, /status: \{stage\.status\}/);
+  assert.match(workspaceSource, /code: \{stage\.code\}/);
+  assert.match(workspaceSource, /stage\.status === "string" \? stage\.status : "not_run"/);
+  assert.match(workspaceSource, /stage\.code === "string" \? stage\.code : "not_run"/);
+  assert.match(workspaceSource, /not_run/);
+  assert.doesNotMatch(workspaceSource, /controlledActionValidationStages\s*=\s*\[/);
+});
+
+test("appointment reviews workspace hardens controlled action validation against stale responses", () => {
+  assert.match(workspaceSource, /controlledActionValidationRequestSequenceRef/);
+  assert.match(workspaceSource, /activeControlledActionValidationRequestRef/);
+  assert.match(workspaceSource, /activeControlledActionValidationAbortRef/);
+  assert.match(workspaceSource, /createControlledActionValidationRequest/);
+  assert.match(workspaceSource, /invalidateControlledActionValidationRequest/);
+  assert.match(workspaceSource, /isActiveControlledActionValidationRequest/);
+  assert.match(workspaceSource, /new AbortController\(\)/);
+  assert.match(
+    workspaceSource,
+    /activeControlledActionValidationAbortRef\.current\.abort\(\)/
+  );
+  assert.match(workspaceSource, /requestId,/);
+  assert.match(workspaceSource, /reviewId: reviewIdForRequest/);
+  assert.match(workspaceSource, /actionIntent: actionIntentForRequest/);
+  assert.match(workspaceSource, /previewRequestId: requestIdForRequest/);
+  assert.match(workspaceSource, /idempotencyKey: idempotencyKeyForRequest/);
+  assert.match(
+    workspaceSource,
+    /expectedReviewVersion: expectedReviewVersionForRequest/
+  );
+  assert.match(workspaceSource, /activeRequest\.requestId === requestId/);
+  assert.match(workspaceSource, /activeRequest\.reviewId === reviewId/);
+  assert.match(workspaceSource, /activeRequest\.actionIntent === actionIntent/);
+  assert.match(
+    workspaceSource,
+    /activeRequest\.previewRequestId === previewRequestId/
+  );
+  assert.match(
+    workspaceSource,
+    /activeRequest\.idempotencyKey === idempotencyKey/
+  );
+  assert.match(
+    workspaceSource,
+    /activeRequest\.expectedReviewVersion === expectedReviewVersion/
+  );
+  assert.match(workspaceSource, /selectedReviewIdRef\.current === reviewId/);
+  assert.match(
+    workspaceSource,
+    /if \(\s+!\s*isActiveControlledActionValidationRequest\(\{[\s\S]*requestId,[\s\S]*reviewId: reviewIdForRequest,[\s\S]*actionIntent: actionIntentForRequest,[\s\S]*previewRequestId: requestIdForRequest,[\s\S]*idempotencyKey: idempotencyKeyForRequest,[\s\S]*expectedReviewVersion: expectedReviewVersionForRequest[\s\S]*\}\)\s+\) \{\s+return;\s+\}/
+  );
+  assert.match(workspaceSource, /if \(isAbortError\(error\)\) \{\s+return;\s+\}/);
+  assert.match(
+    workspaceSource,
+    /setControlledActionValidationResult\(payload\);\s+setControlledActionValidationStatus\("success"\);/
+  );
+  assert.match(
+    workspaceSource,
+    /setControlledActionValidationResult\(null\);\s+setControlledActionValidationStatus\("failure"\);/
+  );
+  assert.match(
+    workspaceSource,
+    /setControlledActionValidationStatus\("loading"\);\s+setControlledActionValidationResult\(null\);\s+setControlledActionValidationError\(""\);/
+  );
+  assert.match(
+    workspaceSource,
+    /if \(controlledActionValidationStatus === "loading"\) \{\s+return;\s+\}/
+  );
+  assert.match(
+    workspaceSource,
+    /disabled=\{controlledActionValidationStatus === "loading"\}/
+  );
+});
+
+test("appointment reviews workspace resets controlled action validation on review change and unmount", () => {
+  assert.match(workspaceSource, /invalidateControlledActionValidationRequest\(\);/);
+  assert.match(
+    workspaceSource,
+    /selectedReviewIdRef\.current = selectedReviewId;\s+invalidateStateTransitionDryRunRequest\(\);\s+invalidatePreconditionsDryRunRequest\(\);\s+invalidateControlledActionValidationRequest\(\);/
+  );
+  assert.match(workspaceSource, /setControlledActionValidationStatus\("idle"\)/);
+  assert.match(workspaceSource, /setControlledActionValidationResult\(null\)/);
+  assert.match(workspaceSource, /setControlledActionValidationError\(""\)/);
+  assert.match(
+    workspaceSource,
+    /setSelectedControlledActionValidationIntent\(\s+CONTROLLED_ACTION_VALIDATION_INTENTS\[0\]\s+\)/
+  );
+  assert.match(
+    workspaceSource,
+    /setControlledActionValidationRequestId\(\s+INITIAL_CONTROLLED_ACTION_VALIDATION_REQUEST_ID\s+\)/
+  );
+  assert.match(
+    workspaceSource,
+    /setControlledActionValidationIdempotencyKey\(\s+INITIAL_CONTROLLED_ACTION_VALIDATION_IDEMPOTENCY_KEY\s+\)/
+  );
+  assert.match(
+    workspaceSource,
+    /setControlledActionValidationExpectedReviewVersion\(\s+INITIAL_CONTROLLED_ACTION_VALIDATION_EXPECTED_REVIEW_VERSION\s+\)/
+  );
+  assert.match(
+    workspaceSource,
+    /isMountedRef\.current = false;\s+invalidateStateTransitionDryRunRequest\(\);\s+invalidatePreconditionsDryRunRequest\(\);\s+invalidateControlledActionValidationRequest\(\);/
+  );
+});
+
+test("appointment reviews workspace handles matching replay display without fabricating it", () => {
+  assert.match(workspaceSource, /matchingReplay === true/);
+  assert.match(workspaceSource, /replayExistingResultOnly/);
+  assert.match(workspaceSource, /no new command or action was created/);
+  assert.match(workspaceSource, /No new command or action was created/i);
+  assert.doesNotMatch(workspaceSource, /matchingReplay:\s+true/);
+  assert.doesNotMatch(workspaceSource, /replayExistingResultOnly:\s+true/);
+  assert.doesNotMatch(workspaceSource, /previous result/i);
+});
+
+test("appointment reviews workspace keeps controlled action validation UI non-executable", () => {
+  assert.match(workspaceSource, /mock:\s+true/);
+  assert.match(workspaceSource, /dryRun:\s+true/);
+  assert.match(workspaceSource, /validationOnly:\s+true/);
+  assert.match(workspaceSource, /controlledHandlingOnly:\s+true/);
+  assert.match(workspaceSource, /executionEnabled:\s+false/);
+  assert.match(workspaceSource, /executorAvailable:\s+false/);
+  assert.match(workspaceSource, /executionAvailable:\s+false/);
+  assert.match(workspaceSource, /executionRequested:\s+false/);
+  assert.match(workspaceSource, /actionPerformed:\s+false/);
+  assert.match(workspaceSource, /commandDispatched:\s+false/);
+  assert.match(workspaceSource, /commandPersisted:\s+false/);
+  assert.match(workspaceSource, /bookingCreated:\s+false/);
+  assert.match(workspaceSource, /calendarChecked:\s+false/);
+  assert.match(workspaceSource, /appointmentCreated:\s+false/);
+  assert.match(workspaceSource, /calendarEventCreated:\s+false/);
+  assert.match(workspaceSource, /databasePersisted:\s+false/);
+  assert.match(workspaceSource, /persistence:\s+"not_persisted"/);
+  assert.match(workspaceSource, /payload\.executorAvailable === false/);
+  assert.match(workspaceSource, /payload\.commandDispatched === false/);
+  assert.match(workspaceSource, /payload\.commandPersisted === false/);
+  assert.doesNotMatch(workspaceSource, /setReviews\([^)]*controlledAction/i);
+  assert.doesNotMatch(workspaceSource, /selectedReview\.status\s*=/);
+  assert.doesNotMatch(workspaceSource, /appointmentReviewControlledActionValidationHandler/);
+  assert.doesNotMatch(workspaceSource, /appointmentReviewTrustedServerContextAssemblyContract/);
+  assert.doesNotMatch(workspaceSource, /appointmentReviewControlledActionValidationPipelineContract/);
+  assert.doesNotMatch(workspaceSource, /appointmentReviewControlledActionExecutionPolicyContract/);
+  assert.doesNotMatch(workspaceSource, /appointmentReviewControlledActionCommandEnvelopeContract/);
+  assert.doesNotMatch(workspaceSource, /appointmentReviewControlledActionGuardContract/);
+  assert.doesNotMatch(workspaceSource, /appointmentReviewVerifiedActorAuthorizationContract/);
+  assert.doesNotMatch(workspaceSource, /appointmentReviewActionIntentStateMachine/);
+  assert.doesNotMatch(workspaceSource, /Date\.now|Math\.random|randomUUID|crypto/);
+});
+
 test("appointment reviews workspace hardens preconditions dry-run against stale responses", () => {
   assert.match(workspaceSource, /preconditionsRequestSequenceRef/);
   assert.match(workspaceSource, /activePreconditionsRequestRef/);

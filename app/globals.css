@@ -2019,6 +2019,8 @@ blockquote {
 .appointment-review-action-intent-empty,
 .appointment-review-state-transition-preview,
 .appointment-review-state-transition-empty,
+.appointment-review-controlled-action-validation-preview,
+.appointment-review-controlled-action-validation-empty,
 .appointment-review-preconditions-preview,
 .appointment-review-preconditions-empty,
 .appointment-review-item {
@@ -2090,6 +2092,13 @@ blockquote {
   background: #fbfaf6;
 }
 
+.appointment-review-controlled-action-validation-preview {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  background: #f7fbfb;
+}
+
 .appointment-review-preconditions-preview {
   display: grid;
   gap: 14px;
@@ -2112,6 +2121,11 @@ blockquote {
   gap: 6px;
 }
 
+.appointment-review-controlled-action-validation-preview > div:first-child {
+  display: grid;
+  gap: 6px;
+}
+
 .appointment-review-preconditions-preview > div:first-child {
   display: grid;
   gap: 6px;
@@ -2126,6 +2140,9 @@ blockquote {
 .appointment-review-state-transition-preview span,
 .appointment-review-state-transition-preview p,
 .appointment-review-state-transition-empty span,
+.appointment-review-controlled-action-validation-preview span,
+.appointment-review-controlled-action-validation-preview p,
+.appointment-review-controlled-action-validation-empty span,
 .appointment-review-preconditions-preview span,
 .appointment-review-preconditions-preview p,
 .appointment-review-preconditions-empty span {
@@ -2151,6 +2168,12 @@ blockquote {
   text-transform: uppercase;
 }
 
+.appointment-review-controlled-action-validation-preview > div:first-child > span {
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
 .appointment-review-preconditions-preview > div:first-child > span {
   font-size: 0.76rem;
   font-weight: 900;
@@ -2163,6 +2186,8 @@ blockquote {
 .appointment-review-action-intent-preview p,
 .appointment-review-state-transition-preview h3,
 .appointment-review-state-transition-preview p,
+.appointment-review-controlled-action-validation-preview h3,
+.appointment-review-controlled-action-validation-preview p,
 .appointment-review-preconditions-preview h3,
 .appointment-review-preconditions-preview p {
   margin: 0;
@@ -2184,6 +2209,10 @@ blockquote {
 
 .appointment-review-state-transition-grid,
 .appointment-review-state-transition-controls,
+.appointment-review-controlled-action-validation-grid,
+.appointment-review-controlled-action-validation-controls,
+.appointment-review-controlled-action-validation-stages,
+.appointment-review-controlled-action-validation-badges,
 .appointment-review-preconditions-grid,
 .appointment-review-preconditions-controls {
   display: grid;
@@ -2200,6 +2229,10 @@ blockquote {
 .appointment-review-state-transition-grid div,
 .appointment-review-state-transition-list,
 .appointment-review-state-transition-empty,
+.appointment-review-controlled-action-validation-grid div,
+.appointment-review-controlled-action-validation-stages div,
+.appointment-review-controlled-action-validation-list,
+.appointment-review-controlled-action-validation-empty,
 .appointment-review-preconditions-grid div,
 .appointment-review-preconditions-list,
 .appointment-review-preconditions-empty {
@@ -2226,6 +2259,26 @@ blockquote {
   gap: 6px;
 }
 
+.appointment-review-controlled-action-validation-list,
+.appointment-review-controlled-action-validation-empty,
+.appointment-review-controlled-action-validation-stages div {
+  display: grid;
+  gap: 6px;
+}
+
+.appointment-review-controlled-action-validation-badges span {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 7px 9px;
+  border: 1px solid rgba(32, 111, 116, 0.24);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
 .appointment-review-preconditions-list,
 .appointment-review-preconditions-empty {
   display: grid;
@@ -2233,6 +2286,7 @@ blockquote {
 }
 
 .appointment-review-state-transition-controls label,
+.appointment-review-controlled-action-validation-controls label,
 .appointment-review-preconditions-controls label {
   display: grid;
   gap: 6px;
@@ -2244,6 +2298,8 @@ blockquote {
 
 .appointment-review-state-transition-controls input,
 .appointment-review-state-transition-controls select,
+.appointment-review-controlled-action-validation-controls input,
+.appointment-review-controlled-action-validation-controls select,
 .appointment-review-preconditions-controls input,
 .appointment-review-preconditions-controls select {
   min-width: 0;
@@ -2283,6 +2339,19 @@ blockquote {
   cursor: pointer;
 }
 
+.appointment-review-controlled-action-validation-button {
+  align-self: end;
+  justify-self: start;
+  width: fit-content;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font-weight: 800;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
 .appointment-review-preconditions-button {
   align-self: end;
   justify-self: start;
@@ -2302,6 +2371,7 @@ blockquote {
 }
 
 .appointment-review-state-transition-button:disabled,
+.appointment-review-controlled-action-validation-button:disabled,
 .appointment-review-preconditions-button:disabled {
   cursor: not-allowed;
   opacity: 0.65;
@@ -2320,6 +2390,14 @@ blockquote {
   border: 1px dashed rgba(127, 104, 43, 0.3);
   border-radius: 8px;
   background: rgba(127, 104, 43, 0.08);
+  font-weight: 800;
+}
+
+.appointment-review-controlled-action-validation-state {
+  padding: 10px 12px;
+  border: 1px dashed rgba(32, 111, 116, 0.3);
+  border-radius: 8px;
+  background: rgba(32, 111, 116, 0.08);
   font-weight: 800;
 }
 
@@ -2367,6 +2445,10 @@ blockquote {
   .appointment-review-action-intent-grid,
   .appointment-review-state-transition-grid,
   .appointment-review-state-transition-controls,
+  .appointment-review-controlled-action-validation-grid,
+  .appointment-review-controlled-action-validation-controls,
+  .appointment-review-controlled-action-validation-stages,
+  .appointment-review-controlled-action-validation-badges,
   .appointment-review-preconditions-grid,
   .appointment-review-preconditions-controls,
   .appointment-review-item dl {

@@ -46,6 +46,12 @@ const INITIAL_PRECONDITIONS_CURRENT_STATE = "validation_only_intent_checked";
 const INITIAL_PRECONDITIONS_ACTOR_ID = "secretary-preview";
 const INITIAL_PRECONDITIONS_ACTOR_ROLE = "secretary";
 const INITIAL_PRECONDITIONS_REQUEST_ID = "preconditions-preview";
+const CONTROLLED_ACTION_VALIDATION_INTENTS = ["approve_intent", "reject_intent"];
+const INITIAL_CONTROLLED_ACTION_VALIDATION_REQUEST_ID =
+  "controlled-action-preview";
+const INITIAL_CONTROLLED_ACTION_VALIDATION_IDEMPOTENCY_KEY =
+  "controlled-action-preview-key";
+const INITIAL_CONTROLLED_ACTION_VALIDATION_EXPECTED_REVIEW_VERSION = 1;
 
 const INITIAL_PRECONDITIONS_DRY_RUN = {
   dryRun: true,
@@ -62,6 +68,34 @@ const INITIAL_PRECONDITIONS_DRY_RUN = {
   databasePersisted: false,
   persistence: "not_persisted"
 };
+
+const INITIAL_CONTROLLED_ACTION_VALIDATION_PREVIEW = {
+  mock: true,
+  dryRun: true,
+  validationOnly: true,
+  controlledHandlingOnly: true,
+  executionEnabled: false,
+  executorAvailable: false,
+  executionAvailable: false,
+  executionRequested: false,
+  actionPerformed: false,
+  commandDispatched: false,
+  commandPersisted: false,
+  bookingCreated: false,
+  calendarChecked: false,
+  appointmentCreated: false,
+  calendarEventCreated: false,
+  databasePersisted: false,
+  persistence: "not_persisted"
+};
+
+const CONTROLLED_ACTION_VALIDATION_STAGE_LABELS = [
+  ["preconditions", "Preconditions"],
+  ["authorization", "Authorization"],
+  ["idempotencyAndVersionGuard", "Idempotency and Version Guard"],
+  ["commandEnvelope", "Command Envelope"],
+  ["executionPolicy", "Execution Policy"]
+];
 
 export default function AppointmentReviewsWorkspace() {
   const [reviews, setReviews] = useState([]);
@@ -108,6 +142,34 @@ export default function AppointmentReviewsWorkspace() {
   const [preconditionsRequestId, setPreconditionsRequestId] = useState(
     INITIAL_PRECONDITIONS_REQUEST_ID
   );
+  const [
+    controlledActionValidationStatus,
+    setControlledActionValidationStatus
+  ] = useState("idle");
+  const [
+    controlledActionValidationResult,
+    setControlledActionValidationResult
+  ] = useState(null);
+  const [
+    controlledActionValidationError,
+    setControlledActionValidationError
+  ] = useState("");
+  const [
+    selectedControlledActionValidationIntent,
+    setSelectedControlledActionValidationIntent
+  ] = useState(CONTROLLED_ACTION_VALIDATION_INTENTS[0]);
+  const [
+    controlledActionValidationRequestId,
+    setControlledActionValidationRequestId
+  ] = useState(INITIAL_CONTROLLED_ACTION_VALIDATION_REQUEST_ID);
+  const [
+    controlledActionValidationIdempotencyKey,
+    setControlledActionValidationIdempotencyKey
+  ] = useState(INITIAL_CONTROLLED_ACTION_VALIDATION_IDEMPOTENCY_KEY);
+  const [
+    controlledActionValidationExpectedReviewVersion,
+    setControlledActionValidationExpectedReviewVersion
+  ] = useState(INITIAL_CONTROLLED_ACTION_VALIDATION_EXPECTED_REVIEW_VERSION);
   const selectedReviewIdRef = useRef("");
   const isMountedRef = useRef(false);
   const stateTransitionRequestSequenceRef = useRef(0);
@@ -116,6 +178,9 @@ export default function AppointmentReviewsWorkspace() {
   const preconditionsRequestSequenceRef = useRef(0);
   const activePreconditionsRequestRef = useRef(null);
   const activePreconditionsAbortRef = useRef(null);
+  const controlledActionValidationRequestSequenceRef = useRef(0);
+  const activeControlledActionValidationRequestRef = useRef(null);
+  const activeControlledActionValidationAbortRef = useRef(null);
   const selectedReview =
     reviews.find((review) => review.id === selectedReviewId) || null;
   const displayedActionIntentDryRun =
@@ -124,6 +189,11 @@ export default function AppointmentReviewsWorkspace() {
     stateTransitionDryRunResult || INITIAL_STATE_TRANSITION_DRY_RUN;
   const displayedPreconditionsDryRun =
     preconditionsDryRunResult || INITIAL_PRECONDITIONS_DRY_RUN;
+  const displayedControlledActionValidation =
+    controlledActionValidationResult ||
+    INITIAL_CONTROLLED_ACTION_VALIDATION_PREVIEW;
+  const controlledActionValidationStages =
+    getControlledActionValidationStages(controlledActionValidationResult);
 
   useEffect(() => {
     let isMounted = true;
@@ -193,6 +263,7 @@ export default function AppointmentReviewsWorkspace() {
       isMountedRef.current = false;
       invalidateStateTransitionDryRunRequest();
       invalidatePreconditionsDryRunRequest();
+      invalidateControlledActionValidationRequest();
     };
   }, []);
 
@@ -200,6 +271,7 @@ export default function AppointmentReviewsWorkspace() {
     selectedReviewIdRef.current = selectedReviewId;
     invalidateStateTransitionDryRunRequest();
     invalidatePreconditionsDryRunRequest();
+    invalidateControlledActionValidationRequest();
     setActionIntentDryRunStatus("idle");
     setActionIntentDryRunResult(null);
     setActionIntentDryRunError("");
@@ -216,6 +288,21 @@ export default function AppointmentReviewsWorkspace() {
     setPreconditionsActorId(INITIAL_PRECONDITIONS_ACTOR_ID);
     setPreconditionsActorRole(INITIAL_PRECONDITIONS_ACTOR_ROLE);
     setPreconditionsRequestId(INITIAL_PRECONDITIONS_REQUEST_ID);
+    setControlledActionValidationStatus("idle");
+    setControlledActionValidationResult(null);
+    setControlledActionValidationError("");
+    setSelectedControlledActionValidationIntent(
+      CONTROLLED_ACTION_VALIDATION_INTENTS[0]
+    );
+    setControlledActionValidationRequestId(
+      INITIAL_CONTROLLED_ACTION_VALIDATION_REQUEST_ID
+    );
+    setControlledActionValidationIdempotencyKey(
+      INITIAL_CONTROLLED_ACTION_VALIDATION_IDEMPOTENCY_KEY
+    );
+    setControlledActionValidationExpectedReviewVersion(
+      INITIAL_CONTROLLED_ACTION_VALIDATION_EXPECTED_REVIEW_VERSION
+    );
   }, [selectedReviewId]);
 
   async function runActionIntentDryRun() {
@@ -608,6 +695,176 @@ export default function AppointmentReviewsWorkspace() {
       activeRequest.actorId === actorId &&
       activeRequest.actorRole === actorRole &&
       activeRequest.preconditionsRequestId === preconditionsRequestId &&
+      selectedReviewIdRef.current === reviewId
+    );
+  }
+
+  async function runControlledActionValidationDryRun() {
+    if (controlledActionValidationStatus === "loading") {
+      return;
+    }
+
+    if (!selectedReview) {
+      setControlledActionValidationStatus("failure");
+      setControlledActionValidationResult(null);
+      setControlledActionValidationError(
+        "Select a review before running controlled action validation dry-run."
+      );
+      return;
+    }
+
+    const reviewIdForRequest = selectedReview.id;
+    const actionIntentForRequest = selectedControlledActionValidationIntent;
+    const requestIdForRequest = controlledActionValidationRequestId;
+    const idempotencyKeyForRequest = controlledActionValidationIdempotencyKey;
+    const expectedReviewVersionForRequest =
+      Number(controlledActionValidationExpectedReviewVersion);
+    const requestId = createControlledActionValidationRequest({
+      reviewId: reviewIdForRequest,
+      actionIntent: actionIntentForRequest,
+      previewRequestId: requestIdForRequest,
+      idempotencyKey: idempotencyKeyForRequest,
+      expectedReviewVersion: expectedReviewVersionForRequest
+    });
+    const activeAbortController = activeControlledActionValidationAbortRef.current;
+
+    setControlledActionValidationStatus("loading");
+    setControlledActionValidationResult(null);
+    setControlledActionValidationError("");
+
+    try {
+      const response = await fetch(
+        `/api/secretary/appointment-reviews/${encodeURIComponent(
+          reviewIdForRequest
+        )}/controlled-action-validation`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          signal: activeAbortController?.signal,
+          body: JSON.stringify({
+            actionIntent: actionIntentForRequest,
+            requestId: requestIdForRequest,
+            idempotencyKey: idempotencyKeyForRequest,
+            expectedReviewVersion: expectedReviewVersionForRequest
+          })
+        }
+      );
+      const payload = await response.json();
+
+      if (
+        !isActiveControlledActionValidationRequest({
+          requestId,
+          reviewId: reviewIdForRequest,
+          actionIntent: actionIntentForRequest,
+          previewRequestId: requestIdForRequest,
+          idempotencyKey: idempotencyKeyForRequest,
+          expectedReviewVersion: expectedReviewVersionForRequest
+        })
+      ) {
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          payload?.reason ||
+            payload?.error?.message ||
+            "Controlled action validation dry-run failed safely."
+        );
+      }
+
+      if (!isSafeControlledActionValidationResponse(payload)) {
+        throw new Error(
+          "Controlled action validation response was unsafe or incomplete."
+        );
+      }
+
+      setControlledActionValidationResult(payload);
+      setControlledActionValidationStatus("success");
+    } catch (error) {
+      if (isAbortError(error)) {
+        return;
+      }
+
+      if (
+        !isActiveControlledActionValidationRequest({
+          requestId,
+          reviewId: reviewIdForRequest,
+          actionIntent: actionIntentForRequest,
+          previewRequestId: requestIdForRequest,
+          idempotencyKey: idempotencyKeyForRequest,
+          expectedReviewVersion: expectedReviewVersionForRequest
+        })
+      ) {
+        return;
+      }
+
+      setControlledActionValidationResult(null);
+      setControlledActionValidationStatus("failure");
+      setControlledActionValidationError(
+        error instanceof Error
+          ? error.message
+          : "Controlled action validation dry-run failed safely."
+      );
+    }
+  }
+
+  function createControlledActionValidationRequest({
+    reviewId,
+    actionIntent,
+    previewRequestId,
+    idempotencyKey,
+    expectedReviewVersion
+  }) {
+    invalidateControlledActionValidationRequest();
+
+    const requestId = controlledActionValidationRequestSequenceRef.current + 1;
+    const abortController = new AbortController();
+
+    controlledActionValidationRequestSequenceRef.current = requestId;
+    activeControlledActionValidationAbortRef.current = abortController;
+    activeControlledActionValidationRequestRef.current = {
+      requestId,
+      reviewId,
+      actionIntent,
+      previewRequestId,
+      idempotencyKey,
+      expectedReviewVersion
+    };
+
+    return requestId;
+  }
+
+  function invalidateControlledActionValidationRequest() {
+    controlledActionValidationRequestSequenceRef.current += 1;
+    activeControlledActionValidationRequestRef.current = null;
+
+    if (activeControlledActionValidationAbortRef.current) {
+      activeControlledActionValidationAbortRef.current.abort();
+      activeControlledActionValidationAbortRef.current = null;
+    }
+  }
+
+  function isActiveControlledActionValidationRequest({
+    requestId,
+    reviewId,
+    actionIntent,
+    previewRequestId,
+    idempotencyKey,
+    expectedReviewVersion
+  }) {
+    const activeRequest = activeControlledActionValidationRequestRef.current;
+
+    return (
+      isMountedRef.current &&
+      activeRequest &&
+      activeRequest.requestId === requestId &&
+      activeRequest.reviewId === reviewId &&
+      activeRequest.actionIntent === actionIntent &&
+      activeRequest.previewRequestId === previewRequestId &&
+      activeRequest.idempotencyKey === idempotencyKey &&
+      activeRequest.expectedReviewVersion === expectedReviewVersion &&
       selectedReviewIdRef.current === reviewId
     );
   }
@@ -1076,6 +1333,352 @@ export default function AppointmentReviewsWorkspace() {
 
         {!loading && !loadError ? (
           <section
+            className="appointment-review-controlled-action-validation-preview"
+            aria-labelledby="appointment-review-controlled-action-validation-preview-title"
+          >
+            <div>
+              <span>
+                Mock server context · Validation only · Controlled handling only
+              </span>
+              <h3 id="appointment-review-controlled-action-validation-preview-title">
+                Controlled Action Validation Pipeline Dry-run
+              </h3>
+              <p>
+                Route-backed full pipeline preview for selected metadata.
+                Execution disabled. Executor unavailable. Not persisted. No
+                action executed. The mock server boundary is not production
+                authentication or authorization.
+              </p>
+            </div>
+
+            {selectedReview ? (
+              <>
+                <div className="appointment-review-controlled-action-validation-badges">
+                  <span>Mock server context</span>
+                  <span>Validation only</span>
+                  <span>Controlled handling only</span>
+                  <span>Execution disabled</span>
+                  <span>Executor unavailable</span>
+                  <span>Not persisted</span>
+                  <span>No action executed</span>
+                </div>
+
+                <div className="appointment-review-controlled-action-validation-controls">
+                  <label>
+                    Action intent metadata
+                    <select
+                      value={selectedControlledActionValidationIntent}
+                      onChange={(event) =>
+                        setSelectedControlledActionValidationIntent(
+                          event.target.value
+                        )
+                      }
+                    >
+                      {CONTROLLED_ACTION_VALIDATION_INTENTS.map((actionIntent) => (
+                        <option key={actionIntent} value={actionIntent}>
+                          {actionIntent}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Request id preview
+                    <input
+                      type="text"
+                      value={controlledActionValidationRequestId}
+                      onChange={(event) =>
+                        setControlledActionValidationRequestId(event.target.value)
+                      }
+                    />
+                  </label>
+                  <label>
+                    Idempotency key preview
+                    <input
+                      type="text"
+                      value={controlledActionValidationIdempotencyKey}
+                      onChange={(event) =>
+                        setControlledActionValidationIdempotencyKey(
+                          event.target.value
+                        )
+                      }
+                    />
+                  </label>
+                  <label>
+                    Expected review version preview
+                    <input
+                      type="number"
+                      min="1"
+                      value={controlledActionValidationExpectedReviewVersion}
+                      onChange={(event) =>
+                        setControlledActionValidationExpectedReviewVersion(
+                          event.target.value
+                        )
+                      }
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="appointment-review-controlled-action-validation-button"
+                    onClick={runControlledActionValidationDryRun}
+                    disabled={controlledActionValidationStatus === "loading"}
+                  >
+                    Run controlled action validation dry-run
+                  </button>
+                </div>
+
+                <p className="appointment-review-controlled-action-validation-state">
+                  {controlledActionValidationStatus === "loading"
+                    ? "Controlled action validation dry-run is running. No action executed."
+                    : null}
+                  {controlledActionValidationStatus === "success" &&
+                  controlledActionValidationResult?.accepted === true &&
+                  controlledActionValidationResult?.eligibleForExecutorBoundary ===
+                    true
+                    ? "This validation-only mock pipeline passed all configured safety contracts. No executor exists and no action was executed."
+                    : null}
+                  {controlledActionValidationStatus === "success" &&
+                  controlledActionValidationResult?.accepted === false
+                    ? "Controlled action validation returned a safe rejection. No state or action changed."
+                    : null}
+                  {controlledActionValidationStatus === "success" &&
+                  controlledActionValidationResult?.matchingReplay === true
+                    ? "Matching replay returned by the route. replayExistingResultOnly is shown below; no new command or action was created."
+                    : null}
+                  {controlledActionValidationStatus === "failure"
+                    ? controlledActionValidationError ||
+                      "Controlled action validation dry-run failed safely."
+                    : null}
+                  {controlledActionValidationStatus === "idle"
+                    ? "Idle: no controlled action validation pipeline result for this selected review."
+                    : null}
+                </p>
+
+                <dl className="appointment-review-controlled-action-validation-grid">
+                  <div>
+                    <dt>reviewId</dt>
+                    <dd>
+                      {controlledActionValidationResult?.reviewId ||
+                        selectedReview.id}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>accepted</dt>
+                    <dd>
+                      {controlledActionValidationResult
+                        ? String(controlledActionValidationResult.accepted)
+                        : "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>handlerCompleted</dt>
+                    <dd>
+                      {controlledActionValidationResult
+                        ? String(
+                            controlledActionValidationResult.handlerCompleted
+                          )
+                        : "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>failedStage</dt>
+                    <dd>
+                      {controlledActionValidationResult?.failedStage || "none"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>matchingReplay</dt>
+                    <dd>
+                      {String(
+                        controlledActionValidationResult?.matchingReplay === true
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>replayExistingResultOnly</dt>
+                    <dd>
+                      {String(
+                        controlledActionValidationResult
+                          ?.replayExistingResultOnly === true
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>eligibleForExecutorBoundary</dt>
+                    <dd>
+                      {controlledActionValidationResult
+                        ? String(
+                            controlledActionValidationResult
+                              .eligibleForExecutorBoundary
+                          )
+                        : "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>code</dt>
+                    <dd>
+                      {controlledActionValidationResult?.code || "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>reason</dt>
+                    <dd>{controlledActionValidationResult?.reason || "none"}</dd>
+                  </div>
+                  <div>
+                    <dt>mock</dt>
+                    <dd>{String(displayedControlledActionValidation.mock)}</dd>
+                  </div>
+                  <div>
+                    <dt>dryRun</dt>
+                    <dd>{String(displayedControlledActionValidation.dryRun)}</dd>
+                  </div>
+                  <div>
+                    <dt>validationOnly</dt>
+                    <dd>
+                      {String(displayedControlledActionValidation.validationOnly)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>controlledHandlingOnly</dt>
+                    <dd>
+                      {String(
+                        displayedControlledActionValidation.controlledHandlingOnly
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>executionEnabled</dt>
+                    <dd>
+                      {String(
+                        displayedControlledActionValidation.executionEnabled
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>executorAvailable</dt>
+                    <dd>
+                      {String(
+                        displayedControlledActionValidation.executorAvailable
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>executionAvailable</dt>
+                    <dd>
+                      {String(
+                        displayedControlledActionValidation.executionAvailable
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>executionRequested</dt>
+                    <dd>
+                      {String(
+                        displayedControlledActionValidation.executionRequested
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>actionPerformed</dt>
+                    <dd>
+                      {String(displayedControlledActionValidation.actionPerformed)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>commandDispatched</dt>
+                    <dd>
+                      {String(
+                        displayedControlledActionValidation.commandDispatched
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>commandPersisted</dt>
+                    <dd>
+                      {String(
+                        displayedControlledActionValidation.commandPersisted
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>bookingCreated</dt>
+                    <dd>
+                      {String(displayedControlledActionValidation.bookingCreated)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>calendarChecked</dt>
+                    <dd>
+                      {String(displayedControlledActionValidation.calendarChecked)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>appointmentCreated</dt>
+                    <dd>
+                      {String(
+                        displayedControlledActionValidation.appointmentCreated
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>calendarEventCreated</dt>
+                    <dd>
+                      {String(
+                        displayedControlledActionValidation.calendarEventCreated
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>databasePersisted</dt>
+                    <dd>
+                      {String(
+                        displayedControlledActionValidation.databasePersisted
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>persistence</dt>
+                    <dd>{displayedControlledActionValidation.persistence}</dd>
+                  </div>
+                </dl>
+
+                <div className="appointment-review-controlled-action-validation-stages">
+                  {controlledActionValidationStages.map((stage) => (
+                    <div key={stage.key}>
+                      <strong>{stage.label}</strong>
+                      <span>status: {stage.status}</span>
+                      <small>code: {stage.code}</small>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="appointment-review-controlled-action-validation-list">
+                  <strong>Pipeline display boundary</strong>
+                  <span>
+                    {CONTROLLED_ACTION_VALIDATION_INTENTS.join(", ")}
+                  </span>
+                  <small>
+                    The request body contains only actionIntent, requestId,
+                    idempotencyKey, and expectedReviewVersion. It never includes
+                    reviewId, currentState, actor, permissions,
+                    observedReviewVersion, priorIdempotencyObservation, or
+                    executionPolicyContext.
+                  </small>
+                </div>
+              </>
+            ) : (
+              <div className="appointment-review-controlled-action-validation-empty">
+                <strong>No selected appointment review</strong>
+                <span>
+                  Select a review to inspect controlled action validation
+                  pipeline dry-run details.
+                </span>
+              </div>
+            )}
+          </section>
+        ) : null}
+
+        {!loading && !loadError ? (
+          <section
             className="appointment-review-preconditions-preview"
             aria-labelledby="appointment-review-preconditions-preview-title"
           >
@@ -1451,6 +2054,50 @@ function isSafePreconditionsDryRunResponse(payload) {
     typeof payload.reviewId === "string" &&
     typeof payload.code === "string"
   );
+}
+
+function isSafeControlledActionValidationResponse(payload) {
+  return (
+    payload &&
+    payload.mock === true &&
+    payload.dryRun === true &&
+    payload.validationOnly === true &&
+    payload.controlledHandlingOnly === true &&
+    payload.executionEnabled === false &&
+    payload.executorAvailable === false &&
+    payload.executionAvailable === false &&
+    payload.executionRequested === false &&
+    payload.actionPerformed === false &&
+    payload.commandDispatched === false &&
+    payload.commandPersisted === false &&
+    payload.bookingCreated === false &&
+    payload.calendarChecked === false &&
+    payload.appointmentCreated === false &&
+    payload.calendarEventCreated === false &&
+    payload.databasePersisted === false &&
+    payload.persistence === "not_persisted" &&
+    typeof payload.accepted === "boolean" &&
+    typeof payload.handlerCompleted === "boolean" &&
+    typeof payload.matchingReplay === "boolean" &&
+    typeof payload.replayExistingResultOnly === "boolean" &&
+    typeof payload.eligibleForExecutorBoundary === "boolean" &&
+    typeof payload.reviewId === "string" &&
+    typeof payload.code === "string"
+  );
+}
+
+function getControlledActionValidationStages(result) {
+  return CONTROLLED_ACTION_VALIDATION_STAGE_LABELS.map(([key, label]) => {
+    const stage = result?.pipelineResult?.stages?.[key];
+
+    return {
+      key,
+      label,
+      status:
+        stage && typeof stage.status === "string" ? stage.status : "not_run",
+      code: stage && typeof stage.code === "string" ? stage.code : "not_run"
+    };
+  });
 }
 
 function isAbortError(error) {
