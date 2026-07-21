@@ -1,6 +1,9 @@
 const {
   validateAppointmentReviewActionPreconditions,
 } = require("../../../../../../src/secretary/appointmentReviewActionPreconditionsContract");
+const {
+  createAppointmentReviewRouteRuntimeAdapter,
+} = require("../../../../../../src/secretary/appointmentReviewRouteRuntimeAdapter");
 
 const UNSAFE_TRUE_FIELDS = Object.freeze([
   "executionRequested",
@@ -34,6 +37,20 @@ const SAFETY_FIELDS = Object.freeze({
 });
 
 async function POST(request, context = {}) {
+  return handleAppointmentReviewActionPreconditionsRouteRequest(
+    request,
+    context
+  );
+}
+
+async function handleAppointmentReviewActionPreconditionsRouteRequest(
+  request,
+  context = {},
+  options = {}
+) {
+  const createRouteRuntimeAdapter =
+    options.createRouteRuntimeAdapter ||
+    createAppointmentReviewRouteRuntimeAdapter;
   const params = await Promise.resolve(context.params || {});
   const reviewId = normalizeText(params.id);
 
@@ -80,11 +97,49 @@ async function POST(request, context = {}) {
     );
   }
 
-  const validation = validateAppointmentReviewActionPreconditions({
+  const payloadValidation = validateAppointmentReviewActionPreconditions({
     reviewId,
     actionIntent: body.actionIntent,
     currentState: body.currentState,
     actor: body.actor,
+    requestId: body.requestId,
+  });
+
+  if (!payloadValidation.accepted) {
+    return Response.json(
+      {
+        ...payloadValidation,
+        reviewId,
+        ...createSafetyFields(),
+      },
+      { status: 200 }
+    );
+  }
+
+  const dependenciesResult = await resolveRouteControlledActionDependencies({
+    createRouteRuntimeAdapter,
+    reviewId,
+    actionIntent: body.actionIntent,
+  });
+
+  if (!dependenciesResult.accepted) {
+    return Response.json(
+      createRouteValidationError(
+        "internal_error",
+        "Action preconditions runtime failed safely."
+      ),
+      { status: 500 }
+    );
+  }
+
+  const validation = validateAppointmentReviewActionPreconditions({
+    reviewId,
+    actionIntent: body.actionIntent,
+    currentState: dependenciesResult.reviewContext.currentState,
+    actor: {
+      actorId: dependenciesResult.actorContext.actorId,
+      role: dependenciesResult.actorContext.role,
+    },
     requestId: body.requestId,
   });
 
@@ -96,6 +151,109 @@ async function POST(request, context = {}) {
     },
     { status: 200 }
   );
+}
+
+async function resolveRouteControlledActionDependencies({
+  createRouteRuntimeAdapter,
+  reviewId,
+  actionIntent,
+}) {
+  try {
+    const routeRuntime = createRouteRuntimeAdapter({
+      resolveControlledActionState: resolveRouteControlledActionState,
+      initialReviews: [createRouteReviewSeed(reviewId)],
+    });
+
+    if (
+      !routeRuntime ||
+      typeof routeRuntime.getControlledActionDependencies !== "function"
+    ) {
+      return {
+        accepted: false,
+      };
+    }
+
+    const dependencies = routeRuntime.getControlledActionDependencies();
+
+    if (!hasControlledActionDependencyContract(dependencies)) {
+      return {
+        accepted: false,
+      };
+    }
+
+    const actorContext = await dependencies.resolveVerifiedActorContext({
+      actionIntent,
+    });
+    const reviewContext = await dependencies.resolveAppointmentReviewContext({
+      reviewId,
+    });
+
+    if (!hasActorContext(actorContext) || !hasReviewContext(reviewContext)) {
+      return {
+        accepted: false,
+      };
+    }
+
+    return {
+      accepted: true,
+      actorContext,
+      reviewContext,
+    };
+  } catch {
+    return {
+      accepted: false,
+    };
+  }
+}
+
+function hasControlledActionDependencyContract(dependencies) {
+  return Boolean(
+    dependencies &&
+      typeof dependencies === "object" &&
+      !Array.isArray(dependencies) &&
+      typeof dependencies.resolveVerifiedActorContext === "function" &&
+      typeof dependencies.resolveAppointmentReviewContext === "function"
+  );
+}
+
+function hasActorContext(actorContext) {
+  return Boolean(
+    actorContext &&
+      typeof actorContext === "object" &&
+      !Array.isArray(actorContext) &&
+      normalizeText(actorContext.actorId) &&
+      normalizeText(actorContext.role)
+  );
+}
+
+function hasReviewContext(reviewContext) {
+  return Boolean(
+    reviewContext &&
+      typeof reviewContext === "object" &&
+      !Array.isArray(reviewContext) &&
+      normalizeText(reviewContext.reviewId) &&
+      normalizeText(reviewContext.currentState)
+  );
+}
+
+function createRouteReviewSeed(reviewId) {
+  return {
+    id: reviewId,
+    status: "pending_secretary_review",
+    source: "mock",
+    selectedSlot: {
+      id: "route_preconditions_slot",
+      source: "mock",
+    },
+    requiresSecretaryConfirmation: true,
+    bookingCreated: false,
+    calendarChecked: false,
+    metadata: {},
+  };
+}
+
+function resolveRouteControlledActionState() {
+  return "validation_only_intent_checked";
 }
 
 async function rejectMethod() {
@@ -154,4 +312,5 @@ module.exports = {
   PUT: rejectMethod,
   PATCH: rejectMethod,
   DELETE: rejectMethod,
+  handleAppointmentReviewActionPreconditionsRouteRequest,
 };

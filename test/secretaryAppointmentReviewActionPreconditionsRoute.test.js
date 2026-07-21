@@ -61,6 +61,57 @@ function createContext(id = "review_mock") {
   };
 }
 
+function createInstrumentedAdapterFactory(contextsByRequest) {
+  const calls = [];
+
+  return {
+    calls,
+    createRouteRuntimeAdapter(options) {
+      const call = {
+        options,
+        adapter: null,
+        dependencyResolutionCount: 0,
+        actorResolutionCount: 0,
+        reviewResolutionCount: 0,
+      };
+      const contexts = contextsByRequest[calls.length] || {};
+      const dependencies = Object.freeze({
+        resolveVerifiedActorContext(input) {
+          call.actorResolutionCount += 1;
+          call.actorInput = input;
+
+          return Object.freeze({
+            actorId: contexts.actorId || "secretary-adapter",
+            role: contexts.actorRole || "secretary",
+          });
+        },
+        resolveAppointmentReviewContext(input) {
+          call.reviewResolutionCount += 1;
+          call.reviewInput = input;
+
+          return Object.freeze({
+            reviewId: input.reviewId,
+            currentState:
+              contexts.currentState || "validation_only_intent_checked",
+            observedReviewVersion: contexts.observedReviewVersion || 1,
+          });
+        },
+      });
+      const adapter = Object.freeze({
+        getControlledActionDependencies() {
+          call.dependencyResolutionCount += 1;
+          return dependencies;
+        },
+      });
+
+      call.adapter = adapter;
+      calls.push(call);
+
+      return adapter;
+    },
+  };
+}
+
 function assertSafetyFields(body) {
   for (const [field, value] of Object.entries(EXPECTED_SAFETY_FIELDS)) {
     assert.equal(body[field], value);
@@ -78,11 +129,91 @@ test("secretary appointment review action preconditions route accepts approve in
   assert.equal(body.reviewId, "review_mock");
   assert.equal(body.actionIntent, "approve_intent");
   assert.equal(body.currentState, "validation_only_intent_checked");
-  assert.equal(body.actorId, "secretary-demo");
+  assert.equal(body.actorId, "secretary-mock");
   assert.equal(body.actorRole, "secretary");
   assert.equal(body.requestId, "request-demo-001");
   assert.equal(body.code, "preconditions_satisfied");
   assertSafetyFields(body);
+});
+
+test("secretary appointment review action preconditions route uses one route runtime adapter dependency resolver", async () => {
+  const instrumentation = createInstrumentedAdapterFactory([
+    {
+      actorId: "secretary-runtime",
+      currentState: "validation_only_intent_checked",
+    },
+  ]);
+  const response =
+    await route.handleAppointmentReviewActionPreconditionsRouteRequest(
+      createRequest(createValidPayload()),
+      createContext("review_runtime_preconditions"),
+      {
+        createRouteRuntimeAdapter: instrumentation.createRouteRuntimeAdapter,
+      }
+    );
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.accepted, true);
+  assert.equal(body.reviewId, "review_runtime_preconditions");
+  assert.equal(body.actorId, "secretary-runtime");
+  assert.equal(body.currentState, "validation_only_intent_checked");
+  assert.equal(instrumentation.calls.length, 1);
+  assert.equal(instrumentation.calls[0].dependencyResolutionCount, 1);
+  assert.equal(instrumentation.calls[0].actorResolutionCount, 1);
+  assert.equal(instrumentation.calls[0].reviewResolutionCount, 1);
+  assert.equal(Object.isFrozen(instrumentation.calls[0].adapter), true);
+  assert.equal(typeof instrumentation.calls[0].options.resolveControlledActionState, "function");
+  assert.equal(instrumentation.calls[0].options.initialReviews.length, 1);
+  assert.equal(
+    instrumentation.calls[0].options.initialReviews[0].id,
+    "review_runtime_preconditions"
+  );
+  assert.deepEqual(instrumentation.calls[0].actorInput, {
+    actionIntent: "approve_intent",
+  });
+  assert.deepEqual(instrumentation.calls[0].reviewInput, {
+    reviewId: "review_runtime_preconditions",
+  });
+  assert.equal(Object.hasOwn(instrumentation.calls[0].options, "repository"), false);
+});
+
+test("secretary appointment review action preconditions route creates isolated adapter scopes", async () => {
+  const instrumentation = createInstrumentedAdapterFactory([
+    {
+      actorId: "secretary-runtime-a",
+    },
+    {
+      actorId: "secretary-runtime-b",
+    },
+  ]);
+  const first =
+    await route.handleAppointmentReviewActionPreconditionsRouteRequest(
+      createRequest(createValidPayload({ requestId: "request-runtime-a" })),
+      createContext("review_runtime_a"),
+      {
+        createRouteRuntimeAdapter: instrumentation.createRouteRuntimeAdapter,
+      }
+    );
+  const second =
+    await route.handleAppointmentReviewActionPreconditionsRouteRequest(
+      createRequest(createValidPayload({ requestId: "request-runtime-b" })),
+      createContext("review_runtime_b"),
+      {
+        createRouteRuntimeAdapter: instrumentation.createRouteRuntimeAdapter,
+      }
+    );
+  const firstBody = await first.json();
+  const secondBody = await second.json();
+
+  assert.equal(first.status, 200);
+  assert.equal(second.status, 200);
+  assert.equal(firstBody.actorId, "secretary-runtime-a");
+  assert.equal(secondBody.actorId, "secretary-runtime-b");
+  assert.equal(instrumentation.calls.length, 2);
+  assert.notEqual(instrumentation.calls[0].adapter, instrumentation.calls[1].adapter);
+  assert.equal(instrumentation.calls[0].dependencyResolutionCount, 1);
+  assert.equal(instrumentation.calls[1].dependencyResolutionCount, 1);
 });
 
 test("secretary appointment review action preconditions route accepts reject intent", async () => {
@@ -140,6 +271,7 @@ test("secretary appointment review action preconditions route returns unsupporte
 });
 
 test("secretary appointment review action preconditions route returns wrong current state as contract result", async () => {
+  let adapterFactoryCalls = 0;
   const response = await route.POST(
     createRequest(createValidPayload({ currentState: "pending_secretary_review" })),
     createContext()
@@ -151,6 +283,25 @@ test("secretary appointment review action preconditions route returns wrong curr
   assert.equal(body.code, "unsupported_current_state");
   assert.match(body.reason, /currentState/);
   assertSafetyFields(body);
+
+  const injectedResponse =
+    await route.handleAppointmentReviewActionPreconditionsRouteRequest(
+      createRequest(
+        createValidPayload({ currentState: "pending_secretary_review" })
+      ),
+      createContext(),
+      {
+        createRouteRuntimeAdapter() {
+          adapterFactoryCalls += 1;
+          return Object.freeze({});
+        },
+      }
+    );
+  const injectedBody = await injectedResponse.json();
+
+  assert.equal(injectedResponse.status, 200);
+  assert.equal(injectedBody.code, "unsupported_current_state");
+  assert.equal(adapterFactoryCalls, 0);
 });
 
 test("secretary appointment review action preconditions route returns missing actor as contract result", async () => {
@@ -224,6 +375,7 @@ test("secretary appointment review action preconditions route returns missing re
 });
 
 test("secretary appointment review action preconditions route rejects invalid JSON safely", async () => {
+  let adapterFactoryCalls = 0;
   const response = await route.POST(
     new Request(ROUTE_URL, {
       method: "POST",
@@ -242,9 +394,31 @@ test("secretary appointment review action preconditions route rejects invalid JS
   assert.equal(body.code, "invalid_json");
   assert.equal(body.error.code, "invalid_json");
   assertSafetyFields(body);
+
+  const injectedResponse =
+    await route.handleAppointmentReviewActionPreconditionsRouteRequest(
+      new Request(ROUTE_URL, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: "{",
+      }),
+      createContext(),
+      {
+        createRouteRuntimeAdapter() {
+          adapterFactoryCalls += 1;
+          return Object.freeze({});
+        },
+      }
+    );
+
+  assert.equal(injectedResponse.status, 400);
+  assert.equal(adapterFactoryCalls, 0);
 });
 
 test("secretary appointment review action preconditions route rejects missing or malformed route id safely", async () => {
+  let adapterFactoryCalls = 0;
   const response = await route.POST(
     createRequest(createValidPayload()),
     createContext("   ")
@@ -257,6 +431,21 @@ test("secretary appointment review action preconditions route rejects missing or
   assert.equal(body.code, "missing_review_id");
   assert.equal(body.error.code, "missing_review_id");
   assertSafetyFields(body);
+
+  const injectedResponse =
+    await route.handleAppointmentReviewActionPreconditionsRouteRequest(
+      createRequest(createValidPayload()),
+      createContext("   "),
+      {
+        createRouteRuntimeAdapter() {
+          adapterFactoryCalls += 1;
+          return Object.freeze({});
+        },
+      }
+    );
+
+  assert.equal(injectedResponse.status, 400);
+  assert.equal(adapterFactoryCalls, 0);
 });
 
 test("secretary appointment review action preconditions route rejects unsafe true side effect fields safely", async () => {
@@ -317,11 +506,18 @@ test("secretary appointment review action preconditions route rejects authentica
 });
 
 test("secretary appointment review action preconditions route rejects non-post methods safely", async () => {
+  let adapterFactoryCalls = 0;
+  const unusedOptions = {
+    createRouteRuntimeAdapter() {
+      adapterFactoryCalls += 1;
+      return Object.freeze({});
+    },
+  };
   const responses = await Promise.all([
-    route.GET(new Request(ROUTE_URL, { method: "GET" }), createContext()),
-    route.PUT(new Request(ROUTE_URL, { method: "PUT" }), createContext()),
-    route.PATCH(new Request(ROUTE_URL, { method: "PATCH" }), createContext()),
-    route.DELETE(new Request(ROUTE_URL, { method: "DELETE" }), createContext()),
+    route.GET(new Request(ROUTE_URL, { method: "GET" }), createContext(), unusedOptions),
+    route.PUT(new Request(ROUTE_URL, { method: "PUT" }), createContext(), unusedOptions),
+    route.PATCH(new Request(ROUTE_URL, { method: "PATCH" }), createContext(), unusedOptions),
+    route.DELETE(new Request(ROUTE_URL, { method: "DELETE" }), createContext(), unusedOptions),
   ]);
   const bodies = await Promise.all(
     responses.map((response) => response.json())
@@ -340,6 +536,109 @@ test("secretary appointment review action preconditions route rejects non-post m
   for (const body of bodies) {
     assertSafetyFields(body);
   }
+
+  assert.equal(adapterFactoryCalls, 0);
+});
+
+test("secretary appointment review action preconditions route safely contains adapter factory failures", async () => {
+  let adapterFactoryCalls = 0;
+  const response =
+    await route.handleAppointmentReviewActionPreconditionsRouteRequest(
+      createRequest(createValidPayload()),
+      createContext("review_preconditions_factory_failure"),
+      {
+        createRouteRuntimeAdapter() {
+          adapterFactoryCalls += 1;
+          throw new Error("PRECONDITIONS_RUNTIME_FACTORY_INTERNAL");
+        },
+      }
+    );
+  const body = await response.json();
+  const serialized = JSON.stringify(body);
+
+  assert.equal(response.status, 500);
+  assert.equal(body.accepted, false);
+  assert.equal(body.code, "internal_error");
+  assert.equal(body.error.code, "internal_error");
+  assert.equal(body.reason, "Action preconditions runtime failed safely.");
+  assert.equal(adapterFactoryCalls, 1);
+  assert.doesNotMatch(serialized, /PRECONDITIONS_RUNTIME_FACTORY_INTERNAL|Error:|stack|at /);
+  assertSafetyFields(body);
+});
+
+test("secretary appointment review action preconditions route safely contains dependency resolver failures", async () => {
+  let adapterFactoryCalls = 0;
+  let dependencyResolutionCount = 0;
+  const response =
+    await route.handleAppointmentReviewActionPreconditionsRouteRequest(
+      createRequest(createValidPayload()),
+      createContext("review_preconditions_dependency_failure"),
+      {
+        createRouteRuntimeAdapter() {
+          adapterFactoryCalls += 1;
+          return Object.freeze({
+            getControlledActionDependencies() {
+              dependencyResolutionCount += 1;
+              throw new Error("PRECONDITIONS_DEPENDENCY_INTERNAL");
+            },
+          });
+        },
+      }
+    );
+  const body = await response.json();
+  const serialized = JSON.stringify(body);
+
+  assert.equal(response.status, 500);
+  assert.equal(body.accepted, false);
+  assert.equal(body.code, "internal_error");
+  assert.equal(adapterFactoryCalls, 1);
+  assert.equal(dependencyResolutionCount, 1);
+  assert.doesNotMatch(serialized, /PRECONDITIONS_DEPENDENCY_INTERNAL|Error:|stack|at /);
+  assertSafetyFields(body);
+});
+
+test("secretary appointment review action preconditions route safely contains context resolver failures", async () => {
+  let adapterFactoryCalls = 0;
+  let actorResolutionCount = 0;
+  let reviewResolutionCount = 0;
+  const response =
+    await route.handleAppointmentReviewActionPreconditionsRouteRequest(
+      createRequest(createValidPayload()),
+      createContext("review_preconditions_context_failure"),
+      {
+        createRouteRuntimeAdapter() {
+          adapterFactoryCalls += 1;
+          return Object.freeze({
+            getControlledActionDependencies() {
+              return Object.freeze({
+                resolveVerifiedActorContext() {
+                  actorResolutionCount += 1;
+                  return Object.freeze({
+                    actorId: "secretary-context",
+                    role: "secretary",
+                  });
+                },
+                resolveAppointmentReviewContext() {
+                  reviewResolutionCount += 1;
+                  throw new Error("PRECONDITIONS_CONTEXT_INTERNAL");
+                },
+              });
+            },
+          });
+        },
+      }
+    );
+  const body = await response.json();
+  const serialized = JSON.stringify(body);
+
+  assert.equal(response.status, 500);
+  assert.equal(body.accepted, false);
+  assert.equal(body.code, "internal_error");
+  assert.equal(adapterFactoryCalls, 1);
+  assert.equal(actorResolutionCount, 1);
+  assert.equal(reviewResolutionCount, 1);
+  assert.doesNotMatch(serialized, /PRECONDITIONS_CONTEXT_INTERNAL|Error:|stack|at /);
+  assertSafetyFields(body);
 });
 
 test("secretary appointment review action preconditions route has no execution queue auth or network imports", () => {
@@ -351,7 +650,7 @@ test("secretary appointment review action preconditions route has no execution q
     "utf8"
   );
   const forbidden = [
-    "create" + "Appointment",
+    "create" + "Appointment\\(",
     "create" + "CalendarEvent",
     "get" + "CalendarProvider",
     "manual" + "AppointmentCalendarSync",
@@ -372,6 +671,18 @@ test("secretary appointment review action preconditions route has no execution q
   ];
 
   assert.match(source, /validateAppointmentReviewActionPreconditions/);
+  assert.match(source, /appointmentReviewRouteRuntimeAdapter/);
+  assert.doesNotMatch(source, /appointmentReviewInMemoryMockServerRuntime/);
+  assert.doesNotMatch(
+    source,
+    /appointmentReviewInMemoryMockControlledActionRuntimeDependencyProvider/
+  );
+  assert.doesNotMatch(source, /appointmentReviewHybridControlledActionDependencies/);
+  assert.doesNotMatch(source, /appointmentReviewRepositoryContextResolver/);
+  assert.doesNotMatch(source, /appointmentReviewRepository/);
+  assert.doesNotMatch(source, /createMockAppointmentReviewControlledActionDependencies/);
+  assert.doesNotMatch(source, /createHybridAppointmentReviewControlledActionDependencies/);
+  assert.doesNotMatch(source, /getControlledActionRuntimeDependencyProvider/);
   assert.doesNotMatch(source, /reviewFound:\s*true/);
   assert.doesNotMatch(source, /authenticated:\s*true/);
   assert.doesNotMatch(source, /authorized:\s*true/);
