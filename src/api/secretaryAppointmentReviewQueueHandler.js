@@ -21,6 +21,7 @@ function handleSecretaryAppointmentReviewQueueRequest(input = {}, options = {}) 
   const appointmentReviews = Array.isArray(options.appointmentReviews)
     ? options.appointmentReviews
     : null;
+  const hasAppointmentReview = Object.hasOwn(options, "appointmentReview");
   const requireReviewId = input.requireReviewId === true;
   const reviewId = normalizeReviewId(input.id || input.reviewId);
 
@@ -33,6 +34,18 @@ function handleSecretaryAppointmentReviewQueueRequest(input = {}, options = {}) 
   }
 
   if (!queue) {
+    if (hasAppointmentReview && reviewId) {
+      return options.appointmentReview
+        ? createSuccessResponse(
+            buildAppointmentReviewDetailResponse(options.appointmentReview)
+          )
+        : createErrorResponse(
+            404,
+            "review_not_found",
+            "Appointment review item was not found."
+          );
+    }
+
     if (appointmentReviews) {
       return createSuccessResponse(
         buildAppointmentReviewListResponse(reviewId ? [] : appointmentReviews)
@@ -121,6 +134,14 @@ function createSecretaryAppointmentReviewQueueInternalErrorResponse() {
   );
 }
 
+function createSecretaryAppointmentReviewDetailInternalErrorResponse() {
+  return createErrorResponse(
+    500,
+    "internal_error",
+    "Secretary appointment review detail runtime failed safely."
+  );
+}
+
 function normalizeMethod(value) {
   return String(value || "GET").trim().toUpperCase();
 }
@@ -130,6 +151,7 @@ function normalizeReviewId(value) {
 }
 
 module.exports = {
+  createSecretaryAppointmentReviewDetailInternalErrorResponse,
   createSecretaryAppointmentReviewQueueInternalErrorResponse,
   handleSecretaryAppointmentReviewQueueRequest,
 };

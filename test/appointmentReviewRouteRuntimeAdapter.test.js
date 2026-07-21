@@ -155,6 +155,7 @@ test("route runtime adapter exposes a narrow frozen route-facing contract", () =
     "adapterSource",
     "getRuntimeDescriptor",
     "listAppointmentReviews",
+    "getAppointmentReviewById",
     "getAppointmentReviewQueue",
     "getControlledActionDependencies",
   ]);
@@ -210,13 +211,19 @@ test("route runtime adapter creates one Sprint 13F runtime and delegates narrowl
     }),
   ]);
   let listCalls = 0;
+  let lookupCalls = 0;
+  const lookedUpReviews = [];
   const queue = Object.freeze({
     addAppointmentReview() {},
     listAppointmentReviews() {
       listCalls += 1;
       return queuedReviews;
     },
-    getAppointmentReviewById() {},
+    getAppointmentReviewById(reviewId) {
+      lookupCalls += 1;
+      lookedUpReviews.push(reviewId);
+      return queuedReviews.find((review) => review.id === reviewId) || null;
+    },
   });
   const dependencies = Object.freeze({
     resolveVerifiedActorContext() {},
@@ -281,6 +288,16 @@ test("route runtime adapter creates one Sprint 13F runtime and delegates narrowl
     assert.equal(runtimeFactoryCalls, 1);
     assert.equal(adapter.listAppointmentReviews(), queuedReviews);
     assert.equal(listCalls, 1);
+    assert.equal(
+      adapter.getAppointmentReviewById("review_fake_runtime"),
+      queuedReviews[0]
+    );
+    assert.equal(adapter.getAppointmentReviewById("review_missing"), null);
+    assert.equal(lookupCalls, 2);
+    assert.deepEqual(lookedUpReviews, [
+      "review_fake_runtime",
+      "review_missing",
+    ]);
     assert.equal(adapter.getAppointmentReviewQueue(), queue);
     assert.equal(adapter.getAppointmentReviewQueue(), queue);
     assert.equal(adapter.getControlledActionDependencies(), dependencies);
@@ -316,6 +333,28 @@ test("route runtime adapter list capability delegates through its request-scoped
   assert.equal(reviews[0].bookingCreated, false);
   assert.equal(reviews[0].calendarChecked, false);
   assert.equal(reviews[0].requiresSecretaryConfirmation, true);
+  assert.equal(Object.hasOwn(adapter, "repository"), false);
+  assert.equal(Object.hasOwn(adapter, "queue"), false);
+  assert.equal(Object.hasOwn(adapter, "runtime"), false);
+  assert.equal(typeof adapter.updateAppointmentReviewStatus, "undefined");
+  assert.equal(typeof adapter.addAppointmentReview, "undefined");
+});
+
+test("route runtime adapter detail capability delegates through its request-scoped queue", () => {
+  const adapter = createAdapter();
+  const queue = adapter.getAppointmentReviewQueue();
+  const addResult = queue.addAppointmentReview(createSafeAppointmentSelectionReview(), {
+    conversationKey: "route_runtime_detail",
+  });
+  const review = adapter.getAppointmentReviewById(addResult.review.id);
+  const missingReview = adapter.getAppointmentReviewById("review_missing");
+
+  assert.equal(addResult.status, "ok");
+  assert.equal(review.id, addResult.review.id);
+  assert.equal(review.bookingCreated, false);
+  assert.equal(review.calendarChecked, false);
+  assert.equal(review.requiresSecretaryConfirmation, true);
+  assert.equal(missingReview, null);
   assert.equal(Object.hasOwn(adapter, "repository"), false);
   assert.equal(Object.hasOwn(adapter, "queue"), false);
   assert.equal(Object.hasOwn(adapter, "runtime"), false);

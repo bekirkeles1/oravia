@@ -36,6 +36,11 @@ function createAppointmentReviewRouteRuntimeAdapter(options) {
     listAppointmentReviews() {
       return runtime.getAppointmentReviewQueue().listAppointmentReviews();
     },
+    getAppointmentReviewById(reviewId) {
+      return runtime
+        .getAppointmentReviewQueue()
+        .getAppointmentReviewById(reviewId);
+    },
     getAppointmentReviewQueue() {
       return runtime.getAppointmentReviewQueue();
     },

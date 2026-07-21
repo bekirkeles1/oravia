@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const {
+  createSecretaryAppointmentReviewDetailInternalErrorResponse,
   createSecretaryAppointmentReviewQueueInternalErrorResponse,
   handleSecretaryAppointmentReviewQueueRequest,
 } = require("../src/api/secretaryAppointmentReviewQueueHandler");
@@ -187,8 +188,77 @@ test("secretary appointment review queue handler lists injected read-only review
   assert.equal(response.body.safety.usesDatabase, false);
 });
 
+test("secretary appointment review queue handler returns injected read-only detail review", () => {
+  const response = handleSecretaryAppointmentReviewQueueRequest(
+    {
+      method: "GET",
+      id: "review_handler_detail",
+      requireReviewId: true,
+    },
+    {
+      appointmentReview: {
+        id: "review_handler_detail",
+        status: "pending_secretary_review",
+        source: "mock",
+        selectedSlot: {
+          id: "slot_handler_detail",
+        },
+        requiresSecretaryConfirmation: true,
+        bookingCreated: false,
+        calendarChecked: false,
+      },
+    }
+  );
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.status, "ok");
+  assert.equal(response.body.review.id, "review_handler_detail");
+  assert.equal(response.body.review.bookingCreated, false);
+  assert.equal(response.body.review.calendarChecked, false);
+  assert.equal(response.body.safety.readOnly, true);
+  assert.equal(response.body.safety.usesDatabase, false);
+});
+
+test("secretary appointment review queue handler returns safe not found for missing injected detail review", () => {
+  const response = handleSecretaryAppointmentReviewQueueRequest(
+    {
+      method: "GET",
+      id: "review_handler_missing_detail",
+      requireReviewId: true,
+    },
+    {
+      appointmentReview: null,
+    }
+  );
+
+  assert.equal(response.statusCode, 404);
+  assert.equal(response.body.status, "error");
+  assert.equal(response.body.error.code, "review_not_found");
+  assert.equal(response.body.safety.readOnly, true);
+  assert.equal(response.body.safety.bookingCreated, false);
+  assert.equal(response.body.safety.calendarChecked, false);
+});
+
 test("secretary appointment review queue handler exposes stable safe internal error response", () => {
   const response = createSecretaryAppointmentReviewQueueInternalErrorResponse();
+
+  assert.equal(response.statusCode, 500);
+  assert.equal(response.body.status, "error");
+  assert.equal(response.body.source, "mock");
+  assert.equal(response.body.mode, "read_only");
+  assert.equal(response.body.persistence, "not_persisted");
+  assert.equal(response.body.persisted, false);
+  assert.equal(response.body.databasePersisted, false);
+  assert.equal(response.body.actionPerformed, false);
+  assert.equal(response.body.appointmentCreated, false);
+  assert.equal(response.body.safety.readOnly, true);
+  assert.equal(response.body.safety.bookingCreated, false);
+  assert.equal(response.body.safety.calendarChecked, false);
+  assert.equal(response.body.error.code, "internal_error");
+});
+
+test("secretary appointment review queue handler exposes stable safe detail internal error response", () => {
+  const response = createSecretaryAppointmentReviewDetailInternalErrorResponse();
 
   assert.equal(response.statusCode, 500);
   assert.equal(response.body.status, "error");

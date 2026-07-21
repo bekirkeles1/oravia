@@ -14,8 +14,29 @@ const detailRoute = require("../app/api/secretary/appointment-reviews/[id]/route
 
 const COLLECTION_ROUTE_SOURCE_PATH =
   "app/api/secretary/appointment-reviews/route.js";
+const DETAIL_ROUTE_SOURCE_PATH =
+  "app/api/secretary/appointment-reviews/[id]/route.js";
 
 const FORBIDDEN_COLLECTION_ROUTE_INFRASTRUCTURE = Object.freeze([
+  "appointmentReviewInMemoryMockServerRuntime",
+  "appointmentReviewInMemoryMockControlledActionRuntimeDependencyProvider",
+  "appointmentReviewHybridControlledActionDependencies",
+  "appointmentReviewRepositoryContextResolver",
+  "appointmentReviewRepository",
+  "createInMemoryMockAppointmentReviewServerRuntime",
+  "createInMemoryAppointmentReviewRepository",
+  "createInMemoryAppointmentReviewQueue",
+  "getAppointmentReviewQueue",
+  "getControlledActionRuntimeDependencyProvider",
+  "receiptStore",
+  "auditStore",
+  "idempotencyStore",
+  "commandBus",
+  "eventBus",
+  "jobQueue",
+]);
+
+const FORBIDDEN_DETAIL_ROUTE_INFRASTRUCTURE = Object.freeze([
   "appointmentReviewInMemoryMockServerRuntime",
   "appointmentReviewInMemoryMockControlledActionRuntimeDependencyProvider",
   "appointmentReviewHybridControlledActionDependencies",
@@ -119,9 +140,57 @@ function createInstrumentedAdapterFactory(reviewBatches) {
   };
 }
 
+function createInstrumentedDetailAdapterFactory(reviewByRequest) {
+  const calls = [];
+
+  return {
+    calls,
+    createRouteRuntimeAdapter(options) {
+      const call = {
+        options,
+        adapter: null,
+        lookupCallCount: 0,
+        lookupIds: [],
+      };
+      const review = reviewByRequest[calls.length] || null;
+      const adapter = Object.freeze({
+        getAppointmentReviewById(reviewId) {
+          call.lookupCallCount += 1;
+          call.lookupIds.push(reviewId);
+          return review;
+        },
+      });
+
+      call.adapter = adapter;
+      calls.push(call);
+
+      return adapter;
+    },
+  };
+}
+
 async function getCollectionWithAdapter(adapterFactory) {
   const response = await handleAppointmentReviewQueueCollectionRouteRequest(
     new Request("http://localhost/api/secretary/appointment-reviews"),
+    {
+      createRouteRuntimeAdapter: adapterFactory,
+    }
+  );
+
+  return {
+    response,
+    body: await response.json(),
+  };
+}
+
+async function getDetailWithAdapter(reviewId, adapterFactory) {
+  const response = await detailRoute.handleAppointmentReviewDetailRouteRequest(
+    new Request(`http://localhost/api/secretary/appointment-reviews/${reviewId}`),
+    {
+      params: {
+        id: reviewId,
+      },
+    },
     {
       createRouteRuntimeAdapter: adapterFactory,
     }
@@ -303,7 +372,93 @@ test("secretary appointment review detail route returns safe not found without p
   assert.equal(body.error.code, "review_not_found");
 });
 
+test("secretary appointment review detail route uses one route runtime adapter lookup capability", async () => {
+  const review = createSafeReview("review_detail_adapter_lookup");
+  const instrumentation = createInstrumentedDetailAdapterFactory([review]);
+  const { response, body } = await getDetailWithAdapter(
+    "  review_detail_adapter_lookup  ",
+    instrumentation.createRouteRuntimeAdapter
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "ok");
+  assert.equal(body.review.id, "review_detail_adapter_lookup");
+  assert.equal(body.review.bookingCreated, false);
+  assert.equal(body.review.calendarChecked, false);
+  assert.equal(body.review.requiresSecretaryConfirmation, true);
+  assert.equal(Object.hasOwn(body.review, "version"), false);
+  assert.equal(Object.hasOwn(body, "snapshot"), false);
+  assertReadOnlyQueueSafety(body);
+  assert.equal(instrumentation.calls.length, 1);
+  assert.equal(instrumentation.calls[0].lookupCallCount, 1);
+  assert.deepEqual(instrumentation.calls[0].lookupIds, [
+    "review_detail_adapter_lookup",
+  ]);
+  assert.equal(typeof instrumentation.calls[0].options.resolveControlledActionState, "function");
+  assert.equal(Object.hasOwn(instrumentation.calls[0].options, "repository"), false);
+  assert.equal(Object.hasOwn(instrumentation.calls[0].adapter, "repository"), false);
+  assert.equal(Object.hasOwn(instrumentation.calls[0].adapter, "queue"), false);
+  assert.equal(typeof instrumentation.calls[0].adapter.addAppointmentReview, "undefined");
+});
+
+test("secretary appointment review detail route creates exactly one adapter scope per request", async () => {
+  const instrumentation = createInstrumentedDetailAdapterFactory([
+    createSafeReview("review_detail_single_scope"),
+  ]);
+  const { response, body } = await getDetailWithAdapter(
+    "review_detail_single_scope",
+    instrumentation.createRouteRuntimeAdapter
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(body.review.id, "review_detail_single_scope");
+  assert.equal(instrumentation.calls.length, 1);
+  assert.equal(instrumentation.calls[0].lookupCallCount, 1);
+  assert.equal(Object.isFrozen(instrumentation.calls[0].adapter), true);
+});
+
+test("secretary appointment review detail route keeps separate requests isolated", async () => {
+  const instrumentation = createInstrumentedDetailAdapterFactory([
+    createSafeReview("review_detail_isolated_a"),
+    createSafeReview("review_detail_isolated_b"),
+  ]);
+  const first = await getDetailWithAdapter(
+    "review_detail_isolated_a",
+    instrumentation.createRouteRuntimeAdapter
+  );
+  const second = await getDetailWithAdapter(
+    "review_detail_isolated_b",
+    instrumentation.createRouteRuntimeAdapter
+  );
+
+  assert.equal(first.response.status, 200);
+  assert.equal(second.response.status, 200);
+  assert.equal(first.body.review.id, "review_detail_isolated_a");
+  assert.equal(second.body.review.id, "review_detail_isolated_b");
+  assert.equal(instrumentation.calls.length, 2);
+  assert.notEqual(instrumentation.calls[0].adapter, instrumentation.calls[1].adapter);
+  assert.equal(instrumentation.calls[0].lookupCallCount, 1);
+  assert.equal(instrumentation.calls[1].lookupCallCount, 1);
+});
+
+test("secretary appointment review detail route keeps not found as a read outcome through adapter", async () => {
+  const instrumentation = createInstrumentedDetailAdapterFactory([null]);
+  const { response, body } = await getDetailWithAdapter(
+    "review_detail_missing",
+    instrumentation.createRouteRuntimeAdapter
+  );
+
+  assert.equal(response.status, 404);
+  assert.equal(body.status, "error");
+  assert.equal(body.error.code, "review_not_found");
+  assertReadOnlyQueueSafety(body);
+  assert.equal(instrumentation.calls.length, 1);
+  assert.equal(instrumentation.calls[0].lookupCallCount, 1);
+  assertNoInternalLeak(body);
+});
+
 test("secretary appointment review detail route rejects malformed empty id safely", async () => {
+  let adapterFactoryCalls = 0;
   const response = await detailRoute.GET(
     new Request("http://localhost/api/secretary/appointment-reviews/%20"),
     {
@@ -320,6 +475,31 @@ test("secretary appointment review detail route rejects malformed empty id safel
   assert.equal(body.mode, "read_only");
   assert.equal(body.safety.readOnly, true);
   assert.equal(body.error.code, "missing_review_id");
+
+  const injectedResponse =
+    await detailRoute.handleAppointmentReviewDetailRouteRequest(
+      new Request("http://localhost/api/secretary/appointment-reviews/%20"),
+      {
+        params: {
+          id: "   ",
+        },
+      },
+      {
+        createRouteRuntimeAdapter() {
+          adapterFactoryCalls += 1;
+          return Object.freeze({
+            getAppointmentReviewById() {
+              throw new Error("lookup must not run for invalid id");
+            },
+          });
+        },
+      }
+    );
+  const injectedBody = await injectedResponse.json();
+
+  assert.equal(injectedResponse.status, 400);
+  assert.equal(injectedBody.error.code, "missing_review_id");
+  assert.equal(adapterFactoryCalls, 0);
 });
 
 test("secretary appointment review queue route rejects non-read methods", async () => {
@@ -464,16 +644,28 @@ test("secretary appointment review collection route imports only the route adapt
 
 test("secretary appointment review detail route rejects non-read methods", async () => {
   const requestUrl = "http://localhost/api/secretary/appointment-reviews/review_demo";
+  let adapterFactoryCalls = 0;
+  const unusedOptions = {
+    createRouteRuntimeAdapter() {
+      adapterFactoryCalls += 1;
+
+      return Object.freeze({
+        getAppointmentReviewById() {
+          throw new Error("lookup must not run for unsupported methods");
+        },
+      });
+    },
+  };
   const context = {
     params: {
       id: "review_demo",
     },
   };
   const responses = await Promise.all([
-    detailRoute.POST(new Request(requestUrl, { method: "POST" }), context),
-    detailRoute.PUT(new Request(requestUrl, { method: "PUT" }), context),
-    detailRoute.PATCH(new Request(requestUrl, { method: "PATCH" }), context),
-    detailRoute.DELETE(new Request(requestUrl, { method: "DELETE" }), context),
+    detailRoute.POST(new Request(requestUrl, { method: "POST" }), context, unusedOptions),
+    detailRoute.PUT(new Request(requestUrl, { method: "PUT" }), context, unusedOptions),
+    detailRoute.PATCH(new Request(requestUrl, { method: "PATCH" }), context, unusedOptions),
+    detailRoute.DELETE(new Request(requestUrl, { method: "DELETE" }), context, unusedOptions),
   ]);
   const bodies = await Promise.all(
     responses.map((response) => response.json())
@@ -487,6 +679,127 @@ test("secretary appointment review detail route rejects non-read methods", async
   assert.ok(
     bodies.every((body) => body.error.code === "method_not_allowed")
   );
+  assert.equal(adapterFactoryCalls, 0);
+});
+
+test("secretary appointment review detail route safely contains adapter factory failures", async () => {
+  let adapterFactoryCalls = 0;
+  const response = await detailRoute.handleAppointmentReviewDetailRouteRequest(
+    new Request("http://localhost/api/secretary/appointment-reviews/review_detail_failure"),
+    {
+      params: {
+        id: "review_detail_failure",
+      },
+    },
+    {
+      createRouteRuntimeAdapter() {
+        adapterFactoryCalls += 1;
+        throw new Error("deterministic_raw_detail_factory_marker");
+      },
+    }
+  );
+  const body = await response.json();
+  const serialized = JSON.stringify(body);
+
+  assert.equal(response.status, 500);
+  assert.equal(body.status, "error");
+  assert.equal(body.error.code, "internal_error");
+  assert.equal(body.error.message, "Secretary appointment review detail runtime failed safely.");
+  assertReadOnlyQueueSafety(body);
+  assert.equal(adapterFactoryCalls, 1);
+  assert.doesNotMatch(serialized, /deterministic_raw_detail_factory_marker|Error:|stack|at /);
+  assertNoInternalLeak(body);
+});
+
+test("secretary appointment review detail route safely contains adapter lookup failures", async () => {
+  let adapterFactoryCalls = 0;
+  let lookupCalls = 0;
+  const response = await detailRoute.handleAppointmentReviewDetailRouteRequest(
+    new Request("http://localhost/api/secretary/appointment-reviews/review_detail_lookup_failure"),
+    {
+      params: {
+        id: "review_detail_lookup_failure",
+      },
+    },
+    {
+      createRouteRuntimeAdapter() {
+        adapterFactoryCalls += 1;
+
+        return Object.freeze({
+          getAppointmentReviewById() {
+            lookupCalls += 1;
+            throw new Error("deterministic_raw_detail_lookup_marker");
+          },
+        });
+      },
+    }
+  );
+  const body = await response.json();
+  const serialized = JSON.stringify(body);
+
+  assert.equal(response.status, 500);
+  assert.equal(body.status, "error");
+  assert.equal(body.error.code, "internal_error");
+  assertReadOnlyQueueSafety(body);
+  assert.equal(adapterFactoryCalls, 1);
+  assert.equal(lookupCalls, 1);
+  assert.doesNotMatch(serialized, /deterministic_raw_detail_lookup_marker|Error:|stack|at /);
+  assertNoInternalLeak(body);
+});
+
+test("secretary appointment review detail route responses do not leak runtime internals", async () => {
+  const instrumentation = createInstrumentedDetailAdapterFactory([
+    createSafeReview("review_detail_no_internal_leak"),
+  ]);
+  const success = await getDetailWithAdapter(
+    "review_detail_no_internal_leak",
+    instrumentation.createRouteRuntimeAdapter
+  );
+  const notFound = await getDetailWithAdapter(
+    "review_detail_not_found_no_internal_leak",
+    createInstrumentedDetailAdapterFactory([null]).createRouteRuntimeAdapter
+  );
+  const failureResponse =
+    await detailRoute.handleAppointmentReviewDetailRouteRequest(
+      new Request("http://localhost/api/secretary/appointment-reviews/review_detail_invalid_contract"),
+      {
+        params: {
+          id: "review_detail_invalid_contract",
+        },
+      },
+      {
+        createRouteRuntimeAdapter() {
+          return Object.freeze({});
+        },
+      }
+    );
+  const failureBody = await failureResponse.json();
+
+  assert.equal(success.response.status, 200);
+  assert.equal(notFound.response.status, 404);
+  assert.equal(failureResponse.status, 500);
+  assertNoInternalLeak(success.body);
+  assertNoInternalLeak(notFound.body);
+  assertNoInternalLeak(failureBody);
+});
+
+test("secretary appointment review detail route imports only the route adapter boundary", () => {
+  const source = fs.readFileSync(DETAIL_ROUTE_SOURCE_PATH, "utf8");
+
+  assert.match(source, /appointmentReviewRouteRuntimeAdapter/);
+
+  for (const forbidden of FORBIDDEN_DETAIL_ROUTE_INFRASTRUCTURE) {
+    assert.doesNotMatch(source, new RegExp(forbidden, "i"), forbidden);
+  }
+
+  assert.doesNotMatch(source, /createAppointment\(/);
+  assert.doesNotMatch(source, /createCalendarEvent\(/);
+  assert.doesNotMatch(source, /getCalendarProvider\(/);
+  assert.doesNotMatch(source, /manualAppointmentCalendarSync/);
+  assert.doesNotMatch(source, /googleapis|prisma|supabase|redis|fetch\(/i);
+  assert.doesNotMatch(source, /require\([^)]*executor|executor\(|new Executor/i);
+  assert.doesNotMatch(source, /require\([^)]*dispatcher|dispatcher\(|new Dispatcher/i);
+  assert.doesNotMatch(source, /AsyncLocalStorage|globalThis|new Map\(/);
 });
 
 test("secretary appointment review queue route has no appointment or calendar side effects", async () => {

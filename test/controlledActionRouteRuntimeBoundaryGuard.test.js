@@ -329,6 +329,7 @@ test("route runtime adapter keeps a narrow immutable public contract", () => {
   assert.deepEqual(Object.keys(adapter).sort(), [
     "adapterSource",
     "adapterType",
+    "getAppointmentReviewById",
     "getAppointmentReviewQueue",
     "getControlledActionDependencies",
     "getRuntimeDescriptor",
