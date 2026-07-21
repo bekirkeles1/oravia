@@ -25,10 +25,6 @@ test("appointment reviews workspace fetches the read-only mock route", () => {
     workspaceSource,
     /fetch\("\/api\/secretary\/appointment-reviews"\)/
   );
-  assert.doesNotMatch(
-    workspaceSource,
-    /fetch\(`\/api\/secretary\/appointment-reviews\/\$\{/
-  );
   assert.match(workspaceSource, /Pending Appointment Reviews/);
   assert.match(workspaceSource, /No pending appointment reviews/);
   assert.match(workspaceSource, /Read-only mock queue/);
@@ -157,6 +153,135 @@ test("appointment reviews workspace shows route-backed state transition dry-run 
     workspaceSource,
     /Preview\s+result does not update the selected review object/
   );
+});
+
+test("appointment reviews workspace shows end-to-end decision preview dry-run controls", () => {
+  const decisionRequestSource = workspaceSource.slice(
+    workspaceSource.indexOf(")}/decision-preview`"),
+    workspaceSource.indexOf(
+      "const payload = await response.json();",
+      workspaceSource.indexOf(")}/decision-preview`")
+    )
+  );
+
+  assert.match(workspaceSource, /DECISION_PREVIEW_ACTIONS/);
+  assert.match(workspaceSource, /INITIAL_DECISION_PREVIEW/);
+  assert.match(workspaceSource, /runDecisionPreview/);
+  assert.match(workspaceSource, /isSafeDecisionPreviewResponse/);
+  assert.match(workspaceSource, /Decision Preview Dry-run/);
+  assert.match(workspaceSource, /End-to-end dry-run · Trusted server context/);
+  assert.match(workspaceSource, /Approve Preview \(dry-run\)/);
+  assert.match(workspaceSource, /Reject Preview \(dry-run\)/);
+  assert.match(workspaceSource, /No approval or rejection is executed/);
+  assert.match(workspaceSource, /Review unchanged/);
+  assert.match(workspaceSource, /Not\s+persisted/);
+  assert.match(workspaceSource, /action_intent/);
+  assert.match(workspaceSource, /preconditions/);
+  assert.match(workspaceSource, /state_transition/);
+  assert.match(workspaceSource, /controlled_action_validation/);
+  assert.match(workspaceSource, /validation_decision_receipt/);
+  assert.match(workspaceSource, /The client sends only action/);
+  assert.match(
+    workspaceSource,
+    /Server-side trusted context\s+provides current state and observed version/
+  );
+  assert.match(
+    workspaceSource,
+    /\/api\/secretary\/appointment-reviews\/\$\{encodeURIComponent/
+  );
+  assert.match(workspaceSource, /\/decision-preview`/);
+  assert.match(decisionRequestSource, /method: "POST"/);
+  assert.match(decisionRequestSource, /body: JSON\.stringify\(/);
+  assert.match(decisionRequestSource, /action: actionForRequest/);
+  assert.doesNotMatch(decisionRequestSource, /reviewId:/);
+  assert.doesNotMatch(decisionRequestSource, /currentState:/);
+  assert.doesNotMatch(decisionRequestSource, /observedReviewVersion/);
+  assert.doesNotMatch(decisionRequestSource, /expectedReviewVersion/);
+  assert.doesNotMatch(decisionRequestSource, /actor:/);
+  assert.doesNotMatch(decisionRequestSource, /idempotencyKey/);
+  assert.match(workspaceSource, /requested action/);
+  assert.match(workspaceSource, /trustedCurrentState/);
+  assert.match(workspaceSource, /projectedNextState/);
+  assert.match(workspaceSource, /observedReviewVersion/);
+  assert.match(workspaceSource, /receiptOutcome/);
+  assert.match(workspaceSource, /reviewMutated/);
+  assert.match(workspaceSource, /reviewStateChanged/);
+  assert.match(workspaceSource, /repositoryVersionChanged/);
+});
+
+test("appointment reviews workspace hardens decision preview against stale responses", () => {
+  assert.match(workspaceSource, /decisionPreviewRequestSequenceRef/);
+  assert.match(workspaceSource, /activeDecisionPreviewRequestRef/);
+  assert.match(workspaceSource, /activeDecisionPreviewAbortRef/);
+  assert.match(workspaceSource, /createDecisionPreviewRequest/);
+  assert.match(workspaceSource, /invalidateDecisionPreviewRequest/);
+  assert.match(workspaceSource, /isActiveDecisionPreviewRequest/);
+  assert.match(workspaceSource, /new AbortController\(\)/);
+  assert.match(workspaceSource, /activeDecisionPreviewAbortRef\.current\.abort\(\)/);
+  assert.match(workspaceSource, /signal: activeAbortController\?\.signal/);
+  assert.match(workspaceSource, /requestId/);
+  assert.match(workspaceSource, /reviewId: reviewIdForRequest/);
+  assert.match(workspaceSource, /action: actionForRequest/);
+  assert.match(workspaceSource, /activeRequest\.requestId === requestId/);
+  assert.match(workspaceSource, /activeRequest\.reviewId === reviewId/);
+  assert.match(workspaceSource, /activeRequest\.action === action/);
+  assert.match(workspaceSource, /selectedReviewIdRef\.current === reviewId/);
+  assert.match(
+    workspaceSource,
+    /if \(\s+!\s*isActiveDecisionPreviewRequest\(\{[\s\S]*requestId,[\s\S]*reviewId: reviewIdForRequest,[\s\S]*action: actionForRequest[\s\S]*\}\)\s+\) \{\s+return;\s+\}/
+  );
+  assert.match(workspaceSource, /if \(isAbortError\(error\)\) \{\s+return;\s+\}/);
+  assert.match(
+    workspaceSource,
+    /setDecisionPreviewResult\(payload\);\s+setDecisionPreviewStatus\("success"\);/
+  );
+  assert.match(
+    workspaceSource,
+    /setDecisionPreviewResult\(null\);\s+setDecisionPreviewStatus\("failure"\);/
+  );
+  assert.match(
+    workspaceSource,
+    /setDecisionPreviewStatus\("loading"\);\s+setDecisionPreviewResult\(null\);\s+setDecisionPreviewError\(""\);/
+  );
+  assert.match(
+    workspaceSource,
+    /if \(decisionPreviewStatus === "loading"\) \{\s+return;\s+\}/
+  );
+  assert.match(
+    workspaceSource,
+    /disabled=\{decisionPreviewStatus === "loading"\}/
+  );
+});
+
+test("appointment reviews workspace keeps decision preview validation-only and non-mutating", () => {
+  assert.match(workspaceSource, /decisionPreview:\s+true/);
+  assert.match(workspaceSource, /validationOnly:\s+true/);
+  assert.match(workspaceSource, /controlledHandlingOnly:\s+true/);
+  assert.match(workspaceSource, /executionEnabled:\s+false/);
+  assert.match(workspaceSource, /executorAvailable:\s+false/);
+  assert.match(workspaceSource, /executionAvailable:\s+false/);
+  assert.match(workspaceSource, /executionRequested:\s+false/);
+  assert.match(workspaceSource, /actionPerformed:\s+false/);
+  assert.match(workspaceSource, /commandDispatched:\s+false/);
+  assert.match(workspaceSource, /commandPersisted:\s+false/);
+  assert.match(workspaceSource, /receiptPersisted:\s+false/);
+  assert.match(workspaceSource, /bookingCreated:\s+false/);
+  assert.match(workspaceSource, /calendarChecked:\s+false/);
+  assert.match(workspaceSource, /appointmentCreated:\s+false/);
+  assert.match(workspaceSource, /calendarEventCreated:\s+false/);
+  assert.match(workspaceSource, /databasePersisted:\s+false/);
+  assert.match(workspaceSource, /persistence:\s+"not_persisted"/);
+  assert.match(workspaceSource, /reviewMutated:\s+false/);
+  assert.match(workspaceSource, /reviewStateChanged:\s+false/);
+  assert.match(workspaceSource, /repositoryVersionChanged:\s+false/);
+  assert.match(workspaceSource, /payload\.decisionPreview === true/);
+  assert.match(workspaceSource, /payload\.executionEnabled === false/);
+  assert.match(workspaceSource, /payload\.reviewMutated === false/);
+  assert.match(workspaceSource, /payload\.reviewStateChanged === false/);
+  assert.match(workspaceSource, /payload\.repositoryVersionChanged === false/);
+  assert.doesNotMatch(workspaceSource, /setReviews\([^)]*decisionPreview/i);
+  assert.doesNotMatch(workspaceSource, /selectedReview\.status\s*=/);
+  assert.doesNotMatch(workspaceSource, /setSelectedReviewId\(.*projectedNextState/);
 });
 
 test("appointment reviews workspace shows controlled action preconditions dry-run preview", () => {
@@ -956,6 +1081,21 @@ test("appointment reviews workspace invalidates state transition requests on rev
   );
 });
 
+test("appointment reviews workspace resets decision preview on review change and unmount", () => {
+  assert.match(workspaceSource, /invalidateDecisionPreviewRequest\(\);/);
+  assert.match(
+    workspaceSource,
+    /selectedReviewIdRef\.current = selectedReviewId;[\s\S]*invalidateDecisionPreviewRequest\(\);/
+  );
+  assert.match(workspaceSource, /setDecisionPreviewStatus\("idle"\)/);
+  assert.match(workspaceSource, /setDecisionPreviewResult\(null\)/);
+  assert.match(workspaceSource, /setDecisionPreviewError\(""\)/);
+  assert.match(
+    workspaceSource,
+    /isMountedRef\.current = false;[\s\S]*invalidateDecisionPreviewRequest\(\);/
+  );
+});
+
 test("appointment reviews workspace ignores stale state transition success and failure", () => {
   assert.match(
     workspaceSource,
@@ -1118,6 +1258,13 @@ test("appointment reviews workspace styles are present", () => {
   assert.match(cssSource, /\.appointment-review-state-transition-empty/);
   assert.match(cssSource, /\.appointment-review-state-transition-button/);
   assert.match(cssSource, /\.appointment-review-state-transition-state/);
+  assert.match(cssSource, /\.appointment-review-decision-preview/);
+  assert.match(cssSource, /\.appointment-review-decision-grid/);
+  assert.match(cssSource, /\.appointment-review-decision-controls/);
+  assert.match(cssSource, /\.appointment-review-decision-list/);
+  assert.match(cssSource, /\.appointment-review-decision-empty/);
+  assert.match(cssSource, /\.appointment-review-decision-button/);
+  assert.match(cssSource, /\.appointment-review-decision-state/);
   assert.match(cssSource, /\.appointment-review-validation-receipt-preview/);
   assert.match(cssSource, /\.appointment-review-validation-receipt-grid/);
   assert.match(cssSource, /\.appointment-review-validation-receipt-controls/);

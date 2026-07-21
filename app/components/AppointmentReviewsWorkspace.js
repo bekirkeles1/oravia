@@ -143,6 +143,33 @@ const VALIDATION_RECEIPT_CORRELATION_FIELDS = [
   "requiredPermission"
 ];
 
+const DECISION_PREVIEW_ACTIONS = ["approve", "reject"];
+
+const INITIAL_DECISION_PREVIEW = {
+  mock: true,
+  dryRun: true,
+  decisionPreview: true,
+  validationOnly: true,
+  controlledHandlingOnly: true,
+  executionEnabled: false,
+  executorAvailable: false,
+  executionAvailable: false,
+  executionRequested: false,
+  actionPerformed: false,
+  commandDispatched: false,
+  commandPersisted: false,
+  receiptPersisted: false,
+  bookingCreated: false,
+  calendarChecked: false,
+  appointmentCreated: false,
+  calendarEventCreated: false,
+  databasePersisted: false,
+  persistence: "not_persisted",
+  reviewMutated: false,
+  reviewStateChanged: false,
+  repositoryVersionChanged: false
+};
+
 export default function AppointmentReviewsWorkspace() {
   const [reviews, setReviews] = useState([]);
   const [summary, setSummary] = useState({
@@ -219,6 +246,9 @@ export default function AppointmentReviewsWorkspace() {
   const [validationReceiptStatus, setValidationReceiptStatus] = useState("idle");
   const [validationReceiptResult, setValidationReceiptResult] = useState(null);
   const [validationReceiptError, setValidationReceiptError] = useState("");
+  const [decisionPreviewStatus, setDecisionPreviewStatus] = useState("idle");
+  const [decisionPreviewResult, setDecisionPreviewResult] = useState(null);
+  const [decisionPreviewError, setDecisionPreviewError] = useState("");
   const [
     selectedValidationReceiptActionIntent,
     setSelectedValidationReceiptActionIntent
@@ -248,6 +278,9 @@ export default function AppointmentReviewsWorkspace() {
   const validationReceiptRequestSequenceRef = useRef(0);
   const activeValidationReceiptRequestRef = useRef(null);
   const activeValidationReceiptAbortRef = useRef(null);
+  const decisionPreviewRequestSequenceRef = useRef(0);
+  const activeDecisionPreviewRequestRef = useRef(null);
+  const activeDecisionPreviewAbortRef = useRef(null);
   const selectedReview =
     reviews.find((review) => review.id === selectedReviewId) || null;
   const displayedActionIntentDryRun =
@@ -267,6 +300,8 @@ export default function AppointmentReviewsWorkspace() {
     getValidationReceiptStages(validationReceiptResult);
   const validationReceiptCorrelation =
     getValidationReceiptCorrelation(validationReceiptResult);
+  const displayedDecisionPreview =
+    decisionPreviewResult || INITIAL_DECISION_PREVIEW;
 
   useEffect(() => {
     let isMounted = true;
@@ -338,6 +373,7 @@ export default function AppointmentReviewsWorkspace() {
       invalidatePreconditionsDryRunRequest();
       invalidateControlledActionValidationRequest();
       invalidateValidationReceiptRequest();
+      invalidateDecisionPreviewRequest();
     };
   }, []);
 
@@ -347,6 +383,7 @@ export default function AppointmentReviewsWorkspace() {
     invalidatePreconditionsDryRunRequest();
     invalidateControlledActionValidationRequest();
     invalidateValidationReceiptRequest();
+    invalidateDecisionPreviewRequest();
     setActionIntentDryRunStatus("idle");
     setActionIntentDryRunResult(null);
     setActionIntentDryRunError("");
@@ -389,6 +426,9 @@ export default function AppointmentReviewsWorkspace() {
     setValidationReceiptExpectedReviewVersion(
       INITIAL_VALIDATION_RECEIPT_EXPECTED_REVIEW_VERSION
     );
+    setDecisionPreviewStatus("idle");
+    setDecisionPreviewResult(null);
+    setDecisionPreviewError("");
   }, [selectedReviewId]);
 
   async function runActionIntentDryRun() {
@@ -1126,6 +1166,139 @@ export default function AppointmentReviewsWorkspace() {
     );
   }
 
+  async function runDecisionPreview(action) {
+    if (decisionPreviewStatus === "loading") {
+      return;
+    }
+
+    if (!selectedReview) {
+      setDecisionPreviewStatus("failure");
+      setDecisionPreviewResult(null);
+      setDecisionPreviewError(
+        "Select a review before running decision preview dry-run."
+      );
+      return;
+    }
+
+    const reviewIdForRequest = selectedReview.id;
+    const actionForRequest = action;
+    const requestId = createDecisionPreviewRequest({
+      reviewId: reviewIdForRequest,
+      action: actionForRequest
+    });
+    const activeAbortController = activeDecisionPreviewAbortRef.current;
+
+    setDecisionPreviewStatus("loading");
+    setDecisionPreviewResult(null);
+    setDecisionPreviewError("");
+
+    try {
+      const response = await fetch(
+        `/api/secretary/appointment-reviews/${encodeURIComponent(
+          reviewIdForRequest
+        )}/decision-preview`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          signal: activeAbortController?.signal,
+          body: JSON.stringify({
+            action: actionForRequest
+          })
+        }
+      );
+      const payload = await response.json();
+
+      if (
+        !isActiveDecisionPreviewRequest({
+          requestId,
+          reviewId: reviewIdForRequest,
+          action: actionForRequest
+        })
+      ) {
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          payload?.reason ||
+            payload?.error?.message ||
+            "Decision preview dry-run failed safely."
+        );
+      }
+
+      if (!isSafeDecisionPreviewResponse(payload)) {
+        throw new Error("Decision preview response was unsafe or incomplete.");
+      }
+
+      setDecisionPreviewResult(payload);
+      setDecisionPreviewStatus("success");
+    } catch (error) {
+      if (isAbortError(error)) {
+        return;
+      }
+
+      if (
+        !isActiveDecisionPreviewRequest({
+          requestId,
+          reviewId: reviewIdForRequest,
+          action: actionForRequest
+        })
+      ) {
+        return;
+      }
+
+      setDecisionPreviewResult(null);
+      setDecisionPreviewStatus("failure");
+      setDecisionPreviewError(
+        error instanceof Error
+          ? error.message
+          : "Decision preview dry-run failed safely."
+      );
+    }
+  }
+
+  function createDecisionPreviewRequest({ reviewId, action }) {
+    invalidateDecisionPreviewRequest();
+
+    const requestId = decisionPreviewRequestSequenceRef.current + 1;
+    const abortController = new AbortController();
+
+    decisionPreviewRequestSequenceRef.current = requestId;
+    activeDecisionPreviewAbortRef.current = abortController;
+    activeDecisionPreviewRequestRef.current = {
+      requestId,
+      reviewId,
+      action
+    };
+
+    return requestId;
+  }
+
+  function invalidateDecisionPreviewRequest() {
+    decisionPreviewRequestSequenceRef.current += 1;
+    activeDecisionPreviewRequestRef.current = null;
+
+    if (activeDecisionPreviewAbortRef.current) {
+      activeDecisionPreviewAbortRef.current.abort();
+      activeDecisionPreviewAbortRef.current = null;
+    }
+  }
+
+  function isActiveDecisionPreviewRequest({ requestId, reviewId, action }) {
+    const activeRequest = activeDecisionPreviewRequestRef.current;
+
+    return (
+      isMountedRef.current &&
+      activeRequest &&
+      activeRequest.requestId === requestId &&
+      activeRequest.reviewId === reviewId &&
+      activeRequest.action === action &&
+      selectedReviewIdRef.current === reviewId
+    );
+  }
+
   return (
     <section
       className="appointment-reviews-workspace-section"
@@ -1582,6 +1755,228 @@ export default function AppointmentReviewsWorkspace() {
                 <strong>No selected appointment review</strong>
                 <span>
                   Select a review to inspect state transition dry-run details.
+                </span>
+              </div>
+            )}
+          </section>
+        ) : null}
+
+        {!loading && !loadError ? (
+          <section
+            className="appointment-review-decision-preview"
+            aria-labelledby="appointment-review-decision-preview-title"
+          >
+            <div>
+              <span>End-to-end dry-run · Trusted server context</span>
+              <h3 id="appointment-review-decision-preview-title">
+                Decision Preview Dry-run
+              </h3>
+              <p>
+                Runs action intent, preconditions, state transition,
+                controlled validation, and receipt assembly in preview mode.
+                No approval or rejection is executed. Review unchanged. Not
+                persisted.
+              </p>
+            </div>
+
+            {selectedReview ? (
+              <>
+                <div className="appointment-review-decision-controls">
+                  {DECISION_PREVIEW_ACTIONS.map((action) => (
+                    <button
+                      key={action}
+                      type="button"
+                      className="appointment-review-decision-button"
+                      onClick={() => runDecisionPreview(action)}
+                      disabled={decisionPreviewStatus === "loading"}
+                    >
+                      {action === "approve"
+                        ? "Approve Preview (dry-run)"
+                        : "Reject Preview (dry-run)"}
+                    </button>
+                  ))}
+                </div>
+
+                <p className="appointment-review-decision-state">
+                  {decisionPreviewStatus === "loading"
+                    ? "Decision preview dry-run is running. Duplicate preview clicks are ignored."
+                    : null}
+                  {decisionPreviewStatus === "success" &&
+                  decisionPreviewResult?.accepted === true
+                    ? "Decision preview passed. This is not approval or rejection execution."
+                    : null}
+                  {decisionPreviewStatus === "success" &&
+                  decisionPreviewResult?.accepted === false
+                    ? "Decision preview returned a controlled safe block. No review state changed."
+                    : null}
+                  {decisionPreviewStatus === "failure"
+                    ? decisionPreviewError ||
+                      "Decision preview dry-run failed safely."
+                    : null}
+                  {decisionPreviewStatus === "idle"
+                    ? "Idle: no end-to-end decision preview result for this selected review."
+                    : null}
+                </p>
+
+                <dl className="appointment-review-decision-grid">
+                  <div>
+                    <dt>reviewId</dt>
+                    <dd>{decisionPreviewResult?.reviewId || selectedReview.id}</dd>
+                  </div>
+                  <div>
+                    <dt>requested action</dt>
+                    <dd>{decisionPreviewResult?.action || "not_run"}</dd>
+                  </div>
+                  <div>
+                    <dt>actionIntent</dt>
+                    <dd>{decisionPreviewResult?.actionIntent || "not_run"}</dd>
+                  </div>
+                  <div>
+                    <dt>accepted</dt>
+                    <dd>
+                      {decisionPreviewResult
+                        ? String(decisionPreviewResult.accepted)
+                        : "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>previewPassed</dt>
+                    <dd>
+                      {decisionPreviewResult
+                        ? String(decisionPreviewResult.previewPassed)
+                        : "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>previewBlocked</dt>
+                    <dd>
+                      {decisionPreviewResult
+                        ? String(decisionPreviewResult.previewBlocked)
+                        : "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>completedStage</dt>
+                    <dd>{decisionPreviewResult?.completedStage || "not_run"}</dd>
+                  </div>
+                  <div>
+                    <dt>blockingStage</dt>
+                    <dd>{decisionPreviewResult?.blockingStage || "none"}</dd>
+                  </div>
+                  <div>
+                    <dt>code</dt>
+                    <dd>{decisionPreviewResult?.code || "not_run"}</dd>
+                  </div>
+                  <div>
+                    <dt>reason</dt>
+                    <dd>{decisionPreviewResult?.reason || "none"}</dd>
+                  </div>
+                  <div>
+                    <dt>trustedCurrentState</dt>
+                    <dd>
+                      {decisionPreviewResult?.trustedCurrentState || "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>projectedNextState</dt>
+                    <dd>{decisionPreviewResult?.projectedNextState || "not_run"}</dd>
+                  </div>
+                  <div>
+                    <dt>observedReviewVersion</dt>
+                    <dd>
+                      {decisionPreviewResult?.observedReviewVersion || "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>receiptOutcome</dt>
+                    <dd>{decisionPreviewResult?.receiptOutcome || "not_run"}</dd>
+                  </div>
+                  <div>
+                    <dt>dryRun</dt>
+                    <dd>{String(displayedDecisionPreview.dryRun)}</dd>
+                  </div>
+                  <div>
+                    <dt>decisionPreview</dt>
+                    <dd>{String(displayedDecisionPreview.decisionPreview)}</dd>
+                  </div>
+                  <div>
+                    <dt>validationOnly</dt>
+                    <dd>{String(displayedDecisionPreview.validationOnly)}</dd>
+                  </div>
+                  <div>
+                    <dt>executionEnabled</dt>
+                    <dd>{String(displayedDecisionPreview.executionEnabled)}</dd>
+                  </div>
+                  <div>
+                    <dt>executionAvailable</dt>
+                    <dd>{String(displayedDecisionPreview.executionAvailable)}</dd>
+                  </div>
+                  <div>
+                    <dt>actionPerformed</dt>
+                    <dd>{String(displayedDecisionPreview.actionPerformed)}</dd>
+                  </div>
+                  <div>
+                    <dt>bookingCreated</dt>
+                    <dd>{String(displayedDecisionPreview.bookingCreated)}</dd>
+                  </div>
+                  <div>
+                    <dt>calendarChecked</dt>
+                    <dd>{String(displayedDecisionPreview.calendarChecked)}</dd>
+                  </div>
+                  <div>
+                    <dt>appointmentCreated</dt>
+                    <dd>{String(displayedDecisionPreview.appointmentCreated)}</dd>
+                  </div>
+                  <div>
+                    <dt>calendarEventCreated</dt>
+                    <dd>
+                      {String(displayedDecisionPreview.calendarEventCreated)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>databasePersisted</dt>
+                    <dd>{String(displayedDecisionPreview.databasePersisted)}</dd>
+                  </div>
+                  <div>
+                    <dt>persistence</dt>
+                    <dd>{displayedDecisionPreview.persistence}</dd>
+                  </div>
+                  <div>
+                    <dt>reviewMutated</dt>
+                    <dd>{String(displayedDecisionPreview.reviewMutated)}</dd>
+                  </div>
+                  <div>
+                    <dt>reviewStateChanged</dt>
+                    <dd>{String(displayedDecisionPreview.reviewStateChanged)}</dd>
+                  </div>
+                  <div>
+                    <dt>repositoryVersionChanged</dt>
+                    <dd>
+                      {String(displayedDecisionPreview.repositoryVersionChanged)}
+                    </dd>
+                  </div>
+                </dl>
+
+                <div className="appointment-review-decision-list">
+                  <strong>Preview-only stages</strong>
+                  <span>
+                    action_intent, preconditions, state_transition,
+                    controlled_action_validation, validation_decision_receipt
+                  </span>
+                  <small>
+                    The client sends only action. Server-side trusted context
+                    provides current state and observed version. No optimistic
+                    update, route-to-route HTTP, booking, calendar, database,
+                    persistence, or executor work is performed.
+                  </small>
+                </div>
+              </>
+            ) : (
+              <div className="appointment-review-decision-empty">
+                <strong>No selected appointment review</strong>
+                <span>
+                  Select a review to run approve or reject decision preview
+                  dry-runs.
                 </span>
               </div>
             )}
@@ -2807,6 +3202,40 @@ function isSafeValidationReceiptResponse(payload) {
     typeof payload.code === "string" &&
     payload.validationReceipt &&
     typeof payload.validationReceipt === "object"
+  );
+}
+
+function isSafeDecisionPreviewResponse(payload) {
+  return (
+    payload &&
+    payload.mock === true &&
+    payload.dryRun === true &&
+    payload.decisionPreview === true &&
+    payload.validationOnly === true &&
+    payload.controlledHandlingOnly === true &&
+    payload.executionEnabled === false &&
+    payload.executorAvailable === false &&
+    payload.executionAvailable === false &&
+    payload.executionRequested === false &&
+    payload.actionPerformed === false &&
+    payload.commandDispatched === false &&
+    payload.commandPersisted === false &&
+    payload.receiptPersisted === false &&
+    payload.bookingCreated === false &&
+    payload.calendarChecked === false &&
+    payload.appointmentCreated === false &&
+    payload.calendarEventCreated === false &&
+    payload.databasePersisted === false &&
+    payload.persistence === "not_persisted" &&
+    payload.reviewMutated === false &&
+    payload.reviewStateChanged === false &&
+    payload.repositoryVersionChanged === false &&
+    typeof payload.accepted === "boolean" &&
+    typeof payload.previewPassed === "boolean" &&
+    typeof payload.previewBlocked === "boolean" &&
+    typeof payload.reviewId === "string" &&
+    typeof payload.code === "string" &&
+    DECISION_PREVIEW_ACTIONS.includes(payload.action)
   );
 }
 
