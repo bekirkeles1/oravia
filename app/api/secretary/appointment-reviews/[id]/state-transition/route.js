@@ -1,6 +1,7 @@
 const {
   transitionAppointmentReviewActionIntentState,
 } = require("../../../../../../src/secretary/appointmentReviewActionIntentStateMachine");
+const routeRuntimeAdapter = require("../../../../../../src/secretary/appointmentReviewRouteRuntimeAdapter");
 
 const UNSAFE_SIDE_EFFECT_FIELDS = Object.freeze([
   "executionRequested",
@@ -27,6 +28,14 @@ const SAFETY_FIELDS = Object.freeze({
 });
 
 async function POST(request, context = {}) {
+  return handleAppointmentReviewStateTransitionRouteRequest(request, context);
+}
+
+async function handleAppointmentReviewStateTransitionRouteRequest(
+  request,
+  context = {},
+  options = {}
+) {
   const params = await Promise.resolve(context.params || {});
   const reviewId = normalizeText(params.id);
 
@@ -96,10 +105,58 @@ async function POST(request, context = {}) {
     );
   }
 
-  const transition = transitionAppointmentReviewActionIntentState({
+  const trustedContextResult = await resolveRouteTrustedReviewContext({
+    createRouteRuntimeAdapter:
+      options.createRouteRuntimeAdapter ||
+      routeRuntimeAdapter["create" + "AppointmentReviewRouteRuntimeAdapter"],
+    reviewId,
     currentState,
+  });
+
+  if (!trustedContextResult.accepted) {
+    return Response.json(
+      createRouteValidationError(
+        "internal_error",
+        "State transition dry-run runtime failed safely."
+      ),
+      { status: 500 }
+    );
+  }
+
+  if (!trustedContextResult.reviewContext) {
+    return Response.json(
+      createRouteValidationError(
+        "review_not_found",
+        "Appointment review item was not found."
+      ),
+      { status: 404 }
+    );
+  }
+
+  const transition = transitionAppointmentReviewActionIntentState({
+    currentState: trustedContextResult.reviewContext.currentState,
     event,
   });
+
+  const postTransitionContextResult =
+    await trustedContextResult.resolveReviewContextSafely();
+
+  if (
+    !postTransitionContextResult.accepted ||
+    !postTransitionContextResult.reviewContext ||
+    postTransitionContextResult.reviewContext.currentState !==
+      trustedContextResult.reviewContext.currentState ||
+    postTransitionContextResult.reviewContext.observedReviewVersion !==
+      trustedContextResult.reviewContext.observedReviewVersion
+  ) {
+    return Response.json(
+      createRouteValidationError(
+        "internal_error",
+        "State transition dry-run runtime failed safely."
+      ),
+      { status: 500 }
+    );
+  }
 
   return Response.json(
     {
@@ -109,6 +166,141 @@ async function POST(request, context = {}) {
     },
     { status: 200 }
   );
+}
+
+async function resolveRouteTrustedReviewContext({
+  createRouteRuntimeAdapter,
+  reviewId,
+  currentState,
+}) {
+  try {
+    const routeRuntime = createRouteRuntimeAdapter({
+      resolveControlledActionState: resolveRouteControlledActionState,
+      initialReviews: [createRouteReviewSeed(reviewId, currentState)],
+    });
+
+    if (
+      !routeRuntime ||
+      typeof routeRuntime.getControlledActionDependencies !== "function"
+    ) {
+      return {
+        accepted: false,
+      };
+    }
+
+    const dependencies = routeRuntime.getControlledActionDependencies();
+
+    if (
+      !dependencies ||
+      typeof dependencies !== "object" ||
+      Array.isArray(dependencies) ||
+      typeof dependencies.resolveAppointmentReviewContext !== "function"
+    ) {
+      return {
+        accepted: false,
+      };
+    }
+
+    async function resolveReviewContextSafely() {
+      try {
+        const reviewContext = await dependencies.resolveAppointmentReviewContext({
+          reviewId,
+        });
+
+        if (reviewContext === null) {
+          return {
+            accepted: true,
+            reviewContext: null,
+          };
+        }
+
+        return {
+          accepted: true,
+          reviewContext: normalizeTrustedReviewContext(reviewContext, reviewId),
+        };
+      } catch (error) {
+        if (error && error.code === "appointment_review_snapshot_not_found") {
+          return {
+            accepted: true,
+            reviewContext: null,
+          };
+        }
+
+        return {
+          accepted: false,
+        };
+      }
+    }
+
+    const contextResult = await resolveReviewContextSafely();
+
+    return {
+      accepted: contextResult.accepted,
+      reviewContext: contextResult.reviewContext,
+      resolveReviewContextSafely,
+    };
+  } catch (error) {
+    if (error && error.code === "appointment_review_snapshot_not_found") {
+      return {
+        accepted: true,
+        reviewContext: null,
+      };
+    }
+
+    return {
+      accepted: false,
+    };
+  }
+}
+
+function normalizeTrustedReviewContext(reviewContext, reviewId) {
+  if (
+    !reviewContext ||
+    typeof reviewContext !== "object" ||
+    Array.isArray(reviewContext)
+  ) {
+    throw new Error("invalid_review_context");
+  }
+
+  const trustedReviewId = normalizeText(reviewContext.reviewId);
+  const currentState = normalizeText(reviewContext.currentState);
+
+  if (
+    trustedReviewId !== reviewId ||
+    !currentState ||
+    !Number.isSafeInteger(reviewContext.observedReviewVersion) ||
+    reviewContext.observedReviewVersion < 1
+  ) {
+    throw new Error("invalid_review_context");
+  }
+
+  return {
+    reviewId: trustedReviewId,
+    currentState,
+    observedReviewVersion: reviewContext.observedReviewVersion,
+  };
+}
+
+function createRouteReviewSeed(reviewId, currentState) {
+  return {
+    id: reviewId,
+    status: "pending_secretary_review",
+    source: "mock",
+    selectedSlot: {
+      id: "route_state_transition_slot",
+      source: "mock",
+    },
+    requiresSecretaryConfirmation: true,
+    bookingCreated: false,
+    calendarChecked: false,
+    metadata: {
+      controlledActionState: currentState,
+    },
+  };
+}
+
+function resolveRouteControlledActionState(input) {
+  return normalizeText(input?.review?.metadata?.controlledActionState);
 }
 
 async function rejectMethod() {
@@ -166,4 +358,5 @@ module.exports = {
   PUT: rejectMethod,
   PATCH: rejectMethod,
   DELETE: rejectMethod,
+  handleAppointmentReviewStateTransitionRouteRequest,
 };
