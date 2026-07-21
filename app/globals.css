@@ -2021,6 +2021,8 @@ blockquote {
 .appointment-review-state-transition-empty,
 .appointment-review-decision-preview,
 .appointment-review-decision-empty,
+.appointment-review-decision-comparison,
+.appointment-review-decision-comparison-empty,
 .appointment-review-controlled-action-validation-preview,
 .appointment-review-controlled-action-validation-empty,
 .appointment-review-validation-receipt-preview,
@@ -2103,6 +2105,13 @@ blockquote {
   background: #f8fafc;
 }
 
+.appointment-review-decision-comparison {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  background: #f8fbff;
+}
+
 .appointment-review-controlled-action-validation-preview {
   display: grid;
   gap: 14px;
@@ -2144,6 +2153,11 @@ blockquote {
   gap: 6px;
 }
 
+.appointment-review-decision-comparison > div:first-child {
+  display: grid;
+  gap: 6px;
+}
+
 .appointment-review-controlled-action-validation-preview > div:first-child {
   display: grid;
   gap: 6px;
@@ -2171,6 +2185,9 @@ blockquote {
 .appointment-review-decision-preview span,
 .appointment-review-decision-preview p,
 .appointment-review-decision-empty span,
+.appointment-review-decision-comparison span,
+.appointment-review-decision-comparison p,
+.appointment-review-decision-comparison-empty span,
 .appointment-review-controlled-action-validation-preview span,
 .appointment-review-controlled-action-validation-preview p,
 .appointment-review-controlled-action-validation-empty span,
@@ -2208,6 +2225,12 @@ blockquote {
   text-transform: uppercase;
 }
 
+.appointment-review-decision-comparison > div:first-child > span {
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
 .appointment-review-controlled-action-validation-preview > div:first-child > span {
   font-size: 0.76rem;
   font-weight: 900;
@@ -2234,6 +2257,8 @@ blockquote {
 .appointment-review-state-transition-preview p,
 .appointment-review-decision-preview h3,
 .appointment-review-decision-preview p,
+.appointment-review-decision-comparison h3,
+.appointment-review-decision-comparison p,
 .appointment-review-controlled-action-validation-preview h3,
 .appointment-review-controlled-action-validation-preview p,
 .appointment-review-validation-receipt-preview h3,
@@ -2261,6 +2286,9 @@ blockquote {
 .appointment-review-state-transition-controls,
 .appointment-review-decision-grid,
 .appointment-review-decision-controls,
+.appointment-review-decision-comparison-grid,
+.appointment-review-decision-comparison-paths,
+.appointment-review-decision-comparison-paths article dl,
 .appointment-review-controlled-action-validation-grid,
 .appointment-review-controlled-action-validation-controls,
 .appointment-review-controlled-action-validation-stages,
@@ -2289,6 +2317,11 @@ blockquote {
 .appointment-review-decision-grid div,
 .appointment-review-decision-list,
 .appointment-review-decision-empty,
+.appointment-review-decision-comparison-grid div,
+.appointment-review-decision-comparison-paths article,
+.appointment-review-decision-comparison-paths article dl div,
+.appointment-review-decision-comparison-list,
+.appointment-review-decision-comparison-empty,
 .appointment-review-controlled-action-validation-grid div,
 .appointment-review-controlled-action-validation-stages div,
 .appointment-review-controlled-action-validation-list,
@@ -2327,6 +2360,13 @@ blockquote {
 
 .appointment-review-decision-list,
 .appointment-review-decision-empty {
+  display: grid;
+  gap: 6px;
+}
+
+.appointment-review-decision-comparison-list,
+.appointment-review-decision-comparison-empty,
+.appointment-review-decision-comparison-paths article {
   display: grid;
   gap: 6px;
 }
@@ -2451,6 +2491,18 @@ blockquote {
   cursor: pointer;
 }
 
+.appointment-review-decision-comparison-button {
+  justify-self: start;
+  width: fit-content;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font-weight: 800;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
 .appointment-review-controlled-action-validation-button {
   align-self: end;
   justify-self: start;
@@ -2497,6 +2549,7 @@ blockquote {
 
 .appointment-review-state-transition-button:disabled,
 .appointment-review-decision-button:disabled,
+.appointment-review-decision-comparison-button:disabled,
 .appointment-review-controlled-action-validation-button:disabled,
 .appointment-review-validation-receipt-button:disabled,
 .appointment-review-preconditions-button:disabled {
@@ -2525,6 +2578,14 @@ blockquote {
   border: 1px dashed rgba(45, 80, 120, 0.3);
   border-radius: 8px;
   background: rgba(45, 80, 120, 0.08);
+  font-weight: 800;
+}
+
+.appointment-review-decision-comparison-state {
+  padding: 10px 12px;
+  border: 1px dashed rgba(33, 92, 150, 0.3);
+  border-radius: 8px;
+  background: rgba(33, 92, 150, 0.08);
   font-weight: 800;
 }
 
@@ -2590,6 +2651,9 @@ blockquote {
   .appointment-review-state-transition-controls,
   .appointment-review-decision-grid,
   .appointment-review-decision-controls,
+  .appointment-review-decision-comparison-grid,
+  .appointment-review-decision-comparison-paths,
+  .appointment-review-decision-comparison-paths article dl,
   .appointment-review-controlled-action-validation-grid,
   .appointment-review-controlled-action-validation-controls,
   .appointment-review-controlled-action-validation-stages,

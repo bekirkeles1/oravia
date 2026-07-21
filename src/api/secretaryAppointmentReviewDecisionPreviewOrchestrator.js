@@ -165,10 +165,103 @@ async function runAppointmentReviewDecisionPreview(input, contracts = {}) {
   const trustedCurrentState = normalizeText(reviewContext.currentState);
   const observedReviewVersion = reviewContext.observedReviewVersion;
   const trustedReviewContext = freezeClone({
+    contextType: normalizeText(reviewContext.contextType),
+    contextSource: normalizeText(reviewContext.contextSource),
     reviewId,
     currentState: trustedCurrentState,
     observedReviewVersion,
   });
+
+  return evaluateAppointmentReviewDecisionPreview({
+    reviewId,
+    action,
+    dependencies: input.dependencies,
+    trustedReviewContext,
+    requestId,
+    idempotencyKey,
+    contracts: activeContracts,
+    verifyPostPreviewContext: true,
+  });
+}
+
+async function evaluateAppointmentReviewDecisionPreview(input) {
+  const activeContracts = { ...DEFAULT_CONTRACTS, ...(input?.contracts || {}) };
+
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return blockPreview({
+      code: "invalid_decision_preview_input",
+      reason:
+        "Appointment review decision preview input must be an object.",
+      blockingStage: null,
+    });
+  }
+
+  const reviewId = normalizeText(input.reviewId);
+  const action = normalizeText(input.action);
+
+  if (!reviewId) {
+    return blockPreview({
+      code: "missing_review_id",
+      reason: "reviewId is required for appointment review decision preview.",
+      blockingStage: null,
+    });
+  }
+
+  if (!SUPPORTED_DECISION_ACTIONS.includes(action)) {
+    return blockPreview({
+      reviewId,
+      action,
+      code: action ? "unsupported_decision_action" : "missing_decision_action",
+      reason: "Decision preview action must be approve or reject.",
+      blockingStage: DECISION_PREVIEW_STAGES.ACTION_INTENT,
+    });
+  }
+
+  const dependenciesIssue = validateDependencies(input.dependencies);
+
+  if (dependenciesIssue) {
+    return blockPreview({
+      reviewId,
+      action,
+      actionIntent: ACTION_INTENT_BY_ACTION[action],
+      code: dependenciesIssue.code,
+      reason: dependenciesIssue.reason,
+      blockingStage: DECISION_PREVIEW_STAGES.TRUSTED_REVIEW_CONTEXT,
+    });
+  }
+
+  const trustedContextIssue = validateTrustedReviewContext(
+    input.trustedReviewContext,
+    reviewId
+  );
+  const actionIntent = ACTION_INTENT_BY_ACTION[action];
+
+  if (trustedContextIssue) {
+    return blockPreview({
+      reviewId,
+      action,
+      actionIntent,
+      code: trustedContextIssue.code,
+      reason: trustedContextIssue.reason,
+      blockingStage: DECISION_PREVIEW_STAGES.TRUSTED_REVIEW_CONTEXT,
+    });
+  }
+
+  const trustedCurrentState = normalizeText(input.trustedReviewContext.currentState);
+  const observedReviewVersion = input.trustedReviewContext.observedReviewVersion;
+  const trustedReviewContext = freezeClone({
+    contextType: normalizeText(input.trustedReviewContext.contextType),
+    contextSource: normalizeText(input.trustedReviewContext.contextSource),
+    reviewId,
+    currentState: trustedCurrentState,
+    observedReviewVersion,
+  });
+  const requestId =
+    normalizeText(input.requestId) ||
+    `decision_preview_${reviewId}_${action}`;
+  const idempotencyKey =
+    normalizeText(input.idempotencyKey) ||
+    `decision_preview_${reviewId}_${action}_key`;
 
   const actionIntentResult = activeContracts.validateActionIntent({
     reviewId,
@@ -269,6 +362,8 @@ async function runAppointmentReviewDecisionPreview(input, contracts = {}) {
     idempotencyKey,
     expectedReviewVersion: observedReviewVersion,
   });
+  const validationDependencies =
+    input.validationDependencies || input.dependencies;
   let validationResult;
 
   try {
@@ -276,7 +371,7 @@ async function runAppointmentReviewDecisionPreview(input, contracts = {}) {
       method: "POST",
       reviewId,
       body: validationBody,
-      dependencies: input.dependencies,
+      dependencies: validationDependencies,
     });
   } catch {
     return blockPreview({
@@ -354,47 +449,49 @@ async function runAppointmentReviewDecisionPreview(input, contracts = {}) {
     });
   }
 
-  let postReviewContext;
+  if (input.verifyPostPreviewContext !== false) {
+    let postReviewContext;
 
-  try {
-    postReviewContext = await input.dependencies.resolveAppointmentReviewContext(
-      Object.freeze({ reviewId })
-    );
-  } catch {
-    return blockPreview({
-      reviewId,
-      action,
-      actionIntent,
-      trustedReviewContext,
-      code: "post_preview_review_context_failed",
-      reason: "Post-preview review context verification failed safely.",
-      blockingStage: DECISION_PREVIEW_STAGES.VALIDATION_DECISION_RECEIPT,
-      actionIntentResult,
-      preconditionsResult,
-      stateTransitionResult,
-      validationResult: summarizeValidationResult(validationResult),
-    });
-  }
+    try {
+      postReviewContext = await input.dependencies.resolveAppointmentReviewContext(
+        Object.freeze({ reviewId })
+      );
+    } catch {
+      return blockPreview({
+        reviewId,
+        action,
+        actionIntent,
+        trustedReviewContext,
+        code: "post_preview_review_context_failed",
+        reason: "Post-preview review context verification failed safely.",
+        blockingStage: DECISION_PREVIEW_STAGES.VALIDATION_DECISION_RECEIPT,
+        actionIntentResult,
+        preconditionsResult,
+        stateTransitionResult,
+        validationResult: summarizeValidationResult(validationResult),
+      });
+    }
 
-  if (
-    !postReviewContext ||
-    normalizeText(postReviewContext.currentState) !== trustedCurrentState ||
-    postReviewContext.observedReviewVersion !== observedReviewVersion
-  ) {
-    return blockPreview({
-      reviewId,
-      action,
-      actionIntent,
-      trustedReviewContext,
-      code: "review_context_changed_after_preview",
-      reason:
-        "Review state or repository version changed during decision preview.",
-      blockingStage: DECISION_PREVIEW_STAGES.VALIDATION_DECISION_RECEIPT,
-      actionIntentResult,
-      preconditionsResult,
-      stateTransitionResult,
-      validationResult: summarizeValidationResult(validationResult),
-    });
+    if (
+      !postReviewContext ||
+      normalizeText(postReviewContext.currentState) !== trustedCurrentState ||
+      postReviewContext.observedReviewVersion !== observedReviewVersion
+    ) {
+      return blockPreview({
+        reviewId,
+        action,
+        actionIntent,
+        trustedReviewContext,
+        code: "review_context_changed_after_preview",
+        reason:
+          "Review state or repository version changed during decision preview.",
+        blockingStage: DECISION_PREVIEW_STAGES.VALIDATION_DECISION_RECEIPT,
+        actionIntentResult,
+        preconditionsResult,
+        stateTransitionResult,
+        validationResult: summarizeValidationResult(validationResult),
+      });
+    }
   }
 
   return freezeClone({
@@ -609,5 +706,6 @@ module.exports = {
   DECISION_PREVIEW_STAGES,
   STATE_TRANSITION_EVENT_BY_ACTION,
   SUPPORTED_DECISION_ACTIONS,
+  evaluateAppointmentReviewDecisionPreview,
   runAppointmentReviewDecisionPreview,
 };

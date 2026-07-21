@@ -170,6 +170,31 @@ const INITIAL_DECISION_PREVIEW = {
   repositoryVersionChanged: false
 };
 
+const INITIAL_DECISION_COMPARISON = {
+  mock: true,
+  dryRun: true,
+  decisionComparison: true,
+  validationOnly: true,
+  controlledHandlingOnly: true,
+  executionEnabled: false,
+  executorAvailable: false,
+  executionAvailable: false,
+  executionRequested: false,
+  actionPerformed: false,
+  commandDispatched: false,
+  commandPersisted: false,
+  receiptPersisted: false,
+  bookingCreated: false,
+  calendarChecked: false,
+  appointmentCreated: false,
+  calendarEventCreated: false,
+  databasePersisted: false,
+  persistence: "not_persisted",
+  reviewMutated: false,
+  reviewStateChanged: false,
+  repositoryVersionChanged: false
+};
+
 export default function AppointmentReviewsWorkspace() {
   const [reviews, setReviews] = useState([]);
   const [summary, setSummary] = useState({
@@ -249,6 +274,11 @@ export default function AppointmentReviewsWorkspace() {
   const [decisionPreviewStatus, setDecisionPreviewStatus] = useState("idle");
   const [decisionPreviewResult, setDecisionPreviewResult] = useState(null);
   const [decisionPreviewError, setDecisionPreviewError] = useState("");
+  const [decisionComparisonStatus, setDecisionComparisonStatus] =
+    useState("idle");
+  const [decisionComparisonResult, setDecisionComparisonResult] =
+    useState(null);
+  const [decisionComparisonError, setDecisionComparisonError] = useState("");
   const [
     selectedValidationReceiptActionIntent,
     setSelectedValidationReceiptActionIntent
@@ -281,6 +311,9 @@ export default function AppointmentReviewsWorkspace() {
   const decisionPreviewRequestSequenceRef = useRef(0);
   const activeDecisionPreviewRequestRef = useRef(null);
   const activeDecisionPreviewAbortRef = useRef(null);
+  const decisionComparisonRequestSequenceRef = useRef(0);
+  const activeDecisionComparisonRequestRef = useRef(null);
+  const activeDecisionComparisonAbortRef = useRef(null);
   const selectedReview =
     reviews.find((review) => review.id === selectedReviewId) || null;
   const displayedActionIntentDryRun =
@@ -302,6 +335,10 @@ export default function AppointmentReviewsWorkspace() {
     getValidationReceiptCorrelation(validationReceiptResult);
   const displayedDecisionPreview =
     decisionPreviewResult || INITIAL_DECISION_PREVIEW;
+  const displayedDecisionComparison =
+    decisionComparisonResult || INITIAL_DECISION_COMPARISON;
+  const approveComparisonPath = decisionComparisonResult?.paths?.approve || null;
+  const rejectComparisonPath = decisionComparisonResult?.paths?.reject || null;
 
   useEffect(() => {
     let isMounted = true;
@@ -374,6 +411,7 @@ export default function AppointmentReviewsWorkspace() {
       invalidateControlledActionValidationRequest();
       invalidateValidationReceiptRequest();
       invalidateDecisionPreviewRequest();
+      invalidateDecisionComparisonRequest();
     };
   }, []);
 
@@ -384,6 +422,7 @@ export default function AppointmentReviewsWorkspace() {
     invalidateControlledActionValidationRequest();
     invalidateValidationReceiptRequest();
     invalidateDecisionPreviewRequest();
+    invalidateDecisionComparisonRequest();
     setActionIntentDryRunStatus("idle");
     setActionIntentDryRunResult(null);
     setActionIntentDryRunError("");
@@ -429,9 +468,14 @@ export default function AppointmentReviewsWorkspace() {
     setDecisionPreviewStatus("idle");
     setDecisionPreviewResult(null);
     setDecisionPreviewError("");
+    setDecisionComparisonStatus("idle");
+    setDecisionComparisonResult(null);
+    setDecisionComparisonError("");
   }, [selectedReviewId]);
 
   async function runActionIntentDryRun() {
+    invalidateDecisionComparisonRequest();
+
     if (!selectedReview) {
       setActionIntentDryRunStatus("error");
       setActionIntentDryRunResult(null);
@@ -499,6 +543,8 @@ export default function AppointmentReviewsWorkspace() {
   }
 
   async function runStateTransitionDryRun() {
+    invalidateDecisionComparisonRequest();
+
     if (stateTransitionDryRunStatus === "loading") {
       return;
     }
@@ -646,6 +692,8 @@ export default function AppointmentReviewsWorkspace() {
   }
 
   async function runPreconditionsDryRun() {
+    invalidateDecisionComparisonRequest();
+
     if (preconditionsDryRunStatus === "loading") {
       return;
     }
@@ -826,6 +874,8 @@ export default function AppointmentReviewsWorkspace() {
   }
 
   async function runControlledActionValidationDryRun() {
+    invalidateDecisionComparisonRequest();
+
     if (controlledActionValidationStatus === "loading") {
       return;
     }
@@ -996,6 +1046,8 @@ export default function AppointmentReviewsWorkspace() {
   }
 
   async function runValidationReceiptDryRun() {
+    invalidateDecisionComparisonRequest();
+
     if (validationReceiptStatus === "loading") {
       return;
     }
@@ -1167,6 +1219,8 @@ export default function AppointmentReviewsWorkspace() {
   }
 
   async function runDecisionPreview(action) {
+    invalidateDecisionComparisonRequest();
+
     if (decisionPreviewStatus === "loading") {
       return;
     }
@@ -1295,6 +1349,134 @@ export default function AppointmentReviewsWorkspace() {
       activeRequest.requestId === requestId &&
       activeRequest.reviewId === reviewId &&
       activeRequest.action === action &&
+      selectedReviewIdRef.current === reviewId
+    );
+  }
+
+  async function runDecisionComparison() {
+    if (decisionComparisonStatus === "loading") {
+      return;
+    }
+
+    if (!selectedReview) {
+      setDecisionComparisonStatus("failure");
+      setDecisionComparisonResult(null);
+      setDecisionComparisonError(
+        "Select a review before running decision path comparison dry-run."
+      );
+      return;
+    }
+
+    const reviewIdForRequest = selectedReview.id;
+    const requestId = createDecisionComparisonRequest({
+      reviewId: reviewIdForRequest
+    });
+    const activeAbortController = activeDecisionComparisonAbortRef.current;
+
+    setDecisionComparisonStatus("loading");
+    setDecisionComparisonResult(null);
+    setDecisionComparisonError("");
+
+    try {
+      const response = await fetch(
+        `/api/secretary/appointment-reviews/${encodeURIComponent(
+          reviewIdForRequest
+        )}/decision-comparison`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          signal: activeAbortController?.signal,
+          body: JSON.stringify({})
+        }
+      );
+      const payload = await response.json();
+
+      if (
+        !isActiveDecisionComparisonRequest({
+          requestId,
+          reviewId: reviewIdForRequest
+        })
+      ) {
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          payload?.reason ||
+            payload?.error?.message ||
+            "Decision path comparison dry-run failed safely."
+        );
+      }
+
+      if (!isSafeDecisionComparisonResponse(payload)) {
+        throw new Error(
+          "Decision path comparison response was unsafe or incomplete."
+        );
+      }
+
+      setDecisionComparisonResult(payload);
+      setDecisionComparisonStatus("success");
+    } catch (error) {
+      if (isAbortError(error)) {
+        return;
+      }
+
+      if (
+        !isActiveDecisionComparisonRequest({
+          requestId,
+          reviewId: reviewIdForRequest
+        })
+      ) {
+        return;
+      }
+
+      setDecisionComparisonResult(null);
+      setDecisionComparisonStatus("failure");
+      setDecisionComparisonError(
+        error instanceof Error
+          ? error.message
+          : "Decision path comparison dry-run failed safely."
+      );
+    }
+  }
+
+  function createDecisionComparisonRequest({ reviewId }) {
+    invalidateDecisionPreviewRequest();
+    invalidateDecisionComparisonRequest();
+
+    const requestId = decisionComparisonRequestSequenceRef.current + 1;
+    const abortController = new AbortController();
+
+    decisionComparisonRequestSequenceRef.current = requestId;
+    activeDecisionComparisonAbortRef.current = abortController;
+    activeDecisionComparisonRequestRef.current = {
+      requestId,
+      reviewId
+    };
+
+    return requestId;
+  }
+
+  function invalidateDecisionComparisonRequest() {
+    decisionComparisonRequestSequenceRef.current += 1;
+    activeDecisionComparisonRequestRef.current = null;
+
+    if (activeDecisionComparisonAbortRef.current) {
+      activeDecisionComparisonAbortRef.current.abort();
+      activeDecisionComparisonAbortRef.current = null;
+    }
+  }
+
+  function isActiveDecisionComparisonRequest({ requestId, reviewId }) {
+    const activeRequest = activeDecisionComparisonRequestRef.current;
+
+    return (
+      isMountedRef.current &&
+      activeRequest &&
+      activeRequest.requestId === requestId &&
+      activeRequest.reviewId === reviewId &&
       selectedReviewIdRef.current === reviewId
     );
   }
@@ -1977,6 +2159,217 @@ export default function AppointmentReviewsWorkspace() {
                 <span>
                   Select a review to run approve or reject decision preview
                   dry-runs.
+                </span>
+              </div>
+            )}
+          </section>
+        ) : null}
+
+        {!loading && !loadError ? (
+          <section
+            className="appointment-review-decision-comparison"
+            aria-labelledby="appointment-review-decision-comparison-title"
+          >
+            <div>
+              <span>Two-path dry-run · No recommendation</span>
+              <h3 id="appointment-review-decision-comparison-title">
+                Decision Path Comparison Dry-run
+              </h3>
+              <p>
+                Evaluates approve and reject preview paths in one server
+                request against the same trusted review state and observed
+                version. It does not recommend, select, execute, persist, book,
+                or check calendar availability.
+              </p>
+            </div>
+
+            {selectedReview ? (
+              <>
+                <button
+                  type="button"
+                  className="appointment-review-decision-comparison-button"
+                  onClick={runDecisionComparison}
+                  disabled={decisionComparisonStatus === "loading"}
+                >
+                  Compare Decision Paths (dry-run)
+                </button>
+
+                <p className="appointment-review-decision-comparison-state">
+                  {decisionComparisonStatus === "loading"
+                    ? "Decision path comparison dry-run is running. Duplicate comparison submissions are ignored."
+                    : null}
+                  {decisionComparisonStatus === "success"
+                    ? "Decision path comparison result received. No action was selected or executed."
+                    : null}
+                  {decisionComparisonStatus === "failure"
+                    ? decisionComparisonError ||
+                      "Decision path comparison dry-run failed safely."
+                    : null}
+                  {decisionComparisonStatus === "idle"
+                    ? "Idle: no approve/reject path comparison result for this selected review."
+                    : null}
+                </p>
+
+                <dl className="appointment-review-decision-comparison-grid">
+                  <div>
+                    <dt>reviewId</dt>
+                    <dd>
+                      {decisionComparisonResult?.reviewId || selectedReview.id}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>trustedCurrentState</dt>
+                    <dd>
+                      {decisionComparisonResult?.trustedCurrentState ||
+                        "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>observedReviewVersion</dt>
+                    <dd>
+                      {decisionComparisonResult?.observedReviewVersion ||
+                        "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>dryRun</dt>
+                    <dd>{String(displayedDecisionComparison.dryRun)}</dd>
+                  </div>
+                  <div>
+                    <dt>decisionComparison</dt>
+                    <dd>
+                      {String(displayedDecisionComparison.decisionComparison)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>executionEnabled</dt>
+                    <dd>
+                      {String(displayedDecisionComparison.executionEnabled)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>reviewMutated</dt>
+                    <dd>{String(displayedDecisionComparison.reviewMutated)}</dd>
+                  </div>
+                  <div>
+                    <dt>repositoryVersionChanged</dt>
+                    <dd>
+                      {String(
+                        displayedDecisionComparison.repositoryVersionChanged
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>persistence</dt>
+                    <dd>{displayedDecisionComparison.persistence}</dd>
+                  </div>
+                </dl>
+
+                <div className="appointment-review-decision-comparison-paths">
+                  <article>
+                    <span>Approve path</span>
+                    <dl>
+                      <div>
+                        <dt>outcome</dt>
+                        <dd>{approveComparisonPath?.outcome || "not_run"}</dd>
+                      </div>
+                      <div>
+                        <dt>completedStage</dt>
+                        <dd>
+                          {approveComparisonPath?.completedStage || "not_run"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>blockingStage</dt>
+                        <dd>{approveComparisonPath?.blockingStage || "none"}</dd>
+                      </div>
+                      <div>
+                        <dt>projectedNextState</dt>
+                        <dd>
+                          {approveComparisonPath?.projectedNextState ||
+                            "not_run"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>reason</dt>
+                        <dd>{approveComparisonPath?.reason || "none"}</dd>
+                      </div>
+                      <div>
+                        <dt>receiptOutcome</dt>
+                        <dd>
+                          {approveComparisonPath?.receiptOutcome || "not_run"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>not persisted</dt>
+                        <dd>
+                          {approveComparisonPath?.persistence ||
+                            displayedDecisionComparison.persistence}
+                        </dd>
+                      </div>
+                    </dl>
+                  </article>
+                  <article>
+                    <span>Reject path</span>
+                    <dl>
+                      <div>
+                        <dt>outcome</dt>
+                        <dd>{rejectComparisonPath?.outcome || "not_run"}</dd>
+                      </div>
+                      <div>
+                        <dt>completedStage</dt>
+                        <dd>
+                          {rejectComparisonPath?.completedStage || "not_run"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>blockingStage</dt>
+                        <dd>{rejectComparisonPath?.blockingStage || "none"}</dd>
+                      </div>
+                      <div>
+                        <dt>projectedNextState</dt>
+                        <dd>
+                          {rejectComparisonPath?.projectedNextState ||
+                            "not_run"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>reason</dt>
+                        <dd>{rejectComparisonPath?.reason || "none"}</dd>
+                      </div>
+                      <div>
+                        <dt>receiptOutcome</dt>
+                        <dd>
+                          {rejectComparisonPath?.receiptOutcome || "not_run"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>not persisted</dt>
+                        <dd>
+                          {rejectComparisonPath?.persistence ||
+                            displayedDecisionComparison.persistence}
+                        </dd>
+                      </div>
+                    </dl>
+                  </article>
+                </div>
+
+                <div className="appointment-review-decision-comparison-list">
+                  <strong>Comparison boundary</strong>
+                  <span>approve, reject</span>
+                  <small>
+                    Both paths are factual previews only. The comparison does
+                    not rank paths, choose an action, mutate the review, create
+                    a receipt record, create an appointment, access calendar
+                    data, or persist anything.
+                  </small>
+                </div>
+              </>
+            ) : (
+              <div className="appointment-review-decision-comparison-empty">
+                <strong>No selected appointment review</strong>
+                <span>
+                  Select a review to compare approve and reject dry-run paths.
                 </span>
               </div>
             )}
@@ -3236,6 +3629,47 @@ function isSafeDecisionPreviewResponse(payload) {
     typeof payload.reviewId === "string" &&
     typeof payload.code === "string" &&
     DECISION_PREVIEW_ACTIONS.includes(payload.action)
+  );
+}
+
+function isSafeDecisionComparisonResponse(payload) {
+  return (
+    payload &&
+    payload.mock === true &&
+    payload.dryRun === true &&
+    payload.decisionComparison === true &&
+    payload.validationOnly === true &&
+    payload.controlledHandlingOnly === true &&
+    payload.executionEnabled === false &&
+    payload.executorAvailable === false &&
+    payload.executionAvailable === false &&
+    payload.executionRequested === false &&
+    payload.actionPerformed === false &&
+    payload.commandDispatched === false &&
+    payload.commandPersisted === false &&
+    payload.receiptPersisted === false &&
+    payload.bookingCreated === false &&
+    payload.calendarChecked === false &&
+    payload.appointmentCreated === false &&
+    payload.calendarEventCreated === false &&
+    payload.databasePersisted === false &&
+    payload.persistence === "not_persisted" &&
+    payload.reviewMutated === false &&
+    payload.reviewStateChanged === false &&
+    payload.repositoryVersionChanged === false &&
+    typeof payload.accepted === "boolean" &&
+    payload.mode === "validation_only" &&
+    payload.comparison === "decision_paths" &&
+    typeof payload.reviewId === "string" &&
+    typeof payload.code === "string" &&
+    Array.isArray(payload.actions) &&
+    payload.actions.join(",") === "approve,reject" &&
+    payload.paths &&
+    typeof payload.paths === "object" &&
+    payload.paths.approve &&
+    payload.paths.reject &&
+    payload.paths.approve.persistence === "not_persisted" &&
+    payload.paths.reject.persistence === "not_persisted"
   );
 }
 

@@ -284,6 +284,126 @@ test("appointment reviews workspace keeps decision preview validation-only and n
   assert.doesNotMatch(workspaceSource, /setSelectedReviewId\(.*projectedNextState/);
 });
 
+test("appointment reviews workspace shows side-by-side decision path comparison dry-run", () => {
+  const comparisonRequestSource = workspaceSource.slice(
+    workspaceSource.indexOf(")}/decision-comparison`"),
+    workspaceSource.indexOf(
+      "const payload = await response.json();",
+      workspaceSource.indexOf(")}/decision-comparison`")
+    )
+  );
+
+  assert.match(workspaceSource, /INITIAL_DECISION_COMPARISON/);
+  assert.match(workspaceSource, /runDecisionComparison/);
+  assert.match(workspaceSource, /isSafeDecisionComparisonResponse/);
+  assert.match(workspaceSource, /Decision Path Comparison Dry-run/);
+  assert.match(workspaceSource, /Compare Decision Paths \(dry-run\)/);
+  assert.match(workspaceSource, /Two-path dry-run · No recommendation/);
+  assert.match(workspaceSource, /same trusted review state and observed\s+version/);
+  assert.match(workspaceSource, /Approve path/);
+  assert.match(workspaceSource, /Reject path/);
+  assert.match(workspaceSource, /approveComparisonPath/);
+  assert.match(workspaceSource, /rejectComparisonPath/);
+  assert.match(workspaceSource, /trustedCurrentState/);
+  assert.match(workspaceSource, /observedReviewVersion/);
+  assert.match(workspaceSource, /projectedNextState/);
+  assert.match(workspaceSource, /blockingStage/);
+  assert.match(workspaceSource, /receiptOutcome/);
+  assert.match(workspaceSource, /No action was selected or executed/);
+  assert.match(workspaceSource, /does\s+not rank paths, choose an action/);
+  assert.match(
+    workspaceSource,
+    /\/api\/secretary\/appointment-reviews\/\$\{encodeURIComponent/
+  );
+  assert.match(workspaceSource, /\/decision-comparison`/);
+  assert.match(comparisonRequestSource, /method: "POST"/);
+  assert.match(comparisonRequestSource, /body: JSON\.stringify\(\{\}\)/);
+  assert.doesNotMatch(comparisonRequestSource, /action:/);
+  assert.doesNotMatch(comparisonRequestSource, /actions:/);
+  assert.doesNotMatch(comparisonRequestSource, /currentState:/);
+  assert.doesNotMatch(comparisonRequestSource, /observedReviewVersion/);
+  assert.doesNotMatch(comparisonRequestSource, /idempotencyKey/);
+});
+
+test("appointment reviews workspace hardens decision comparison against stale responses", () => {
+  assert.match(workspaceSource, /decisionComparisonRequestSequenceRef/);
+  assert.match(workspaceSource, /activeDecisionComparisonRequestRef/);
+  assert.match(workspaceSource, /activeDecisionComparisonAbortRef/);
+  assert.match(workspaceSource, /createDecisionComparisonRequest/);
+  assert.match(workspaceSource, /invalidateDecisionComparisonRequest/);
+  assert.match(workspaceSource, /isActiveDecisionComparisonRequest/);
+  assert.match(workspaceSource, /activeDecisionComparisonAbortRef\.current\.abort\(\)/);
+  assert.match(workspaceSource, /signal: activeAbortController\?\.signal/);
+  assert.match(workspaceSource, /activeRequest\.requestId === requestId/);
+  assert.match(workspaceSource, /activeRequest\.reviewId === reviewId/);
+  assert.match(workspaceSource, /selectedReviewIdRef\.current === reviewId/);
+  assert.match(
+    workspaceSource,
+    /if \(\s+!\s*isActiveDecisionComparisonRequest\(\{[\s\S]*requestId,[\s\S]*reviewId: reviewIdForRequest[\s\S]*\}\)\s+\) \{\s+return;\s+\}/
+  );
+  assert.match(
+    workspaceSource,
+    /setDecisionComparisonResult\(payload\);\s+setDecisionComparisonStatus\("success"\);/
+  );
+  assert.match(
+    workspaceSource,
+    /setDecisionComparisonResult\(null\);\s+setDecisionComparisonStatus\("failure"\);/
+  );
+  assert.match(
+    workspaceSource,
+    /setDecisionComparisonStatus\("loading"\);\s+setDecisionComparisonResult\(null\);\s+setDecisionComparisonError\(""\);/
+  );
+  assert.match(
+    workspaceSource,
+    /if \(decisionComparisonStatus === "loading"\) \{\s+return;\s+\}/
+  );
+  assert.match(
+    workspaceSource,
+    /disabled=\{decisionComparisonStatus === "loading"\}/
+  );
+  assert.match(
+    workspaceSource,
+    /async function runDecisionPreview\(action\) \{\s+invalidateDecisionComparisonRequest\(\);/
+  );
+  assert.match(
+    workspaceSource,
+    /function createDecisionComparisonRequest\(\{ reviewId \}\) \{\s+invalidateDecisionPreviewRequest\(\);/
+  );
+});
+
+test("appointment reviews workspace keeps decision comparison non-executable and non-mutating", () => {
+  assert.match(workspaceSource, /decisionComparison:\s+true/);
+  assert.match(workspaceSource, /payload\.decisionComparison === true/);
+  assert.match(workspaceSource, /payload\.mode === "validation_only"/);
+  assert.match(workspaceSource, /payload\.comparison === "decision_paths"/);
+  assert.match(workspaceSource, /payload\.actions\.join\(","\) === "approve,reject"/);
+  assert.match(workspaceSource, /payload\.paths\.approve/);
+  assert.match(workspaceSource, /payload\.paths\.reject/);
+  assert.match(workspaceSource, /payload\.paths\.approve\.persistence === "not_persisted"/);
+  assert.match(workspaceSource, /payload\.paths\.reject\.persistence === "not_persisted"/);
+  assert.match(workspaceSource, /payload\.executionEnabled === false/);
+  assert.match(workspaceSource, /payload\.actionPerformed === false/);
+  assert.match(workspaceSource, /payload\.bookingCreated === false/);
+  assert.match(workspaceSource, /payload\.calendarChecked === false/);
+  assert.match(workspaceSource, /payload\.databasePersisted === false/);
+  assert.match(workspaceSource, /payload\.reviewMutated === false/);
+  assert.match(workspaceSource, /payload\.repositoryVersionChanged === false/);
+  assert.doesNotMatch(
+    workspaceSource,
+    new RegExp(
+      [
+        "recommended" + "Action",
+        "best" + "Action",
+        "preferred" + "Action",
+        "automatic" + "Decision",
+        "selected" + "Action",
+      ].join("|")
+    )
+  );
+  assert.doesNotMatch(workspaceSource, /setReviews\([^)]*decisionComparison/i);
+  assert.doesNotMatch(workspaceSource, /setSelectedReviewId\(.*comparison/i);
+});
+
 test("appointment reviews workspace shows controlled action preconditions dry-run preview", () => {
   const preconditionsRequestSource = workspaceSource.slice(
     workspaceSource.indexOf(")}/action-preconditions`"),
@@ -1096,6 +1216,21 @@ test("appointment reviews workspace resets decision preview on review change and
   );
 });
 
+test("appointment reviews workspace resets decision comparison on review change and unmount", () => {
+  assert.match(workspaceSource, /invalidateDecisionComparisonRequest\(\);/);
+  assert.match(
+    workspaceSource,
+    /selectedReviewIdRef\.current = selectedReviewId;[\s\S]*invalidateDecisionComparisonRequest\(\);/
+  );
+  assert.match(workspaceSource, /setDecisionComparisonStatus\("idle"\)/);
+  assert.match(workspaceSource, /setDecisionComparisonResult\(null\)/);
+  assert.match(workspaceSource, /setDecisionComparisonError\(""\)/);
+  assert.match(
+    workspaceSource,
+    /isMountedRef\.current = false;[\s\S]*invalidateDecisionComparisonRequest\(\);/
+  );
+});
+
 test("appointment reviews workspace ignores stale state transition success and failure", () => {
   assert.match(
     workspaceSource,
@@ -1265,6 +1400,13 @@ test("appointment reviews workspace styles are present", () => {
   assert.match(cssSource, /\.appointment-review-decision-empty/);
   assert.match(cssSource, /\.appointment-review-decision-button/);
   assert.match(cssSource, /\.appointment-review-decision-state/);
+  assert.match(cssSource, /\.appointment-review-decision-comparison/);
+  assert.match(cssSource, /\.appointment-review-decision-comparison-grid/);
+  assert.match(cssSource, /\.appointment-review-decision-comparison-paths/);
+  assert.match(cssSource, /\.appointment-review-decision-comparison-list/);
+  assert.match(cssSource, /\.appointment-review-decision-comparison-empty/);
+  assert.match(cssSource, /\.appointment-review-decision-comparison-button/);
+  assert.match(cssSource, /\.appointment-review-decision-comparison-state/);
   assert.match(cssSource, /\.appointment-review-validation-receipt-preview/);
   assert.match(cssSource, /\.appointment-review-validation-receipt-grid/);
   assert.match(cssSource, /\.appointment-review-validation-receipt-controls/);
