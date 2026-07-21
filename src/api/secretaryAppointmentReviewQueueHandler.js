@@ -18,6 +18,9 @@ function handleSecretaryAppointmentReviewQueueRequest(input = {}, options = {}) 
   }
 
   const queue = options.appointmentReviewQueue || null;
+  const appointmentReviews = Array.isArray(options.appointmentReviews)
+    ? options.appointmentReviews
+    : null;
   const requireReviewId = input.requireReviewId === true;
   const reviewId = normalizeReviewId(input.id || input.reviewId);
 
@@ -30,6 +33,12 @@ function handleSecretaryAppointmentReviewQueueRequest(input = {}, options = {}) 
   }
 
   if (!queue) {
+    if (appointmentReviews) {
+      return createSuccessResponse(
+        buildAppointmentReviewListResponse(reviewId ? [] : appointmentReviews)
+      );
+    }
+
     if (requireReviewId) {
       return createErrorResponse(
         404,
@@ -104,6 +113,14 @@ function createErrorResponse(statusCode, code, message) {
   };
 }
 
+function createSecretaryAppointmentReviewQueueInternalErrorResponse() {
+  return createErrorResponse(
+    500,
+    "internal_error",
+    "Secretary appointment review queue runtime failed safely."
+  );
+}
+
 function normalizeMethod(value) {
   return String(value || "GET").trim().toUpperCase();
 }
@@ -113,5 +130,6 @@ function normalizeReviewId(value) {
 }
 
 module.exports = {
+  createSecretaryAppointmentReviewQueueInternalErrorResponse,
   handleSecretaryAppointmentReviewQueueRequest,
 };

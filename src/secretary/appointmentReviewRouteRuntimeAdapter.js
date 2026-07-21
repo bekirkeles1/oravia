@@ -33,6 +33,9 @@ function createAppointmentReviewRouteRuntimeAdapter(options) {
     getRuntimeDescriptor() {
       return runtimeDescriptor;
     },
+    listAppointmentReviews() {
+      return runtime.getAppointmentReviewQueue().listAppointmentReviews();
+    },
     getAppointmentReviewQueue() {
       return runtime.getAppointmentReviewQueue();
     },

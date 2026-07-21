@@ -154,6 +154,7 @@ test("route runtime adapter exposes a narrow frozen route-facing contract", () =
     "schemaVersion",
     "adapterSource",
     "getRuntimeDescriptor",
+    "listAppointmentReviews",
     "getAppointmentReviewQueue",
     "getControlledActionDependencies",
   ]);
@@ -198,9 +199,23 @@ test("route runtime adapter creates one Sprint 13F runtime and delegates narrowl
   );
   const originalAdapterCache = require.cache[adapterPath];
   const originalRuntimeCache = require.cache[runtimePath];
+  const queuedReviews = Object.freeze([
+    Object.freeze({
+      id: "review_fake_runtime",
+      status: "pending_secretary_review",
+      selectedSlot: Object.freeze({ id: "slot_fake_runtime" }),
+      requiresSecretaryConfirmation: true,
+      bookingCreated: false,
+      calendarChecked: false,
+    }),
+  ]);
+  let listCalls = 0;
   const queue = Object.freeze({
     addAppointmentReview() {},
-    listAppointmentReviews() {},
+    listAppointmentReviews() {
+      listCalls += 1;
+      return queuedReviews;
+    },
     getAppointmentReviewById() {},
   });
   const dependencies = Object.freeze({
@@ -264,6 +279,8 @@ test("route runtime adapter creates one Sprint 13F runtime and delegates narrowl
     });
 
     assert.equal(runtimeFactoryCalls, 1);
+    assert.equal(adapter.listAppointmentReviews(), queuedReviews);
+    assert.equal(listCalls, 1);
     assert.equal(adapter.getAppointmentReviewQueue(), queue);
     assert.equal(adapter.getAppointmentReviewQueue(), queue);
     assert.equal(adapter.getControlledActionDependencies(), dependencies);
@@ -283,6 +300,27 @@ test("route runtime adapter creates one Sprint 13F runtime and delegates narrowl
       delete require.cache[runtimePath];
     }
   }
+});
+
+test("route runtime adapter list capability delegates through its request-scoped queue", () => {
+  const adapter = createAdapter();
+  const queue = adapter.getAppointmentReviewQueue();
+  const addResult = queue.addAppointmentReview(createSafeAppointmentSelectionReview(), {
+    conversationKey: "route_runtime_list",
+  });
+  const reviews = adapter.listAppointmentReviews();
+
+  assert.equal(addResult.status, "ok");
+  assert.equal(reviews.length, 1);
+  assert.equal(reviews[0].id, addResult.review.id);
+  assert.equal(reviews[0].bookingCreated, false);
+  assert.equal(reviews[0].calendarChecked, false);
+  assert.equal(reviews[0].requiresSecretaryConfirmation, true);
+  assert.equal(Object.hasOwn(adapter, "repository"), false);
+  assert.equal(Object.hasOwn(adapter, "queue"), false);
+  assert.equal(Object.hasOwn(adapter, "runtime"), false);
+  assert.equal(typeof adapter.updateAppointmentReviewStatus, "undefined");
+  assert.equal(typeof adapter.addAppointmentReview, "undefined");
 });
 
 test("services from one route adapter share one request-scoped runtime", async () => {

@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const {
+  createSecretaryAppointmentReviewQueueInternalErrorResponse,
   handleSecretaryAppointmentReviewQueueRequest,
 } = require("../src/api/secretaryAppointmentReviewQueueHandler");
 const {
@@ -154,6 +155,54 @@ test("secretary appointment review queue handler returns empty mock response wit
   assert.equal(response.body.safety.bookingCreated, false);
   assert.equal(response.body.safety.calendarChecked, false);
   assert.equal(response.body.safety.usesDatabase, false);
+});
+
+test("secretary appointment review queue handler lists injected read-only review array", () => {
+  const response = handleSecretaryAppointmentReviewQueueRequest(
+    { method: "GET" },
+    {
+      appointmentReviews: [
+        {
+          id: "review_handler_array",
+          status: "pending_secretary_review",
+          source: "mock",
+          selectedSlot: {
+            id: "slot_handler_array",
+          },
+          requiresSecretaryConfirmation: true,
+          bookingCreated: false,
+          calendarChecked: false,
+        },
+      ],
+    }
+  );
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.status, "ok");
+  assert.equal(response.body.count, 1);
+  assert.equal(response.body.reviews[0].id, "review_handler_array");
+  assert.equal(response.body.reviews[0].bookingCreated, false);
+  assert.equal(response.body.reviews[0].calendarChecked, false);
+  assert.equal(response.body.safety.readOnly, true);
+  assert.equal(response.body.safety.usesDatabase, false);
+});
+
+test("secretary appointment review queue handler exposes stable safe internal error response", () => {
+  const response = createSecretaryAppointmentReviewQueueInternalErrorResponse();
+
+  assert.equal(response.statusCode, 500);
+  assert.equal(response.body.status, "error");
+  assert.equal(response.body.source, "mock");
+  assert.equal(response.body.mode, "read_only");
+  assert.equal(response.body.persistence, "not_persisted");
+  assert.equal(response.body.persisted, false);
+  assert.equal(response.body.databasePersisted, false);
+  assert.equal(response.body.actionPerformed, false);
+  assert.equal(response.body.appointmentCreated, false);
+  assert.equal(response.body.safety.readOnly, true);
+  assert.equal(response.body.safety.bookingCreated, false);
+  assert.equal(response.body.safety.calendarChecked, false);
+  assert.equal(response.body.error.code, "internal_error");
 });
 
 test("secretary appointment review queue handler rejects non-read methods", () => {
