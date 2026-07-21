@@ -2639,6 +2639,107 @@ blockquote {
   font-weight: 800;
 }
 
+.appointment-review-resolution-guidance-preview,
+.appointment-review-resolution-guidance-empty {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f9faf7;
+}
+
+.appointment-review-resolution-guidance-preview {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+}
+
+.appointment-review-resolution-guidance-preview > div:first-child,
+.appointment-review-resolution-guidance-empty,
+.appointment-review-resolution-guidance-paths article,
+.appointment-review-resolution-guidance-summary {
+  display: grid;
+  gap: 6px;
+}
+
+.appointment-review-resolution-guidance-preview span,
+.appointment-review-resolution-guidance-preview p,
+.appointment-review-resolution-guidance-empty span {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.appointment-review-resolution-guidance-preview > div:first-child > span {
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.appointment-review-resolution-guidance-preview h3,
+.appointment-review-resolution-guidance-preview p {
+  margin: 0;
+}
+
+.appointment-review-resolution-guidance-grid,
+.appointment-review-resolution-guidance-paths,
+.appointment-review-resolution-guidance-paths article dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.appointment-review-resolution-guidance-grid div,
+.appointment-review-resolution-guidance-paths article,
+.appointment-review-resolution-guidance-paths article dl div,
+.appointment-review-resolution-guidance-summary,
+.appointment-review-resolution-guidance-empty {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.appointment-review-resolution-guidance-button {
+  justify-self: start;
+  width: fit-content;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font-weight: 800;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.appointment-review-resolution-guidance-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.appointment-review-resolution-guidance-state {
+  padding: 10px 12px;
+  border: 1px dashed rgba(107, 103, 45, 0.3);
+  border-radius: 8px;
+  background: rgba(107, 103, 45, 0.08);
+  font-weight: 800;
+}
+
+.appointment-review-resolution-guidance-paths ul {
+  display: grid;
+  gap: 6px;
+  margin: 4px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.appointment-review-resolution-guidance-summary pre {
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--ink);
+  font: inherit;
+  line-height: 1.45;
+}
+
 .appointment-review-queue-readiness-state {
   padding: 10px 12px;
   border: 1px dashed rgba(43, 111, 99, 0.3);
@@ -2732,6 +2833,9 @@ blockquote {
   .appointment-review-decision-comparison-grid,
   .appointment-review-decision-comparison-paths,
   .appointment-review-decision-comparison-paths article dl,
+  .appointment-review-resolution-guidance-grid,
+  .appointment-review-resolution-guidance-paths,
+  .appointment-review-resolution-guidance-paths article dl,
   .appointment-review-queue-readiness-controls,
   .appointment-review-queue-readiness-summary,
   .appointment-review-controlled-action-validation-grid,

@@ -195,6 +195,35 @@ const INITIAL_DECISION_COMPARISON = {
   repositoryVersionChanged: false
 };
 
+const INITIAL_RESOLUTION_GUIDANCE_PREVIEW = {
+  mock: true,
+  dryRun: true,
+  resolutionGuidancePreview: true,
+  validationOnly: true,
+  controlledHandlingOnly: true,
+  executionEnabled: false,
+  executorAvailable: false,
+  executionAvailable: false,
+  executionRequested: false,
+  actionPerformed: false,
+  commandDispatched: false,
+  commandPersisted: false,
+  receiptPersisted: false,
+  bookingCreated: false,
+  calendarChecked: false,
+  appointmentCreated: false,
+  calendarEventCreated: false,
+  databasePersisted: false,
+  persistence: "not_persisted",
+  reviewMutated: false,
+  reviewStateChanged: false,
+  repositoryVersionChanged: false,
+  guidancePersisted: false,
+  summaryPersisted: false,
+  messageSent: false,
+  taskAssigned: false
+};
+
 const QUEUE_READINESS_FILTERS = [
   ["all", "All"],
   ["both_paths_available", "Both paths available"],
@@ -329,6 +358,11 @@ export default function AppointmentReviewsWorkspace() {
   const [decisionComparisonResult, setDecisionComparisonResult] =
     useState(null);
   const [decisionComparisonError, setDecisionComparisonError] = useState("");
+  const [resolutionGuidanceStatus, setResolutionGuidanceStatus] =
+    useState("idle");
+  const [resolutionGuidanceResult, setResolutionGuidanceResult] =
+    useState(null);
+  const [resolutionGuidanceError, setResolutionGuidanceError] = useState("");
   const [queueReadinessStatus, setQueueReadinessStatus] = useState("idle");
   const [queueReadinessResult, setQueueReadinessResult] = useState(null);
   const [queueReadinessError, setQueueReadinessError] = useState("");
@@ -368,6 +402,9 @@ export default function AppointmentReviewsWorkspace() {
   const decisionComparisonRequestSequenceRef = useRef(0);
   const activeDecisionComparisonRequestRef = useRef(null);
   const activeDecisionComparisonAbortRef = useRef(null);
+  const resolutionGuidanceRequestSequenceRef = useRef(0);
+  const activeResolutionGuidanceRequestRef = useRef(null);
+  const activeResolutionGuidanceAbortRef = useRef(null);
   const queueReadinessRequestSequenceRef = useRef(0);
   const activeQueueReadinessRequestRef = useRef(null);
   const activeQueueReadinessAbortRef = useRef(null);
@@ -396,6 +433,11 @@ export default function AppointmentReviewsWorkspace() {
     decisionComparisonResult || INITIAL_DECISION_COMPARISON;
   const approveComparisonPath = decisionComparisonResult?.paths?.approve || null;
   const rejectComparisonPath = decisionComparisonResult?.paths?.reject || null;
+  const displayedResolutionGuidance =
+    resolutionGuidanceResult || INITIAL_RESOLUTION_GUIDANCE_PREVIEW;
+  const approveResolutionGuidance =
+    resolutionGuidanceResult?.approve || null;
+  const rejectResolutionGuidance = resolutionGuidanceResult?.reject || null;
   const displayedQueueReadiness =
     queueReadinessResult || INITIAL_QUEUE_READINESS_PREVIEW;
   const currentReviewIds = reviews.map((review) => review.id);
@@ -434,6 +476,8 @@ export default function AppointmentReviewsWorkspace() {
 
         const nextReviews = Array.isArray(payload.reviews) ? payload.reviews : [];
 
+        invalidateResolutionGuidanceRequest();
+        resetResolutionGuidanceState();
         invalidateQueueReadinessRequest();
         resetQueueReadinessState();
         setReviews(nextReviews);
@@ -462,6 +506,8 @@ export default function AppointmentReviewsWorkspace() {
 
         setReviews([]);
         setSelectedReviewId("");
+        invalidateResolutionGuidanceRequest();
+        resetResolutionGuidanceState();
         invalidateQueueReadinessRequest();
         resetQueueReadinessState();
         setLoading(false);
@@ -491,6 +537,7 @@ export default function AppointmentReviewsWorkspace() {
       invalidateValidationReceiptRequest();
       invalidateDecisionPreviewRequest();
       invalidateDecisionComparisonRequest();
+      invalidateResolutionGuidanceRequest();
       invalidateQueueReadinessRequest();
     };
   }, []);
@@ -503,6 +550,7 @@ export default function AppointmentReviewsWorkspace() {
     invalidateValidationReceiptRequest();
     invalidateDecisionPreviewRequest();
     invalidateDecisionComparisonRequest();
+    invalidateResolutionGuidanceRequest();
     setActionIntentDryRunStatus("idle");
     setActionIntentDryRunResult(null);
     setActionIntentDryRunError("");
@@ -551,10 +599,15 @@ export default function AppointmentReviewsWorkspace() {
     setDecisionComparisonStatus("idle");
     setDecisionComparisonResult(null);
     setDecisionComparisonError("");
+    setResolutionGuidanceStatus("idle");
+    setResolutionGuidanceResult(null);
+    setResolutionGuidanceError("");
   }, [selectedReviewId]);
 
   async function runActionIntentDryRun() {
     invalidateDecisionComparisonRequest();
+    invalidateResolutionGuidanceRequest();
+    resetResolutionGuidanceState();
 
     if (!selectedReview) {
       setActionIntentDryRunStatus("error");
@@ -624,6 +677,8 @@ export default function AppointmentReviewsWorkspace() {
 
   async function runStateTransitionDryRun() {
     invalidateDecisionComparisonRequest();
+    invalidateResolutionGuidanceRequest();
+    resetResolutionGuidanceState();
 
     if (stateTransitionDryRunStatus === "loading") {
       return;
@@ -773,6 +828,8 @@ export default function AppointmentReviewsWorkspace() {
 
   async function runPreconditionsDryRun() {
     invalidateDecisionComparisonRequest();
+    invalidateResolutionGuidanceRequest();
+    resetResolutionGuidanceState();
 
     if (preconditionsDryRunStatus === "loading") {
       return;
@@ -955,6 +1012,8 @@ export default function AppointmentReviewsWorkspace() {
 
   async function runControlledActionValidationDryRun() {
     invalidateDecisionComparisonRequest();
+    invalidateResolutionGuidanceRequest();
+    resetResolutionGuidanceState();
 
     if (controlledActionValidationStatus === "loading") {
       return;
@@ -1127,6 +1186,8 @@ export default function AppointmentReviewsWorkspace() {
 
   async function runValidationReceiptDryRun() {
     invalidateDecisionComparisonRequest();
+    invalidateResolutionGuidanceRequest();
+    resetResolutionGuidanceState();
 
     if (validationReceiptStatus === "loading") {
       return;
@@ -1300,6 +1361,8 @@ export default function AppointmentReviewsWorkspace() {
 
   async function runDecisionPreview(action) {
     invalidateDecisionComparisonRequest();
+    invalidateResolutionGuidanceRequest();
+    resetResolutionGuidanceState();
 
     if (decisionPreviewStatus === "loading") {
       return;
@@ -1496,6 +1559,8 @@ export default function AppointmentReviewsWorkspace() {
         );
       }
 
+      invalidateResolutionGuidanceRequest();
+      resetResolutionGuidanceState();
       setDecisionComparisonResult(payload);
       setDecisionComparisonStatus("success");
     } catch (error) {
@@ -1525,6 +1590,8 @@ export default function AppointmentReviewsWorkspace() {
   function createDecisionComparisonRequest({ reviewId }) {
     invalidateDecisionPreviewRequest();
     invalidateDecisionComparisonRequest();
+    invalidateResolutionGuidanceRequest();
+    resetResolutionGuidanceState();
 
     const requestId = decisionComparisonRequestSequenceRef.current + 1;
     const abortController = new AbortController();
@@ -1551,6 +1618,141 @@ export default function AppointmentReviewsWorkspace() {
 
   function isActiveDecisionComparisonRequest({ requestId, reviewId }) {
     const activeRequest = activeDecisionComparisonRequestRef.current;
+
+    return (
+      isMountedRef.current &&
+      activeRequest &&
+      activeRequest.requestId === requestId &&
+      activeRequest.reviewId === reviewId &&
+      selectedReviewIdRef.current === reviewId
+    );
+  }
+
+  async function runResolutionGuidancePreview() {
+    if (resolutionGuidanceStatus === "loading") {
+      return;
+    }
+
+    if (!selectedReview) {
+      setResolutionGuidanceStatus("failure");
+      setResolutionGuidanceResult(null);
+      setResolutionGuidanceError(
+        "Select a review before generating resolution guidance preview."
+      );
+      return;
+    }
+
+    const reviewIdForRequest = selectedReview.id;
+    const requestId = createResolutionGuidanceRequest({
+      reviewId: reviewIdForRequest
+    });
+    const activeAbortController = activeResolutionGuidanceAbortRef.current;
+
+    setResolutionGuidanceStatus("loading");
+    setResolutionGuidanceResult(null);
+    setResolutionGuidanceError("");
+
+    try {
+      const response = await fetch(
+        `/api/secretary/appointment-reviews/${encodeURIComponent(
+          reviewIdForRequest
+        )}/resolution-guidance-preview`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          signal: activeAbortController?.signal,
+          body: JSON.stringify({})
+        }
+      );
+      const payload = await response.json();
+
+      if (
+        !isActiveResolutionGuidanceRequest({
+          requestId,
+          reviewId: reviewIdForRequest
+        })
+      ) {
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          payload?.reason ||
+            payload?.error?.message ||
+            "Resolution guidance preview failed safely."
+        );
+      }
+
+      if (!isSafeResolutionGuidanceResponse(payload)) {
+        throw new Error(
+          "Resolution guidance preview response was unsafe or incomplete."
+        );
+      }
+
+      setResolutionGuidanceResult(payload);
+      setResolutionGuidanceStatus("success");
+    } catch (error) {
+      if (isAbortError(error)) {
+        return;
+      }
+
+      if (
+        !isActiveResolutionGuidanceRequest({
+          requestId,
+          reviewId: reviewIdForRequest
+        })
+      ) {
+        return;
+      }
+
+      setResolutionGuidanceResult(null);
+      setResolutionGuidanceStatus("failure");
+      setResolutionGuidanceError(
+        error instanceof Error
+          ? error.message
+          : "Resolution guidance preview failed safely."
+      );
+    }
+  }
+
+  function createResolutionGuidanceRequest({ reviewId }) {
+    invalidateDecisionPreviewRequest();
+    invalidateDecisionComparisonRequest();
+    invalidateResolutionGuidanceRequest();
+
+    const requestId = resolutionGuidanceRequestSequenceRef.current + 1;
+    const abortController = new AbortController();
+
+    resolutionGuidanceRequestSequenceRef.current = requestId;
+    activeResolutionGuidanceAbortRef.current = abortController;
+    activeResolutionGuidanceRequestRef.current = {
+      requestId,
+      reviewId
+    };
+
+    return requestId;
+  }
+
+  function invalidateResolutionGuidanceRequest() {
+    resolutionGuidanceRequestSequenceRef.current += 1;
+    activeResolutionGuidanceRequestRef.current = null;
+
+    if (activeResolutionGuidanceAbortRef.current) {
+      activeResolutionGuidanceAbortRef.current.abort();
+      activeResolutionGuidanceAbortRef.current = null;
+    }
+  }
+
+  function resetResolutionGuidanceState() {
+    setResolutionGuidanceStatus("idle");
+    setResolutionGuidanceResult(null);
+    setResolutionGuidanceError("");
+  }
+
+  function isActiveResolutionGuidanceRequest({ requestId, reviewId }) {
+    const activeRequest = activeResolutionGuidanceRequestRef.current;
 
     return (
       isMountedRef.current &&
@@ -2670,6 +2872,258 @@ export default function AppointmentReviewsWorkspace() {
                 <strong>No selected appointment review</strong>
                 <span>
                   Select a review to compare approve and reject dry-run paths.
+                </span>
+              </div>
+            )}
+          </section>
+        ) : null}
+
+        {!loading && !loadError ? (
+          <section
+            className="appointment-review-resolution-guidance-preview"
+            aria-labelledby="appointment-review-resolution-guidance-preview-title"
+          >
+            <div>
+              <span>Operational follow-up dry-run · No recommendation</span>
+              <h3 id="appointment-review-resolution-guidance-preview-title">
+                Resolution Guidance Preview
+              </h3>
+              <p>
+                Generates factual approve and reject follow-up checks from the
+                same server-side decision comparison boundary. It does not
+                choose a path, execute, persist, book, send a message, assign a
+                task, or access calendar data.
+              </p>
+            </div>
+
+            {selectedReview ? (
+              <>
+                <button
+                  type="button"
+                  className="appointment-review-resolution-guidance-button"
+                  onClick={runResolutionGuidancePreview}
+                  disabled={resolutionGuidanceStatus === "loading"}
+                >
+                  Generate Resolution Guidance
+                </button>
+
+                <p className="appointment-review-resolution-guidance-state">
+                  {resolutionGuidanceStatus === "loading"
+                    ? "Resolution guidance preview is running. Duplicate submissions are ignored."
+                    : null}
+                  {resolutionGuidanceStatus === "success"
+                    ? "Resolution guidance preview received. No action was selected, assigned, sent, or executed."
+                    : null}
+                  {resolutionGuidanceStatus === "failure"
+                    ? resolutionGuidanceError ||
+                      "Resolution guidance preview failed safely."
+                    : null}
+                  {resolutionGuidanceStatus === "idle"
+                    ? "Idle: no resolution guidance preview for this selected review."
+                    : null}
+                </p>
+
+                <dl className="appointment-review-resolution-guidance-grid">
+                  <div>
+                    <dt>reviewId</dt>
+                    <dd>
+                      {resolutionGuidanceResult?.reviewId || selectedReview.id}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>trustedCurrentState</dt>
+                    <dd>
+                      {resolutionGuidanceResult?.trustedCurrentState ||
+                        "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>observedReviewVersion</dt>
+                    <dd>
+                      {resolutionGuidanceResult?.observedReviewVersion ||
+                        "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>readiness</dt>
+                    <dd>{resolutionGuidanceResult?.readiness || "not_run"}</dd>
+                  </div>
+                  <div>
+                    <dt>dryRun</dt>
+                    <dd>{String(displayedResolutionGuidance.dryRun)}</dd>
+                  </div>
+                  <div>
+                    <dt>resolutionGuidancePreview</dt>
+                    <dd>
+                      {String(
+                        displayedResolutionGuidance.resolutionGuidancePreview
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>executionEnabled</dt>
+                    <dd>
+                      {String(displayedResolutionGuidance.executionEnabled)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>guidancePersisted</dt>
+                    <dd>
+                      {String(displayedResolutionGuidance.guidancePersisted)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>summaryPersisted</dt>
+                    <dd>
+                      {String(displayedResolutionGuidance.summaryPersisted)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>messageSent</dt>
+                    <dd>{String(displayedResolutionGuidance.messageSent)}</dd>
+                  </div>
+                  <div>
+                    <dt>taskAssigned</dt>
+                    <dd>{String(displayedResolutionGuidance.taskAssigned)}</dd>
+                  </div>
+                  <div>
+                    <dt>persistence</dt>
+                    <dd>{displayedResolutionGuidance.persistence}</dd>
+                  </div>
+                  <div>
+                    <dt>reviewMutated</dt>
+                    <dd>{String(displayedResolutionGuidance.reviewMutated)}</dd>
+                  </div>
+                  <div>
+                    <dt>repositoryVersionChanged</dt>
+                    <dd>
+                      {String(
+                        displayedResolutionGuidance.repositoryVersionChanged
+                      )}
+                    </dd>
+                  </div>
+                </dl>
+
+                <div className="appointment-review-resolution-guidance-paths">
+                  <article>
+                    <span>Approve guidance</span>
+                    <dl>
+                      <div>
+                        <dt>branchOutcome</dt>
+                        <dd>
+                          {approveResolutionGuidance?.branchOutcome ||
+                            "not_run"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>category</dt>
+                        <dd>
+                          {approveResolutionGuidance?.category || "not_run"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>requiredCheck</dt>
+                        <dd>
+                          {approveResolutionGuidance?.requiredCheck ||
+                            "not_run"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>reasonCode</dt>
+                        <dd>
+                          {approveResolutionGuidance?.reasonCode || "none"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>blockingStage</dt>
+                        <dd>
+                          {approveResolutionGuidance?.blockingStage || "none"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>rerunAfterVerification</dt>
+                        <dd>
+                          {String(
+                            approveResolutionGuidance
+                              ?.rerunAfterVerification === true
+                          )}
+                        </dd>
+                      </div>
+                    </dl>
+                    <ul>
+                      {(approveResolutionGuidance?.checklist || [
+                        "No generated checklist for this path yet."
+                      ]).map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </article>
+                  <article>
+                    <span>Reject guidance</span>
+                    <dl>
+                      <div>
+                        <dt>branchOutcome</dt>
+                        <dd>
+                          {rejectResolutionGuidance?.branchOutcome ||
+                            "not_run"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>category</dt>
+                        <dd>
+                          {rejectResolutionGuidance?.category || "not_run"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>requiredCheck</dt>
+                        <dd>
+                          {rejectResolutionGuidance?.requiredCheck ||
+                            "not_run"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>reasonCode</dt>
+                        <dd>{rejectResolutionGuidance?.reasonCode || "none"}</dd>
+                      </div>
+                      <div>
+                        <dt>blockingStage</dt>
+                        <dd>
+                          {rejectResolutionGuidance?.blockingStage || "none"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>rerunAfterVerification</dt>
+                        <dd>
+                          {String(
+                            rejectResolutionGuidance
+                              ?.rerunAfterVerification === true
+                          )}
+                        </dd>
+                      </div>
+                    </dl>
+                    <ul>
+                      {(rejectResolutionGuidance?.checklist || [
+                        "No generated checklist for this path yet."
+                      ]).map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </article>
+                </div>
+
+                <div className="appointment-review-resolution-guidance-summary">
+                  <strong>Internal Follow-up Summary - not sent or saved</strong>
+                  <pre>
+                    {resolutionGuidanceResult?.internalFollowUpSummary ||
+                      "No internal follow-up summary has been generated for this selected review."}
+                  </pre>
+                </div>
+              </>
+            ) : (
+              <div className="appointment-review-resolution-guidance-empty">
+                <strong>No selected appointment review</strong>
+                <span>
+                  Select a review to generate factual resolution guidance.
                 </span>
               </div>
             )}
@@ -4015,6 +4469,77 @@ function isSafeDecisionComparisonResponse(payload) {
     payload.paths.reject &&
     payload.paths.approve.persistence === "not_persisted" &&
     payload.paths.reject.persistence === "not_persisted"
+  );
+}
+
+function isSafeResolutionGuidanceResponse(payload) {
+  return (
+    payload &&
+    payload.mock === true &&
+    payload.dryRun === true &&
+    payload.resolutionGuidancePreview === true &&
+    payload.validationOnly === true &&
+    payload.controlledHandlingOnly === true &&
+    payload.executionEnabled === false &&
+    payload.executorAvailable === false &&
+    payload.executionAvailable === false &&
+    payload.executionRequested === false &&
+    payload.actionPerformed === false &&
+    payload.commandDispatched === false &&
+    payload.commandPersisted === false &&
+    payload.receiptPersisted === false &&
+    payload.bookingCreated === false &&
+    payload.calendarChecked === false &&
+    payload.appointmentCreated === false &&
+    payload.calendarEventCreated === false &&
+    payload.databasePersisted === false &&
+    payload.persistence === "not_persisted" &&
+    payload.reviewMutated === false &&
+    payload.reviewStateChanged === false &&
+    payload.repositoryVersionChanged === false &&
+    payload.guidancePersisted === false &&
+    payload.summaryPersisted === false &&
+    payload.messageSent === false &&
+    payload.taskAssigned === false &&
+    typeof payload.accepted === "boolean" &&
+    payload.mode === "validation_only" &&
+    payload.preview === "resolution_guidance_preview" &&
+    typeof payload.reviewId === "string" &&
+    typeof payload.code === "string" &&
+    ["both_paths_available", "approve_path_only", "reject_path_only", "both_paths_blocked"].includes(
+      payload.readiness
+    ) &&
+    payload.approve &&
+    payload.reject &&
+    isSafeResolutionGuidanceBranch(payload.approve) &&
+    isSafeResolutionGuidanceBranch(payload.reject) &&
+    typeof payload.internalFollowUpSummary === "string"
+  );
+}
+
+function isSafeResolutionGuidanceBranch(branch) {
+  return (
+    branch &&
+    ["approve", "reject"].includes(branch.action) &&
+    ["passed", "blocked"].includes(branch.branchOutcome) &&
+    typeof branch.category === "string" &&
+    typeof branch.requiredCheck === "string" &&
+    Array.isArray(branch.checklist) &&
+    branch.validationOnly === true &&
+    branch.executionAvailable === false &&
+    branch.actionPerformed === false &&
+    branch.bookingCreated === false &&
+    branch.calendarChecked === false &&
+    branch.appointmentCreated === false &&
+    branch.calendarEventCreated === false &&
+    branch.databasePersisted === false &&
+    branch.persistence === "not_persisted" &&
+    branch.reviewMutated === false &&
+    branch.repositoryVersionChanged === false &&
+    branch.guidancePersisted === false &&
+    branch.summaryPersisted === false &&
+    branch.messageSent === false &&
+    branch.taskAssigned === false
   );
 }
 

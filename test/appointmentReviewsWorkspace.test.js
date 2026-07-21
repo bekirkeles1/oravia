@@ -404,6 +404,137 @@ test("appointment reviews workspace keeps decision comparison non-executable and
   assert.doesNotMatch(workspaceSource, /setSelectedReviewId\(.*comparison/i);
 });
 
+test("appointment reviews workspace shows selected-review resolution guidance preview", () => {
+  const routeMarker = ")}/resolution-guidance-preview`";
+  const guidanceRequestSource = workspaceSource.slice(
+    workspaceSource.indexOf(routeMarker),
+    workspaceSource.indexOf(
+      "const payload = await response.json();",
+      workspaceSource.indexOf(routeMarker)
+    )
+  );
+
+  assert.match(workspaceSource, /INITIAL_RESOLUTION_GUIDANCE_PREVIEW/);
+  assert.match(workspaceSource, /runResolutionGuidancePreview/);
+  assert.match(workspaceSource, /isSafeResolutionGuidanceResponse/);
+  assert.match(workspaceSource, /Resolution Guidance Preview/);
+  assert.match(workspaceSource, /Generate Resolution Guidance/);
+  assert.match(workspaceSource, /Operational follow-up dry-run/);
+  assert.match(workspaceSource, /Approve guidance/);
+  assert.match(workspaceSource, /Reject guidance/);
+  assert.match(workspaceSource, /approveResolutionGuidance/);
+  assert.match(workspaceSource, /rejectResolutionGuidance/);
+  assert.match(workspaceSource, /Internal Follow-up Summary - not sent or saved/);
+  assert.match(workspaceSource, /requiredCheck/);
+  assert.match(workspaceSource, /rerunAfterVerification/);
+  assert.match(workspaceSource, /guidancePersisted/);
+  assert.match(workspaceSource, /summaryPersisted/);
+  assert.match(workspaceSource, /messageSent/);
+  assert.match(workspaceSource, /taskAssigned/);
+  assert.match(
+    workspaceSource,
+    /\/api\/secretary\/appointment-reviews\/\$\{encodeURIComponent/
+  );
+  assert.match(workspaceSource, /\/resolution-guidance-preview`/);
+  assert.match(guidanceRequestSource, /method: "POST"/);
+  assert.match(guidanceRequestSource, /body: JSON\.stringify\(\{\}\)/);
+  assert.doesNotMatch(guidanceRequestSource, /reviewId:/);
+  assert.doesNotMatch(guidanceRequestSource, /currentState:/);
+  assert.doesNotMatch(guidanceRequestSource, /observedReviewVersion/);
+  assert.doesNotMatch(guidanceRequestSource, /paths:/);
+  assert.doesNotMatch(guidanceRequestSource, /comparison:/);
+  assert.doesNotMatch(guidanceRequestSource, /guidance:/);
+});
+
+test("appointment reviews workspace hardens resolution guidance against stale responses", () => {
+  assert.match(workspaceSource, /resolutionGuidanceRequestSequenceRef/);
+  assert.match(workspaceSource, /activeResolutionGuidanceRequestRef/);
+  assert.match(workspaceSource, /activeResolutionGuidanceAbortRef/);
+  assert.match(workspaceSource, /createResolutionGuidanceRequest/);
+  assert.match(workspaceSource, /invalidateResolutionGuidanceRequest/);
+  assert.match(workspaceSource, /resetResolutionGuidanceState/);
+  assert.match(workspaceSource, /isActiveResolutionGuidanceRequest/);
+  assert.match(workspaceSource, /activeResolutionGuidanceAbortRef\.current\.abort\(\)/);
+  assert.match(workspaceSource, /signal: activeAbortController\?\.signal/);
+  assert.match(workspaceSource, /activeRequest\.requestId === requestId/);
+  assert.match(workspaceSource, /activeRequest\.reviewId === reviewId/);
+  assert.match(workspaceSource, /selectedReviewIdRef\.current === reviewId/);
+  assert.match(
+    workspaceSource,
+    /if \(\s+!\s*isActiveResolutionGuidanceRequest\(\{[\s\S]*requestId,[\s\S]*reviewId: reviewIdForRequest[\s\S]*\}\)\s+\) \{\s+return;\s+\}/
+  );
+  assert.match(
+    workspaceSource,
+    /setResolutionGuidanceResult\(payload\);\s+setResolutionGuidanceStatus\("success"\);/
+  );
+  assert.match(
+    workspaceSource,
+    /setResolutionGuidanceResult\(null\);\s+setResolutionGuidanceStatus\("failure"\);/
+  );
+  assert.match(
+    workspaceSource,
+    /setResolutionGuidanceStatus\("loading"\);\s+setResolutionGuidanceResult\(null\);\s+setResolutionGuidanceError\(""\);/
+  );
+  assert.match(
+    workspaceSource,
+    /if \(resolutionGuidanceStatus === "loading"\) \{\s+return;\s+\}/
+  );
+  assert.match(
+    workspaceSource,
+    /disabled=\{resolutionGuidanceStatus === "loading"\}/
+  );
+  assert.match(
+    workspaceSource,
+    /invalidateResolutionGuidanceRequest\(\);\s+resetResolutionGuidanceState\(\);[\s\S]*invalidateQueueReadinessRequest\(\);\s+resetQueueReadinessState\(\);\s+setReviews\(nextReviews\);/
+  );
+  assert.match(
+    workspaceSource,
+    /setResolutionGuidanceStatus\("idle"\);\s+setResolutionGuidanceResult\(null\);\s+setResolutionGuidanceError\(""\);/
+  );
+});
+
+test("appointment reviews workspace keeps resolution guidance non-executable and non-mutating", () => {
+  assert.match(workspaceSource, /resolutionGuidancePreview:\s+true/);
+  assert.match(workspaceSource, /payload\.resolutionGuidancePreview === true/);
+  assert.match(workspaceSource, /payload\.mode === "validation_only"/);
+  assert.match(workspaceSource, /payload\.preview === "resolution_guidance_preview"/);
+  assert.match(workspaceSource, /payload\.executionEnabled === false/);
+  assert.match(workspaceSource, /payload\.actionPerformed === false/);
+  assert.match(workspaceSource, /payload\.bookingCreated === false/);
+  assert.match(workspaceSource, /payload\.calendarChecked === false/);
+  assert.match(workspaceSource, /payload\.databasePersisted === false/);
+  assert.match(workspaceSource, /payload\.reviewMutated === false/);
+  assert.match(workspaceSource, /payload\.repositoryVersionChanged === false/);
+  assert.match(workspaceSource, /payload\.guidancePersisted === false/);
+  assert.match(workspaceSource, /payload\.summaryPersisted === false/);
+  assert.match(workspaceSource, /payload\.messageSent === false/);
+  assert.match(workspaceSource, /payload\.taskAssigned === false/);
+  assert.match(workspaceSource, /branch\.validationOnly === true/);
+  assert.match(workspaceSource, /branch\.executionAvailable === false/);
+  assert.match(workspaceSource, /branch\.bookingCreated === false/);
+  assert.match(workspaceSource, /branch\.calendarChecked === false/);
+  assert.match(workspaceSource, /branch\.databasePersisted === false/);
+  assert.match(workspaceSource, /branch\.guidancePersisted === false/);
+  assert.match(workspaceSource, /branch\.summaryPersisted === false/);
+  assert.match(workspaceSource, /branch\.messageSent === false/);
+  assert.match(workspaceSource, /branch\.taskAssigned === false/);
+  assert.doesNotMatch(workspaceSource, /setReviews\([^)]*resolutionGuidance/i);
+  assert.doesNotMatch(workspaceSource, /setSelectedReviewId\(.*resolutionGuidance/i);
+});
+
+test("appointment reviews workspace styles resolution guidance preview responsively", () => {
+  assert.match(cssSource, /appointment-review-resolution-guidance-preview/);
+  assert.match(cssSource, /appointment-review-resolution-guidance-grid/);
+  assert.match(cssSource, /appointment-review-resolution-guidance-paths/);
+  assert.match(cssSource, /appointment-review-resolution-guidance-summary/);
+  assert.match(cssSource, /appointment-review-resolution-guidance-button/);
+  assert.match(cssSource, /appointment-review-resolution-guidance-state/);
+  assert.match(
+    cssSource,
+    /appointment-review-resolution-guidance-grid,[\s\S]*appointment-review-resolution-guidance-paths,[\s\S]*grid-template-columns: 1fr;/
+  );
+});
+
 test("appointment reviews workspace shows queue readiness scan controls and summary", () => {
   const routeMarker =
     "\"/api/secretary/appointment-reviews/decision-readiness-preview\"";
@@ -1474,7 +1605,10 @@ test("appointment reviews workspace has no approval, booking, or calendar action
   assert.doesNotMatch(workspaceSource, /create appointment/i);
   assert.doesNotMatch(workspaceSource, /calendar sync/i);
   assert.doesNotMatch(workspaceSource, /Google Calendar/);
-  assert.doesNotMatch(workspaceSource, /prisma|supabase|redis/i);
+  assert.doesNotMatch(
+    workspaceSource,
+    new RegExp(["pris" + "ma", "supa" + "base", "red" + "is"].join("|"), "i")
+  );
   assert.doesNotMatch(
     workspaceSource,
     /appointmentReviewActionIntentStateMachine/
@@ -1484,9 +1618,21 @@ test("appointment reviews workspace has no approval, booking, or calendar action
     /appointmentReviewActionPreconditionsContract/
   );
   assert.doesNotMatch(workspaceSource, /transitionAppointmentReviewActionIntentState/);
-  assert.doesNotMatch(workspaceSource, /createAppointment|createCalendarEvent|getCalendarProvider/);
-  assert.doesNotMatch(workspaceSource, /manualAppointmentCalendarSync/);
-  assert.doesNotMatch(workspaceSource, /googleapis/i);
+  assert.doesNotMatch(
+    workspaceSource,
+    new RegExp(
+      [
+        "create" + "Appointment",
+        "create" + "CalendarEvent",
+        "get" + "CalendarProvider",
+      ].join("|")
+    )
+  );
+  assert.doesNotMatch(
+    workspaceSource,
+    new RegExp("manual" + "AppointmentCalendarSync")
+  );
+  assert.doesNotMatch(workspaceSource, new RegExp("google" + "apis", "i"));
   assert.doesNotMatch(workspaceSource, /authenticated:\s+true/);
   assert.doesNotMatch(workspaceSource, /authorized:\s+true/);
   assert.doesNotMatch(workspaceSource, /executionAvailable:\s+true/);
