@@ -92,6 +92,13 @@ const ROUTE_SAFETY_FIELDS = Object.freeze({
   authenticationMode: "mock_validation_only",
 });
 
+const REQUIRED_CONTROLLED_ACTION_DEPENDENCY_METHODS = Object.freeze([
+  "resolveVerifiedActorContext",
+  "resolveAppointmentReviewContext",
+  "resolveIdempotencyContext",
+  "resolveExecutionPolicyContext",
+]);
+
 async function POST(request, context = {}) {
   return handleControlledActionValidationReceiptRouteRequest(request, context);
 }
@@ -186,16 +193,27 @@ async function handleControlledActionValidationReceiptRouteRequest(
     );
   }
 
-  const routeRuntime = createRouteRuntimeAdapter({
-    resolveControlledActionState: resolveRouteControlledActionState,
-    initialReviews: [createRouteReviewSeed(reviewId)],
+  const dependenciesResult = resolveRouteControlledActionDependencies({
+    createRouteRuntimeAdapter,
+    reviewId,
   });
+
+  if (!dependenciesResult.accepted) {
+    return Response.json(
+      createRouteValidationError(
+        "internal_error",
+        "Controlled action validation receipt runtime failed safely."
+      ),
+      { status: 500 }
+    );
+  }
+
   const receiptHandlerResult =
     await handleAppointmentReviewControlledActionValidationReceipt({
       method: "POST",
       reviewId,
       body,
-      dependencies: routeRuntime.getControlledActionDependencies(),
+      dependencies: dependenciesResult.dependencies,
     });
   const routeResult = sanitizeRouteResult(receiptHandlerResult);
 
@@ -289,6 +307,55 @@ function createRouteReviewSeed(reviewId) {
 
 function resolveRouteControlledActionState() {
   return "validation_only_intent_checked";
+}
+
+function resolveRouteControlledActionDependencies({
+  createRouteRuntimeAdapter,
+  reviewId,
+}) {
+  try {
+    const routeRuntime = createRouteRuntimeAdapter({
+      resolveControlledActionState: resolveRouteControlledActionState,
+      initialReviews: [createRouteReviewSeed(reviewId)],
+    });
+
+    if (
+      !routeRuntime ||
+      typeof routeRuntime !== "object" ||
+      typeof routeRuntime.getControlledActionDependencies !== "function"
+    ) {
+      return {
+        accepted: false,
+      };
+    }
+
+    const dependencies = routeRuntime.getControlledActionDependencies();
+
+    if (!hasControlledActionDependencyContract(dependencies)) {
+      return {
+        accepted: false,
+      };
+    }
+
+    return {
+      accepted: true,
+      dependencies,
+    };
+  } catch {
+    return {
+      accepted: false,
+    };
+  }
+}
+
+function hasControlledActionDependencyContract(dependencies) {
+  if (!dependencies || typeof dependencies !== "object" || Array.isArray(dependencies)) {
+    return false;
+  }
+
+  return REQUIRED_CONTROLLED_ACTION_DEPENDENCY_METHODS.every(
+    (methodName) => typeof dependencies[methodName] === "function"
+  );
 }
 
 function sanitizeRouteResult(value) {

@@ -116,6 +116,21 @@ function assertRouteError(body, code) {
   assertRouteSafetyFields(body);
 }
 
+function assertNoRuntimeFailureLeak(body, marker) {
+  const serialized = JSON.stringify(body);
+
+  assert.equal(serialized.includes(marker), false);
+  assert.equal(serialized.includes("stack"), false);
+  assert.equal(serialized.includes("appointmentReviewRepository"), false);
+  assert.equal(serialized.includes("appointmentReviewInMemoryMockServerRuntime"), false);
+  assert.equal(
+    serialized.includes("appointmentReviewInMemoryMockControlledActionRuntimeDependencyProvider"),
+    false
+  );
+  assert.equal(serialized.includes("/Users/"), false);
+  assert.equal(serialized.includes("function"), false);
+}
+
 test("controlled action validation receipt route accepts approve request with HTTP 200", async () => {
   const { response, body } = await post(createValidPayload());
 
@@ -283,6 +298,103 @@ test("controlled action validation receipt route creates isolated adapter scopes
   assert.equal(secondBody.reviewId, "review_receipt_request_b");
   assertReceiptSuccess(firstBody, "validation_passed");
   assertReceiptSuccess(secondBody, "validation_passed");
+});
+
+test("controlled action validation receipt route contains adapter factory failures safely", async () => {
+  const marker = "INTERNAL_RECEIPT_RUNTIME_FACTORY_SECRET";
+  let adapterFactoryCalls = 0;
+  const response =
+    await route.handleControlledActionValidationReceiptRouteRequest(
+      createRequest(createValidPayload()),
+      createContext("review_receipt_factory_failure"),
+      {
+        createRouteRuntimeAdapter() {
+          adapterFactoryCalls += 1;
+          throw new Error(`${marker} should not leak`);
+        },
+      }
+    );
+  const body = await response.json();
+
+  assert.equal(response.status, 500);
+  assert.equal(adapterFactoryCalls, 1);
+  assertRouteError(body, "internal_error");
+  assert.equal(
+    body.reason,
+    "Controlled action validation receipt runtime failed safely."
+  );
+  assert.equal(body.receiptHandlerCompleted, false);
+  assert.equal(body.validationReceiptConstructed, false);
+  assert.equal(body.validationReceipt, null);
+  assert.equal(body.receiptOutcome, null);
+  assert.equal(Object.hasOwn(body, "handlerResult"), false);
+  assertNoRuntimeFailureLeak(body, marker);
+});
+
+test("controlled action validation receipt route contains dependency resolver failures safely", async () => {
+  const marker = "INTERNAL_RECEIPT_DEPENDENCY_RESOLVER_SECRET";
+  let adapterFactoryCalls = 0;
+  let dependencyResolutionCalls = 0;
+  const response =
+    await route.handleControlledActionValidationReceiptRouteRequest(
+      createRequest(createValidPayload()),
+      createContext("review_receipt_resolver_failure"),
+      {
+        createRouteRuntimeAdapter() {
+          adapterFactoryCalls += 1;
+          return Object.freeze({
+            getControlledActionDependencies() {
+              dependencyResolutionCalls += 1;
+              throw new Error(`${marker} should not leak`);
+            },
+          });
+        },
+      }
+    );
+  const body = await response.json();
+
+  assert.equal(response.status, 500);
+  assert.equal(adapterFactoryCalls, 1);
+  assert.equal(dependencyResolutionCalls, 1);
+  assertRouteError(body, "internal_error");
+  assert.equal(body.receiptHandlerCompleted, false);
+  assert.equal(body.validationReceiptConstructed, false);
+  assert.equal(body.validationReceipt, null);
+  assert.equal(body.receiptOutcome, null);
+  assert.equal(Object.hasOwn(body, "handlerResult"), false);
+  assertNoRuntimeFailureLeak(body, marker);
+});
+
+test("controlled action validation receipt route contains invalid adapter dependency contracts safely", async () => {
+  let adapterFactoryCalls = 0;
+  let dependencyResolutionCalls = 0;
+  const response =
+    await route.handleControlledActionValidationReceiptRouteRequest(
+      createRequest(createValidPayload()),
+      createContext("review_receipt_invalid_dependencies"),
+      {
+        createRouteRuntimeAdapter() {
+          adapterFactoryCalls += 1;
+          return Object.freeze({
+            getControlledActionDependencies() {
+              dependencyResolutionCalls += 1;
+              return Object.freeze({});
+            },
+          });
+        },
+      }
+    );
+  const body = await response.json();
+
+  assert.equal(response.status, 500);
+  assert.equal(adapterFactoryCalls, 1);
+  assert.equal(dependencyResolutionCalls, 1);
+  assertRouteError(body, "internal_error");
+  assert.equal(body.receiptHandlerCompleted, false);
+  assert.equal(body.validationReceiptConstructed, false);
+  assert.equal(body.validationReceipt, null);
+  assert.equal(body.receiptOutcome, null);
+  assert.equal(Object.hasOwn(body, "handlerResult"), false);
 });
 
 test("controlled action validation receipt route source calls Sprint 12O handler once and not Sprint 12J or 12N directly", () => {

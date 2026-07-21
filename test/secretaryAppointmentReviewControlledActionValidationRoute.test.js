@@ -120,6 +120,21 @@ function assertRejectedRouteBoundary(body, code) {
   assertRouteSafetyFields(body);
 }
 
+function assertNoRuntimeFailureLeak(body, marker) {
+  const serialized = JSON.stringify(body);
+
+  assert.equal(serialized.includes(marker), false);
+  assert.equal(serialized.includes("stack"), false);
+  assert.equal(serialized.includes("appointmentReviewRepository"), false);
+  assert.equal(serialized.includes("appointmentReviewInMemoryMockServerRuntime"), false);
+  assert.equal(
+    serialized.includes("appointmentReviewInMemoryMockControlledActionRuntimeDependencyProvider"),
+    false
+  );
+  assert.equal(serialized.includes("/Users/"), false);
+  assert.equal(serialized.includes("function"), false);
+}
+
 test("controlled action validation route accepts approve intent with HTTP 200", async () => {
   const { response, body } = await post(createValidPayload());
 
@@ -315,6 +330,90 @@ test("controlled action validation route creates isolated adapter scopes for sep
   assert.equal(secondBody.reviewId, "review_request_b");
   assertAcceptedRouteResult(firstBody);
   assertAcceptedRouteResult(secondBody);
+});
+
+test("controlled action validation route contains adapter factory failures safely", async () => {
+  const marker = "INTERNAL_RUNTIME_FACTORY_SECRET";
+  let adapterFactoryCalls = 0;
+  const response = await route.handleControlledActionValidationRouteRequest(
+    createRequest(createValidPayload()),
+    createContext("review_factory_failure"),
+    {
+      createRouteRuntimeAdapter() {
+        adapterFactoryCalls += 1;
+        throw new Error(`${marker} should not leak`);
+      },
+    }
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 500);
+  assert.equal(adapterFactoryCalls, 1);
+  assertRejectedRouteBoundary(body, "internal_error");
+  assert.equal(body.reason, "Controlled action validation runtime failed safely.");
+  assert.equal(body.reviewId, undefined);
+  assertNoRuntimeFailureLeak(body, marker);
+});
+
+test("controlled action validation route contains dependency resolver failures safely", async () => {
+  const marker = "INTERNAL_DEPENDENCY_RESOLVER_SECRET";
+  let adapterFactoryCalls = 0;
+  let dependencyResolutionCalls = 0;
+  const response = await route.handleControlledActionValidationRouteRequest(
+    createRequest(createValidPayload()),
+    createContext("review_resolver_failure"),
+    {
+      createRouteRuntimeAdapter() {
+        adapterFactoryCalls += 1;
+        return Object.freeze({
+          getControlledActionDependencies() {
+            dependencyResolutionCalls += 1;
+            throw new Error(`${marker} should not leak`);
+          },
+        });
+      },
+    }
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 500);
+  assert.equal(adapterFactoryCalls, 1);
+  assert.equal(dependencyResolutionCalls, 1);
+  assertRejectedRouteBoundary(body, "internal_error");
+  assert.equal(body.reason, "Controlled action validation runtime failed safely.");
+  assert.equal(body.handlerCompleted, false);
+  assert.equal(Object.hasOwn(body, "assemblyResult"), false);
+  assert.equal(Object.hasOwn(body, "pipelineResult"), false);
+  assertNoRuntimeFailureLeak(body, marker);
+});
+
+test("controlled action validation route contains invalid adapter dependency contracts safely", async () => {
+  let adapterFactoryCalls = 0;
+  let dependencyResolutionCalls = 0;
+  const response = await route.handleControlledActionValidationRouteRequest(
+    createRequest(createValidPayload()),
+    createContext("review_invalid_dependencies"),
+    {
+      createRouteRuntimeAdapter() {
+        adapterFactoryCalls += 1;
+        return Object.freeze({
+          getControlledActionDependencies() {
+            dependencyResolutionCalls += 1;
+            return Object.freeze({});
+          },
+        });
+      },
+    }
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 500);
+  assert.equal(adapterFactoryCalls, 1);
+  assert.equal(dependencyResolutionCalls, 1);
+  assertRejectedRouteBoundary(body, "internal_error");
+  assert.equal(body.handlerCompleted, false);
+  assert.equal(Object.hasOwn(body, "assemblyResult"), false);
+  assert.equal(Object.hasOwn(body, "pipelineResult"), false);
 });
 
 test("controlled action validation route response is explicitly mock and validation only", async () => {
