@@ -404,6 +404,133 @@ test("appointment reviews workspace keeps decision comparison non-executable and
   assert.doesNotMatch(workspaceSource, /setSelectedReviewId\(.*comparison/i);
 });
 
+test("appointment reviews workspace shows queue readiness scan controls and summary", () => {
+  const routeMarker =
+    "\"/api/secretary/appointment-reviews/decision-readiness-preview\"";
+  const queueReadinessRequestSource = workspaceSource.slice(
+    workspaceSource.indexOf(routeMarker),
+    workspaceSource.indexOf(
+      "const payload = await response.json();",
+      workspaceSource.indexOf(routeMarker)
+    )
+  );
+
+  assert.match(workspaceSource, /INITIAL_QUEUE_READINESS_PREVIEW/);
+  assert.match(workspaceSource, /QUEUE_READINESS_FILTERS/);
+  assert.match(workspaceSource, /QUEUE_READINESS_LABELS/);
+  assert.match(workspaceSource, /runQueueReadinessPreview/);
+  assert.match(workspaceSource, /isSafeQueueReadinessResponse/);
+  assert.match(workspaceSource, /Queue Readiness Scan/);
+  assert.match(workspaceSource, /Run Queue Readiness Scan/);
+  assert.match(workspaceSource, /Queue-wide dry-run · No recommendation/);
+  assert.match(workspaceSource, /Total scanned/);
+  assert.match(workspaceSource, /Both paths available/);
+  assert.match(workspaceSource, /Approve path only/);
+  assert.match(workspaceSource, /Reject path only/);
+  assert.match(workspaceSource, /Both paths blocked/);
+  assert.match(workspaceSource, /Readiness filter/);
+  assert.match(workspaceSource, /queueReadinessStatus === "loading"/);
+  assert.match(workspaceSource, /disabled=\{queueReadinessStatus === "loading"\}/);
+  assert.match(
+    workspaceSource,
+    /\/api\/secretary\/appointment-reviews\/decision-readiness-preview/
+  );
+  assert.match(queueReadinessRequestSource, /method: "POST"/);
+  assert.match(queueReadinessRequestSource, /body: JSON\.stringify\(\{\}\)/);
+  assert.doesNotMatch(queueReadinessRequestSource, /reviewId:/);
+  assert.doesNotMatch(queueReadinessRequestSource, /reviewIds:/);
+  assert.doesNotMatch(queueReadinessRequestSource, /currentState:/);
+  assert.doesNotMatch(queueReadinessRequestSource, /observedReviewVersion/);
+  assert.doesNotMatch(queueReadinessRequestSource, /action:/);
+  assert.doesNotMatch(queueReadinessRequestSource, /actions:/);
+});
+
+test("appointment reviews workspace annotates queue rows and filters neutrally", () => {
+  assert.match(workspaceSource, /filteredReviews/);
+  assert.match(workspaceSource, /queueReadinessItemsById/);
+  assert.match(workspaceSource, /getCurrentQueueReadinessItems/);
+  assert.match(workspaceSource, /reviewIdsMatch/);
+  assert.match(workspaceSource, /filteredReviews\.map/);
+  assert.match(workspaceSource, /appointment-review-readiness-badges/);
+  assert.match(workspaceSource, /Readiness/);
+  assert.match(workspaceSource, /Approve path/);
+  assert.match(workspaceSource, /Reject path/);
+  assert.match(workspaceSource, /not_scanned/);
+  assert.match(workspaceSource, /No reviews match this readiness filter/);
+  assert.match(workspaceSource, /does not\s+mutate, reorder, or persist/);
+  assert.match(
+    workspaceSource,
+    /queueReadinessFilter === "all"\s+\?\s+reviews\s+:\s+reviews\.filter/
+  );
+  assert.match(
+    workspaceSource,
+    /setQueueReadinessFilter\(event\.target\.value\)/
+  );
+  assert.doesNotMatch(workspaceSource, /setSelectedReviewId\(.*queueReadiness/i);
+  assert.doesNotMatch(workspaceSource, /sort\(/);
+});
+
+test("appointment reviews workspace hardens queue readiness scan against stale responses", () => {
+  assert.match(workspaceSource, /queueReadinessRequestSequenceRef/);
+  assert.match(workspaceSource, /activeQueueReadinessRequestRef/);
+  assert.match(workspaceSource, /activeQueueReadinessAbortRef/);
+  assert.match(workspaceSource, /createQueueReadinessRequest/);
+  assert.match(workspaceSource, /invalidateQueueReadinessRequest/);
+  assert.match(workspaceSource, /isActiveQueueReadinessRequest/);
+  assert.match(workspaceSource, /activeQueueReadinessAbortRef\.current\.abort\(\)/);
+  assert.match(workspaceSource, /signal: activeAbortController\?\.signal/);
+  assert.match(workspaceSource, /reviewIds: reviewIdsForRequest/);
+  assert.match(workspaceSource, /reviewIdsMatch\(activeRequest\.reviewIds, reviewIds\)/);
+  assert.match(workspaceSource, /reviewIdsMatch\(currentReviewIds, reviewIds\)/);
+  assert.match(
+    workspaceSource,
+    /invalidateQueueReadinessRequest\(\);\s+resetQueueReadinessState\(\);\s+setReviews\(nextReviews\);/
+  );
+  assert.match(
+    workspaceSource,
+    /setQueueReadinessResult\(payload\);\s+setQueueReadinessStatus\("success"\);/
+  );
+  assert.match(
+    workspaceSource,
+    /setQueueReadinessResult\(null\);\s+setQueueReadinessStatus\("failure"\);/
+  );
+  assert.match(
+    workspaceSource,
+    /if \(queueReadinessStatus === "loading"\) \{\s+return;\s+\}/
+  );
+  assert.match(workspaceSource, /if \(isAbortError\(error\)\) \{\s+return;\s+\}/);
+  assert.doesNotMatch(workspaceSource, /setDecisionComparisonResult\(queueReadiness/i);
+  assert.doesNotMatch(workspaceSource, /setDecisionPreviewResult\(queueReadiness/i);
+});
+
+test("appointment reviews workspace keeps queue readiness non-executable and non-mutating", () => {
+  assert.match(workspaceSource, /queueReadinessPreview:\s+true/);
+  assert.match(workspaceSource, /payload\.queueReadinessPreview === true/);
+  assert.match(workspaceSource, /payload\.mode === "validation_only"/);
+  assert.match(
+    workspaceSource,
+    /payload\.preview === "queue_decision_readiness_preview"/
+  );
+  assert.match(workspaceSource, /payload\.executionEnabled === false/);
+  assert.match(workspaceSource, /payload\.actionPerformed === false/);
+  assert.match(workspaceSource, /payload\.bookingCreated === false/);
+  assert.match(workspaceSource, /payload\.calendarChecked === false/);
+  assert.match(workspaceSource, /payload\.databasePersisted === false/);
+  assert.match(workspaceSource, /payload\.reviewMutated === false/);
+  assert.match(workspaceSource, /payload\.queueMutated === false/);
+  assert.match(workspaceSource, /payload\.queueCountChanged === false/);
+  assert.match(workspaceSource, /item\.validationOnly === true/);
+  assert.match(workspaceSource, /item\.executionAvailable === false/);
+  assert.match(workspaceSource, /item\.bookingCreated === false/);
+  assert.match(workspaceSource, /item\.calendarChecked === false/);
+  assert.match(workspaceSource, /item\.repositoryVersionChanged === false/);
+  assert.doesNotMatch(workspaceSource, new RegExp("recommended" + "Action"));
+  assert.doesNotMatch(workspaceSource, new RegExp("preferred" + "Action"));
+  assert.doesNotMatch(workspaceSource, new RegExp("best" + "Action"));
+  assert.doesNotMatch(workspaceSource, new RegExp("automatic" + "Decision"));
+  assert.doesNotMatch(workspaceSource, new RegExp("selected" + "Action"));
+});
+
 test("appointment reviews workspace shows controlled action preconditions dry-run preview", () => {
   const preconditionsRequestSource = workspaceSource.slice(
     workspaceSource.indexOf(")}/action-preconditions`"),
@@ -1407,6 +1534,12 @@ test("appointment reviews workspace styles are present", () => {
   assert.match(cssSource, /\.appointment-review-decision-comparison-empty/);
   assert.match(cssSource, /\.appointment-review-decision-comparison-button/);
   assert.match(cssSource, /\.appointment-review-decision-comparison-state/);
+  assert.match(cssSource, /\.appointment-review-queue-readiness/);
+  assert.match(cssSource, /\.appointment-review-queue-readiness-controls/);
+  assert.match(cssSource, /\.appointment-review-queue-readiness-summary/);
+  assert.match(cssSource, /\.appointment-review-queue-readiness-button/);
+  assert.match(cssSource, /\.appointment-review-queue-readiness-state/);
+  assert.match(cssSource, /\.appointment-review-readiness-badges/);
   assert.match(cssSource, /\.appointment-review-validation-receipt-preview/);
   assert.match(cssSource, /\.appointment-review-validation-receipt-grid/);
   assert.match(cssSource, /\.appointment-review-validation-receipt-controls/);

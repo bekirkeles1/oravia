@@ -102,10 +102,73 @@ async function runAppointmentReviewDecisionComparison(input, contracts = {}) {
     currentState: normalizeText(trustedReviewContext.currentState),
     observedReviewVersion: trustedReviewContext.observedReviewVersion,
   });
+
+  return evaluateAppointmentReviewDecisionComparison(
+    {
+      reviewId,
+      dependencies: input.dependencies,
+      trustedReviewContext: trustedContext,
+      requestMetadataPrefix: "decision_comparison",
+    },
+    contracts
+  );
+}
+
+async function evaluateAppointmentReviewDecisionComparison(input, contracts = {}) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return rejectComparison({
+      code: "invalid_decision_comparison_input",
+      reason:
+        "Appointment review decision comparison input must be an object.",
+    });
+  }
+
+  const reviewId = normalizeText(input.reviewId);
+
+  if (!reviewId) {
+    return rejectComparison({
+      code: "missing_review_id",
+      reason:
+        "reviewId is required for appointment review decision comparison.",
+    });
+  }
+
+  const dependenciesIssue = validateDependencies(input.dependencies);
+
+  if (dependenciesIssue) {
+    return rejectComparison({
+      reviewId,
+      code: dependenciesIssue.code,
+      reason: dependenciesIssue.reason,
+    });
+  }
+
+  const trustedContextIssue = validateTrustedReviewContext(
+    input.trustedReviewContext,
+    reviewId
+  );
+
+  if (trustedContextIssue) {
+    return rejectComparison({
+      reviewId,
+      code: trustedContextIssue.code,
+      reason: trustedContextIssue.reason,
+    });
+  }
+
+  const trustedContext = freezeClone({
+    contextType: normalizeText(input.trustedReviewContext.contextType),
+    contextSource: normalizeText(input.trustedReviewContext.contextSource),
+    reviewId,
+    currentState: normalizeText(input.trustedReviewContext.currentState),
+    observedReviewVersion: input.trustedReviewContext.observedReviewVersion,
+  });
   const branchValidationDependencies = createTrustedReviewContextDependencies({
     dependencies: input.dependencies,
     trustedReviewContext: trustedContext,
   });
+  const requestMetadataPrefix =
+    normalizeText(input.requestMetadataPrefix) || "decision_comparison";
   const paths = {};
 
   try {
@@ -116,8 +179,8 @@ async function runAppointmentReviewDecisionComparison(input, contracts = {}) {
         dependencies: input.dependencies,
         validationDependencies: branchValidationDependencies,
         trustedReviewContext: trustedContext,
-        requestId: `decision_comparison_${reviewId}_${action}`,
-        idempotencyKey: `decision_comparison_${reviewId}_${action}_key`,
+        requestId: `${requestMetadataPrefix}_${reviewId}_${action}`,
+        idempotencyKey: `${requestMetadataPrefix}_${reviewId}_${action}_key`,
         contracts,
         verifyPostPreviewContext: false,
       });
@@ -339,5 +402,6 @@ module.exports = {
   DECISION_COMPARISON_ACTIONS,
   DECISION_COMPARISON_MODE,
   DECISION_COMPARISON_TYPE,
+  evaluateAppointmentReviewDecisionComparison,
   runAppointmentReviewDecisionComparison,
 };

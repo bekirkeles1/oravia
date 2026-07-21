@@ -195,6 +195,56 @@ const INITIAL_DECISION_COMPARISON = {
   repositoryVersionChanged: false
 };
 
+const QUEUE_READINESS_FILTERS = [
+  ["all", "All"],
+  ["both_paths_available", "Both paths available"],
+  ["approve_path_only", "Approve path only"],
+  ["reject_path_only", "Reject path only"],
+  ["both_paths_blocked", "Both paths blocked"]
+];
+
+const QUEUE_READINESS_LABELS = {
+  both_paths_available: "Both paths available",
+  approve_path_only: "Approve path only",
+  reject_path_only: "Reject path only",
+  both_paths_blocked: "Both paths blocked"
+};
+
+const INITIAL_QUEUE_READINESS_PREVIEW = {
+  mock: true,
+  dryRun: true,
+  queueReadinessPreview: true,
+  validationOnly: true,
+  controlledHandlingOnly: true,
+  executionEnabled: false,
+  executorAvailable: false,
+  executionAvailable: false,
+  executionRequested: false,
+  actionPerformed: false,
+  commandDispatched: false,
+  commandPersisted: false,
+  receiptPersisted: false,
+  bookingCreated: false,
+  calendarChecked: false,
+  appointmentCreated: false,
+  calendarEventCreated: false,
+  databasePersisted: false,
+  persistence: "not_persisted",
+  reviewMutated: false,
+  reviewStateChanged: false,
+  repositoryVersionChanged: false,
+  queueMutated: false,
+  queueCountChanged: false,
+  summary: {
+    totalReviewsScanned: 0,
+    bothPathsAvailable: 0,
+    approvePathOnly: 0,
+    rejectPathOnly: 0,
+    bothPathsBlocked: 0
+  },
+  items: []
+};
+
 export default function AppointmentReviewsWorkspace() {
   const [reviews, setReviews] = useState([]);
   const [summary, setSummary] = useState({
@@ -279,6 +329,10 @@ export default function AppointmentReviewsWorkspace() {
   const [decisionComparisonResult, setDecisionComparisonResult] =
     useState(null);
   const [decisionComparisonError, setDecisionComparisonError] = useState("");
+  const [queueReadinessStatus, setQueueReadinessStatus] = useState("idle");
+  const [queueReadinessResult, setQueueReadinessResult] = useState(null);
+  const [queueReadinessError, setQueueReadinessError] = useState("");
+  const [queueReadinessFilter, setQueueReadinessFilter] = useState("all");
   const [
     selectedValidationReceiptActionIntent,
     setSelectedValidationReceiptActionIntent
@@ -314,6 +368,9 @@ export default function AppointmentReviewsWorkspace() {
   const decisionComparisonRequestSequenceRef = useRef(0);
   const activeDecisionComparisonRequestRef = useRef(null);
   const activeDecisionComparisonAbortRef = useRef(null);
+  const queueReadinessRequestSequenceRef = useRef(0);
+  const activeQueueReadinessRequestRef = useRef(null);
+  const activeQueueReadinessAbortRef = useRef(null);
   const selectedReview =
     reviews.find((review) => review.id === selectedReviewId) || null;
   const displayedActionIntentDryRun =
@@ -339,6 +396,24 @@ export default function AppointmentReviewsWorkspace() {
     decisionComparisonResult || INITIAL_DECISION_COMPARISON;
   const approveComparisonPath = decisionComparisonResult?.paths?.approve || null;
   const rejectComparisonPath = decisionComparisonResult?.paths?.reject || null;
+  const displayedQueueReadiness =
+    queueReadinessResult || INITIAL_QUEUE_READINESS_PREVIEW;
+  const currentReviewIds = reviews.map((review) => review.id);
+  const queueReadinessItems = getCurrentQueueReadinessItems({
+    result: queueReadinessResult,
+    reviewIds: currentReviewIds
+  });
+  const queueReadinessItemsById = Object.fromEntries(
+    queueReadinessItems.map((item) => [item.reviewId, item])
+  );
+  const filteredReviews =
+    queueReadinessFilter === "all"
+      ? reviews
+      : reviews.filter(
+          (review) =>
+            queueReadinessItemsById[review.id]?.readiness ===
+            queueReadinessFilter
+        );
 
   useEffect(() => {
     let isMounted = true;
@@ -359,6 +434,8 @@ export default function AppointmentReviewsWorkspace() {
 
         const nextReviews = Array.isArray(payload.reviews) ? payload.reviews : [];
 
+        invalidateQueueReadinessRequest();
+        resetQueueReadinessState();
         setReviews(nextReviews);
         setSelectedReviewId((currentSelectedReviewId) => {
           if (
@@ -385,6 +462,8 @@ export default function AppointmentReviewsWorkspace() {
 
         setReviews([]);
         setSelectedReviewId("");
+        invalidateQueueReadinessRequest();
+        resetQueueReadinessState();
         setLoading(false);
         setLoadError(
           error instanceof Error
@@ -412,6 +491,7 @@ export default function AppointmentReviewsWorkspace() {
       invalidateValidationReceiptRequest();
       invalidateDecisionPreviewRequest();
       invalidateDecisionComparisonRequest();
+      invalidateQueueReadinessRequest();
     };
   }, []);
 
@@ -1481,6 +1561,128 @@ export default function AppointmentReviewsWorkspace() {
     );
   }
 
+  async function runQueueReadinessPreview() {
+    if (queueReadinessStatus === "loading") {
+      return;
+    }
+
+    const reviewIdsForRequest = currentReviewIds;
+    const requestId = createQueueReadinessRequest({
+      reviewIds: reviewIdsForRequest
+    });
+    const activeAbortController = activeQueueReadinessAbortRef.current;
+
+    setQueueReadinessStatus("loading");
+    setQueueReadinessResult(null);
+    setQueueReadinessError("");
+
+    try {
+      const response = await fetch(
+        "/api/secretary/appointment-reviews/decision-readiness-preview",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          signal: activeAbortController?.signal,
+          body: JSON.stringify({})
+        }
+      );
+      const payload = await response.json();
+
+      if (
+        !isActiveQueueReadinessRequest({
+          requestId,
+          reviewIds: reviewIdsForRequest
+        })
+      ) {
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          payload?.reason ||
+            payload?.error?.message ||
+            "Queue readiness scan failed safely."
+        );
+      }
+
+      if (!isSafeQueueReadinessResponse(payload)) {
+        throw new Error("Queue readiness response was unsafe or incomplete.");
+      }
+
+      setQueueReadinessResult(payload);
+      setQueueReadinessStatus("success");
+      setQueueReadinessFilter("all");
+    } catch (error) {
+      if (isAbortError(error)) {
+        return;
+      }
+
+      if (
+        !isActiveQueueReadinessRequest({
+          requestId,
+          reviewIds: reviewIdsForRequest
+        })
+      ) {
+        return;
+      }
+
+      setQueueReadinessResult(null);
+      setQueueReadinessStatus("failure");
+      setQueueReadinessError(
+        error instanceof Error
+          ? error.message
+          : "Queue readiness scan failed safely."
+      );
+    }
+  }
+
+  function createQueueReadinessRequest({ reviewIds }) {
+    invalidateQueueReadinessRequest();
+
+    const requestId = queueReadinessRequestSequenceRef.current + 1;
+    const abortController = new AbortController();
+
+    queueReadinessRequestSequenceRef.current = requestId;
+    activeQueueReadinessAbortRef.current = abortController;
+    activeQueueReadinessRequestRef.current = {
+      requestId,
+      reviewIds: [...reviewIds]
+    };
+
+    return requestId;
+  }
+
+  function invalidateQueueReadinessRequest() {
+    queueReadinessRequestSequenceRef.current += 1;
+    activeQueueReadinessRequestRef.current = null;
+
+    if (activeQueueReadinessAbortRef.current) {
+      activeQueueReadinessAbortRef.current.abort();
+      activeQueueReadinessAbortRef.current = null;
+    }
+  }
+
+  function resetQueueReadinessState() {
+    setQueueReadinessStatus("idle");
+    setQueueReadinessResult(null);
+    setQueueReadinessError("");
+    setQueueReadinessFilter("all");
+  }
+
+  function isActiveQueueReadinessRequest({ requestId, reviewIds }) {
+    const activeRequest = activeQueueReadinessRequestRef.current;
+
+    return (
+      isMountedRef.current &&
+      activeRequest &&
+      activeRequest.requestId === requestId &&
+      reviewIdsMatch(activeRequest.reviewIds, reviewIds) &&
+      reviewIdsMatch(currentReviewIds, reviewIds)
+    );
+  }
+
   return (
     <section
       className="appointment-reviews-workspace-section"
@@ -1533,6 +1735,104 @@ export default function AppointmentReviewsWorkspace() {
             {String(summary.safety?.usesDatabase === true)}.
           </small>
         </div>
+
+        {!loading && !loadError ? (
+          <section
+            className="appointment-review-queue-readiness"
+            aria-labelledby="appointment-review-queue-readiness-title"
+          >
+            <div>
+              <span>Queue-wide dry-run · No recommendation</span>
+              <h3 id="appointment-review-queue-readiness-title">
+                Queue Readiness Scan
+              </h3>
+              <p>
+                Scans the server-side review queue and compares approve/reject
+                dry-run paths for each item. It does not recommend, select,
+                execute, persist, book, or check calendar availability.
+              </p>
+            </div>
+
+            <div className="appointment-review-queue-readiness-controls">
+              <button
+                type="button"
+                className="appointment-review-queue-readiness-button"
+                onClick={runQueueReadinessPreview}
+                disabled={queueReadinessStatus === "loading"}
+              >
+                Run Queue Readiness Scan
+              </button>
+              <label>
+                Readiness filter
+                <select
+                  value={queueReadinessFilter}
+                  onChange={(event) =>
+                    setQueueReadinessFilter(event.target.value)
+                  }
+                >
+                  {QUEUE_READINESS_FILTERS.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <p className="appointment-review-queue-readiness-state">
+              {queueReadinessStatus === "loading"
+                ? "Queue readiness scan is running. Duplicate scans are ignored."
+                : null}
+              {queueReadinessStatus === "success"
+                ? "Queue readiness scan result received. Queue rows are annotated without changing review state."
+                : null}
+              {queueReadinessStatus === "failure"
+                ? queueReadinessError ||
+                  "Queue readiness scan failed safely."
+                : null}
+              {queueReadinessStatus === "idle"
+                ? "Idle: no queue readiness scan result for the current queue."
+                : null}
+            </p>
+
+            <dl className="appointment-review-queue-readiness-summary">
+              <div>
+                <dt>Total scanned</dt>
+                <dd>
+                  {displayedQueueReadiness.summary.totalReviewsScanned}
+                </dd>
+              </div>
+              <div>
+                <dt>Both paths available</dt>
+                <dd>{displayedQueueReadiness.summary.bothPathsAvailable}</dd>
+              </div>
+              <div>
+                <dt>Approve path only</dt>
+                <dd>{displayedQueueReadiness.summary.approvePathOnly}</dd>
+              </div>
+              <div>
+                <dt>Reject path only</dt>
+                <dd>{displayedQueueReadiness.summary.rejectPathOnly}</dd>
+              </div>
+              <div>
+                <dt>Both paths blocked</dt>
+                <dd>{displayedQueueReadiness.summary.bothPathsBlocked}</dd>
+              </div>
+              <div>
+                <dt>persistence</dt>
+                <dd>{displayedQueueReadiness.persistence}</dd>
+              </div>
+              <div>
+                <dt>executionEnabled</dt>
+                <dd>{String(displayedQueueReadiness.executionEnabled)}</dd>
+              </div>
+              <div>
+                <dt>queueMutated</dt>
+                <dd>{String(displayedQueueReadiness.queueMutated)}</dd>
+              </div>
+            </dl>
+          </section>
+        ) : null}
 
         {loading ? (
           <p className="appointment-reviews-state">
@@ -3430,46 +3730,91 @@ export default function AppointmentReviewsWorkspace() {
 
         {!loading && !loadError && reviews.length > 0 ? (
           <div className="appointment-reviews-list">
-            {reviews.map((review) => (
-              <article className="appointment-review-item" key={review.id}>
-                <div>
-                  <span>{review.status}</span>
-                  <strong>
-                    {review.selectedSlot?.doctorName || "Mock doctor"} ·{" "}
-                    {review.selectedSlot?.time || "Saat bekleniyor"}
-                  </strong>
-                  <button
-                    type="button"
-                    className="appointment-review-preview-button"
-                    onClick={() => setSelectedReviewId(review.id)}
-                  >
-                    Preview details
-                  </button>
-                </div>
-                <dl>
+            {filteredReviews.map((review) => {
+              const readinessItem = queueReadinessItemsById[review.id] || null;
+
+              return (
+                <article className="appointment-review-item" key={review.id}>
                   <div>
-                    <dt>Tedavi</dt>
-                    <dd>{review.treatment || "Belirtilmedi"}</dd>
+                    <span>{review.status}</span>
+                    <strong>
+                      {review.selectedSlot?.doctorName || "Mock doctor"} ·{" "}
+                      {review.selectedSlot?.time || "Saat bekleniyor"}
+                    </strong>
+                    {readinessItem ? (
+                      <div className="appointment-review-readiness-badges">
+                        <span>
+                          {QUEUE_READINESS_LABELS[readinessItem.readiness] ||
+                            readinessItem.readiness}
+                        </span>
+                        <small>
+                          approve: {readinessItem.approve.outcome} · reject:{" "}
+                          {readinessItem.reject.outcome}
+                        </small>
+                      </div>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="appointment-review-preview-button"
+                      onClick={() => setSelectedReviewId(review.id)}
+                    >
+                      Preview details
+                    </button>
                   </div>
-                  <div>
-                    <dt>Gün</dt>
-                    <dd>{review.selectedSlot?.dayLabel || review.day}</dd>
-                  </div>
-                  <div>
-                    <dt>Booking created</dt>
-                    <dd>{String(review.bookingCreated === true)}</dd>
-                  </div>
-                  <div>
-                    <dt>Calendar checked</dt>
-                    <dd>{String(review.calendarChecked === true)}</dd>
-                  </div>
-                  <div>
-                    <dt>Secretary confirmation</dt>
-                    <dd>{String(review.requiresSecretaryConfirmation === true)}</dd>
-                  </div>
-                </dl>
-              </article>
-            ))}
+                  <dl>
+                    <div>
+                      <dt>Tedavi</dt>
+                      <dd>{review.treatment || "Belirtilmedi"}</dd>
+                    </div>
+                    <div>
+                      <dt>Gün</dt>
+                      <dd>{review.selectedSlot?.dayLabel || review.day}</dd>
+                    </div>
+                    <div>
+                      <dt>Readiness</dt>
+                      <dd>
+                        {readinessItem
+                          ? QUEUE_READINESS_LABELS[readinessItem.readiness]
+                          : "not_scanned"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Approve path</dt>
+                      <dd>{readinessItem?.approve.outcome || "not_scanned"}</dd>
+                    </div>
+                    <div>
+                      <dt>Reject path</dt>
+                      <dd>{readinessItem?.reject.outcome || "not_scanned"}</dd>
+                    </div>
+                    <div>
+                      <dt>Booking created</dt>
+                      <dd>{String(review.bookingCreated === true)}</dd>
+                    </div>
+                    <div>
+                      <dt>Calendar checked</dt>
+                      <dd>{String(review.calendarChecked === true)}</dd>
+                    </div>
+                    <div>
+                      <dt>Secretary confirmation</dt>
+                      <dd>{String(review.requiresSecretaryConfirmation === true)}</dd>
+                    </div>
+                  </dl>
+                </article>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {!loading &&
+        !loadError &&
+        reviews.length > 0 &&
+        filteredReviews.length === 0 ? (
+          <div className="appointment-reviews-empty-state">
+            <strong>No reviews match this readiness filter</strong>
+            <span>
+              Filtering is local to the dry-run scan display. It does not
+              mutate, reorder, or persist the appointment review queue.
+            </span>
           </div>
         ) : null}
       </article>
@@ -3671,6 +4016,88 @@ function isSafeDecisionComparisonResponse(payload) {
     payload.paths.approve.persistence === "not_persisted" &&
     payload.paths.reject.persistence === "not_persisted"
   );
+}
+
+function isSafeQueueReadinessResponse(payload) {
+  return (
+    payload &&
+    payload.mock === true &&
+    payload.dryRun === true &&
+    payload.queueReadinessPreview === true &&
+    payload.validationOnly === true &&
+    payload.controlledHandlingOnly === true &&
+    payload.executionEnabled === false &&
+    payload.executorAvailable === false &&
+    payload.executionAvailable === false &&
+    payload.executionRequested === false &&
+    payload.actionPerformed === false &&
+    payload.commandDispatched === false &&
+    payload.commandPersisted === false &&
+    payload.receiptPersisted === false &&
+    payload.bookingCreated === false &&
+    payload.calendarChecked === false &&
+    payload.appointmentCreated === false &&
+    payload.calendarEventCreated === false &&
+    payload.databasePersisted === false &&
+    payload.persistence === "not_persisted" &&
+    payload.reviewMutated === false &&
+    payload.reviewStateChanged === false &&
+    payload.repositoryVersionChanged === false &&
+    payload.queueMutated === false &&
+    payload.queueCountChanged === false &&
+    payload.mode === "validation_only" &&
+    payload.preview === "queue_decision_readiness_preview" &&
+    typeof payload.accepted === "boolean" &&
+    payload.summary &&
+    Number.isSafeInteger(payload.summary.totalReviewsScanned) &&
+    Array.isArray(payload.items) &&
+    payload.items.length === payload.summary.totalReviewsScanned &&
+    payload.items.every(isSafeQueueReadinessItem)
+  );
+}
+
+function isSafeQueueReadinessItem(item) {
+  return (
+    item &&
+    typeof item.reviewId === "string" &&
+    Object.hasOwn(QUEUE_READINESS_LABELS, item.readiness) &&
+    item.validationOnly === true &&
+    item.executionAvailable === false &&
+    item.actionPerformed === false &&
+    item.bookingCreated === false &&
+    item.calendarChecked === false &&
+    item.databasePersisted === false &&
+    item.persistence === "not_persisted" &&
+    item.reviewMutated === false &&
+    item.repositoryVersionChanged === false &&
+    item.approve &&
+    item.reject &&
+    ["passed", "blocked"].includes(item.approve.outcome) &&
+    ["passed", "blocked"].includes(item.reject.outcome)
+  );
+}
+
+function getCurrentQueueReadinessItems({ result, reviewIds }) {
+  if (
+    !result ||
+    !Array.isArray(result.items) ||
+    !reviewIdsMatch(
+      result.items.map((item) => item.reviewId),
+      reviewIds
+    )
+  ) {
+    return [];
+  }
+
+  return result.items;
+}
+
+function reviewIdsMatch(left, right) {
+  if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((value, index) => value === right[index]);
 }
 
 function getControlledActionValidationStages(result) {
