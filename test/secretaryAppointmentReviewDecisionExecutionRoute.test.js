@@ -2,6 +2,11 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const route = require("../app/api/secretary/appointment-reviews/[id]/decision-execution/route");
+const collectionRoute = require("../app/api/secretary/appointment-reviews/route");
+const detailRoute = require("../app/api/secretary/appointment-reviews/[id]/route");
+const {
+  DEFAULT_ROUTE_REVIEW_ID,
+} = require("../src/secretary/appointmentReviewRouteRuntimeCompositionRoot");
 
 const ROUTE_URL =
   "http://localhost/api/secretary/appointment-reviews/review_execution/decision-execution";
@@ -200,4 +205,67 @@ test("decision execution route maps conflicts and unsupported methods safely", a
   assert.ok(methodBodies.every((body) => body.code === "method_not_allowed"));
   assert.equal(adapterCalls, 0);
   methodBodies.forEach(assertSafety);
+});
+
+test("default route runtime persists execution state and idempotent replay across route calls", async () => {
+  const collectionBefore = await collectionRoute.GET(
+    new Request("http://localhost/api/secretary/appointment-reviews")
+  );
+  const collectionBeforeBody = await collectionBefore.json();
+  const executableReview = collectionBeforeBody.reviews.find(
+    (review) => review.id === DEFAULT_ROUTE_REVIEW_ID
+  );
+  const executionPayload = {
+    action: "approve",
+    expectedReviewVersion: 1,
+    idempotencyKey: "decision_execution:route_runtime_demo:approve:1",
+    confirmation: "apply_in_memory",
+  };
+
+  assert.equal(collectionBefore.status, 200);
+  assert.ok(executableReview);
+  assert.equal(
+    executableReview.metadata.controlledActionState,
+    "validation_only_intent_checked"
+  );
+
+  const firstExecution = await route.POST(
+    createRequest(executionPayload),
+    createContext(DEFAULT_ROUTE_REVIEW_ID)
+  );
+  const firstExecutionBody = await firstExecution.json();
+  const detailAfter = await detailRoute.GET(
+    new Request(
+      `http://localhost/api/secretary/appointment-reviews/${DEFAULT_ROUTE_REVIEW_ID}`
+    ),
+    createContext(DEFAULT_ROUTE_REVIEW_ID)
+  );
+  const detailAfterBody = await detailAfter.json();
+  const replayExecution = await route.POST(
+    createRequest(executionPayload),
+    createContext(DEFAULT_ROUTE_REVIEW_ID)
+  );
+  const replayExecutionBody = await replayExecution.json();
+
+  assert.equal(firstExecution.status, 200);
+  assert.equal(firstExecutionBody.accepted, true);
+  assert.equal(firstExecutionBody.applied, true);
+  assert.equal(firstExecutionBody.previousReviewVersion, 1);
+  assert.equal(firstExecutionBody.resultingReviewVersion, 2);
+  assert.equal(firstExecutionBody.resultingRepositoryVersion, 2);
+  assert.equal(firstExecutionBody.resultingState, "needs_clinic_review");
+  assert.equal(detailAfter.status, 200);
+  assert.equal(
+    detailAfterBody.review.metadata.controlledActionState,
+    "needs_clinic_review"
+  );
+  assert.equal(replayExecution.status, 200);
+  assert.equal(replayExecutionBody.accepted, true);
+  assert.equal(replayExecutionBody.matchingReplay, true);
+  assert.equal(replayExecutionBody.applied, false);
+  assert.equal(replayExecutionBody.resultingReviewVersion, 2);
+  assert.equal(replayExecutionBody.resultingRepositoryVersion, 2);
+  assert.equal(replayExecutionBody.reviewStateChanged, false);
+  assertSafety(firstExecutionBody);
+  assertSafety(replayExecutionBody);
 });

@@ -11,6 +11,9 @@ const {
   PUT,
 } = require("../app/api/secretary/appointment-reviews/route");
 const detailRoute = require("../app/api/secretary/appointment-reviews/[id]/route");
+const {
+  DEFAULT_ROUTE_REVIEW_ID,
+} = require("../src/secretary/appointmentReviewRouteRuntimeCompositionRoot");
 
 const COLLECTION_ROUTE_SOURCE_PATH =
   "app/api/secretary/appointment-reviews/route.js";
@@ -242,11 +245,12 @@ function assertNoInternalLeak(value, path = "response") {
   }
 }
 
-test("secretary appointment review queue GET route returns safe empty mock response", async () => {
+test("secretary appointment review queue GET route returns safe active mock response", async () => {
   const response = await GET(
     new Request("http://localhost/api/secretary/appointment-reviews")
   );
   const body = await response.json();
+  const review = body.reviews.find(({ id }) => id === DEFAULT_ROUTE_REVIEW_ID);
 
   assert.equal(response.status, 200);
   assert.equal(body.status, "ok");
@@ -257,8 +261,16 @@ test("secretary appointment review queue GET route returns safe empty mock respo
   assert.equal(body.databasePersisted, false);
   assert.equal(body.actionPerformed, false);
   assert.equal(body.appointmentCreated, false);
-  assert.deepEqual(body.reviews, []);
-  assert.equal(body.count, 0);
+  assert.equal(Array.isArray(body.reviews), true);
+  assert.equal(body.count, body.reviews.length);
+  assert.ok(review);
+  assert.equal(review.requiresSecretaryConfirmation, true);
+  assert.equal(review.bookingCreated, false);
+  assert.equal(review.calendarChecked, false);
+  assert.equal(
+    review.metadata.controlledActionState,
+    "validation_only_intent_checked"
+  );
   assert.equal(body.safety.readOnly, true);
   assert.equal(body.safety.mode, "read_only");
   assert.equal(body.safety.bookingCreated, false);
@@ -623,10 +635,10 @@ test("secretary appointment review queue route responses do not leak runtime int
   assertNoInternalLeak(failureBody);
 });
 
-test("secretary appointment review collection route imports only the route adapter boundary", () => {
+test("secretary appointment review collection route imports only the active route runtime boundary", () => {
   const source = fs.readFileSync(COLLECTION_ROUTE_SOURCE_PATH, "utf8");
 
-  assert.match(source, /appointmentReviewRouteRuntimeAdapter/);
+  assert.match(source, /appointmentReviewRouteRuntimeCompositionRoot/);
 
   for (const forbidden of FORBIDDEN_COLLECTION_ROUTE_INFRASTRUCTURE) {
     assert.doesNotMatch(source, new RegExp(forbidden, "i"), forbidden);
@@ -783,10 +795,10 @@ test("secretary appointment review detail route responses do not leak runtime in
   assertNoInternalLeak(failureBody);
 });
 
-test("secretary appointment review detail route imports only the route adapter boundary", () => {
+test("secretary appointment review detail route imports only the active route runtime boundary", () => {
   const source = fs.readFileSync(DETAIL_ROUTE_SOURCE_PATH, "utf8");
 
-  assert.match(source, /appointmentReviewRouteRuntimeAdapter/);
+  assert.match(source, /appointmentReviewRouteRuntimeCompositionRoot/);
 
   for (const forbidden of FORBIDDEN_DETAIL_ROUTE_INFRASTRUCTURE) {
     assert.doesNotMatch(source, new RegExp(forbidden, "i"), forbidden);

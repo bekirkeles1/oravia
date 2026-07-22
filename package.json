@@ -6,6 +6,7 @@
   "scripts": {
     "check:env": "node scripts/check-env.js",
     "classify:sample": "node scripts/classify-sample.js",
+    "build": "next build",
     "dev": "next dev",
     "demo:availability": "node scripts/demo-availability.js",
     "demo:appointment": "node scripts/demo-appointment.js",

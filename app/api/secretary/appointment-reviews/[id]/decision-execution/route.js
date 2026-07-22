@@ -4,7 +4,10 @@ const {
 const {
   SUPPORTED_DECISION_ACTIONS,
 } = require("../../../../../../src/api/secretaryAppointmentReviewDecisionPreviewOrchestrator");
-const routeRuntimeAdapter = require("../../../../../../src/secretary/appointmentReviewRouteRuntimeAdapter");
+const {
+  createDefaultRouteReview,
+  getActiveAppointmentReviewRouteRuntimeAdapter,
+} = require("../../../../../../src/secretary/appointmentReviewRouteRuntimeCompositionRoot");
 
 const ROUTE_SAFETY_FIELDS = Object.freeze({
   mock: true,
@@ -110,7 +113,7 @@ async function handleAppointmentReviewDecisionExecutionRouteRequest(
   const runtimeResult = resolveRouteDecisionExecutionRuntime({
     createRouteRuntimeAdapter:
       options.createRouteRuntimeAdapter ||
-      routeRuntimeAdapter["create" + "AppointmentReviewRouteRuntimeAdapter"],
+      getActiveAppointmentReviewRouteRuntimeAdapter,
     reviewId,
   });
 
@@ -242,7 +245,6 @@ function resolveRouteDecisionExecutionRuntime({
   try {
     const adapter = createRouteRuntimeAdapter({
       resolveControlledActionState: resolveRouteControlledActionState,
-      initialReviews: [createRouteReviewSeed(reviewId)],
     });
 
     if (
@@ -263,24 +265,6 @@ function resolveRouteDecisionExecutionRuntime({
       accepted: false,
     };
   }
-}
-
-function createRouteReviewSeed(reviewId) {
-  return {
-    id: reviewId,
-    status: "pending_secretary_review",
-    source: "mock",
-    selectedSlot: {
-      id: "route_decision_execution_slot",
-      source: "mock",
-    },
-    requiresSecretaryConfirmation: true,
-    bookingCreated: false,
-    calendarChecked: false,
-    metadata: {
-      controlledActionState: "validation_only_intent_checked",
-    },
-  };
 }
 
 function resolveRouteControlledActionState(input) {
@@ -396,6 +380,7 @@ function createSafetyFields() {
 }
 
 module.exports = {
+  createRouteReviewSeed: createDefaultRouteReview,
   DELETE: rejectMethod,
   GET: rejectMethod,
   PATCH: rejectMethod,

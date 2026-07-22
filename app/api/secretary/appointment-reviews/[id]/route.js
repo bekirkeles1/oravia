@@ -3,8 +3,8 @@ const {
   handleSecretaryAppointmentReviewQueueRequest,
 } = require("../../../../../src/api/secretaryAppointmentReviewQueueHandler");
 const {
-  createAppointmentReviewRouteRuntimeAdapter,
-} = require("../../../../../src/secretary/appointmentReviewRouteRuntimeAdapter");
+  getActiveAppointmentReviewRouteRuntimeAdapter,
+} = require("../../../../../src/secretary/appointmentReviewRouteRuntimeCompositionRoot");
 
 async function GET(request, context = {}) {
   return handleAppointmentReviewDetailRouteRequest(request, context);
@@ -62,7 +62,7 @@ async function handleAppointmentReviewDetailRouteRequest(
 function resolveAppointmentReviewDetailForRoute(reviewId, options) {
   const createRouteRuntimeAdapter =
     options.createRouteRuntimeAdapter ||
-    createAppointmentReviewRouteRuntimeAdapter;
+    getActiveAppointmentReviewRouteRuntimeAdapter;
 
   try {
     const routeRuntime = createRouteRuntimeAdapter({
@@ -89,8 +89,8 @@ function resolveAppointmentReviewDetailForRoute(reviewId, options) {
   }
 }
 
-function resolveRouteControlledActionState() {
-  return "validation_only_intent_checked";
+function resolveRouteControlledActionState(input) {
+  return String(input?.review?.metadata?.controlledActionState || "").trim();
 }
 
 async function rejectWriteMethod(request) {

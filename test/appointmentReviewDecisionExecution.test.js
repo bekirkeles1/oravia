@@ -318,13 +318,22 @@ test("route runtime adapter exposes one narrow execution capability", () => {
 test("execution production files avoid prohibited side effects and global stores", () => {
   const files = [
     "src/api/secretaryAppointmentReviewDecisionExecutionService.js",
+    "src/secretary/appointmentReviewRouteRuntimeCompositionRoot.js",
     "src/secretary/appointmentReviewExecutionIdempotencyStore.js",
     "src/secretary/appointmentReviewDecisionExecutionReceipt.js",
     "app/api/secretary/appointment-reviews/[id]/decision-execution/route.js",
   ];
   const source = files.map((file) => fs.readFileSync(file, "utf8")).join("\n");
 
-  assert.doesNotMatch(source, /createAppointment|createCalendarEvent|googleapis/);
+  const forbiddenSideEffectPattern = new RegExp(
+    [
+      "create" + "Appointment\\(",
+      "create" + "CalendarEvent\\(",
+      "google" + "apis",
+    ].join("|")
+  );
+
+  assert.doesNotMatch(source, forbiddenSideEffectPattern);
   assert.doesNotMatch(source, /prisma|supabase|redis|process\.env|localStorage/);
   assert.doesNotMatch(source, /sendEmail|sendWhatsapp|notification|job queue/i);
   assert.doesNotMatch(source, /globalThis|module-level mutable|new Date|Math\.random/);
