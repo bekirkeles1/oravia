@@ -13,6 +13,11 @@ import {
   reconcileAppointmentReviewGuidedSession
 } from "../../src/secretary/appointmentReviewGuidedSession";
 import {
+  FOLLOW_UP_CATEGORY_FILTER_ALL,
+  buildAppointmentReviewFollowUpFocusBoard,
+  findNextUnreviewedAppointmentReviewInFocus
+} from "../../src/secretary/appointmentReviewFollowUpFocusBoard";
+import {
   clearResolutionChecklistSession,
   createResolutionChecklistSession,
   toggleResolutionChecklistItem
@@ -255,6 +260,13 @@ const GUIDED_SESSION_FILTER_OPTIONS = [
   [GUIDED_SESSION_FILTERS.VERSION_CHANGED, "Version reset"]
 ];
 
+const FOLLOW_UP_BOARD_SESSION_FILTER_OPTIONS = [
+  [GUIDED_SESSION_FILTERS.ALL, "All focused reviews"],
+  [GUIDED_SESSION_FILTERS.UNREVIEWED, "Unreviewed focused reviews"],
+  [GUIDED_SESSION_FILTERS.REVIEWED, "Reviewed locally in focus"],
+  [GUIDED_SESSION_FILTERS.VERSION_CHANGED, "Version reset in focus"]
+];
+
 const QUEUE_READINESS_LABELS = {
   both_paths_available: "Both paths available",
   approve_path_only: "Approve path only",
@@ -445,6 +457,14 @@ export default function AppointmentReviewsWorkspace() {
   );
   const [guidedReviewSessionMessage, setGuidedReviewSessionMessage] =
     useState("");
+  const [followUpBoardStatus, setFollowUpBoardStatus] = useState("idle");
+  const [followUpBoardError, setFollowUpBoardError] = useState("");
+  const [followUpBoardMessage, setFollowUpBoardMessage] = useState("");
+  const [followUpBoardCategoryFilter, setFollowUpBoardCategoryFilter] =
+    useState(FOLLOW_UP_CATEGORY_FILTER_ALL);
+  const [followUpBoardSessionFilter, setFollowUpBoardSessionFilter] = useState(
+    GUIDED_SESSION_FILTERS.ALL
+  );
   const [
     selectedValidationReceiptActionIntent,
     setSelectedValidationReceiptActionIntent
@@ -528,6 +548,25 @@ export default function AppointmentReviewsWorkspace() {
   const displayedShiftHandoff =
     shiftHandoffResult || INITIAL_SHIFT_HANDOFF_PREVIEW;
   const currentReviewIds = reviews.map((review) => review.id);
+  const currentShiftHandoffResult =
+    isCurrentShiftHandoffResult(shiftHandoffResult, currentReviewIds)
+      ? shiftHandoffResult
+      : null;
+  const followUpFocusBoard = buildAppointmentReviewFollowUpFocusBoard(
+    currentShiftHandoffResult,
+    {
+      categoryFilter: followUpBoardCategoryFilter,
+      sessionFilter: followUpBoardSessionFilter,
+      guidedSession: guidedReviewSession
+    }
+  );
+  const followUpBoardCategoryOptions = [
+    [FOLLOW_UP_CATEGORY_FILTER_ALL, "All follow-up categories"],
+    ...followUpFocusBoard.categories.map((category) => [
+      category.code,
+      category.label
+    ])
+  ];
   const queueReadinessItems = getCurrentQueueReadinessItems({
     result: queueReadinessResult,
     reviewIds: currentReviewIds
@@ -587,6 +626,7 @@ export default function AppointmentReviewsWorkspace() {
         );
         invalidateShiftHandoffRequest();
         resetShiftHandoffState();
+        resetFollowUpBoardState();
         setSelectedReviewId((currentSelectedReviewId) => {
           if (
             currentSelectedReviewId &&
@@ -624,6 +664,7 @@ export default function AppointmentReviewsWorkspace() {
         setLoading(false);
         invalidateShiftHandoffRequest();
         resetShiftHandoffState();
+        resetFollowUpBoardState();
         setLoadError(
           error instanceof Error
             ? error.message
@@ -2069,6 +2110,11 @@ export default function AppointmentReviewsWorkspace() {
 
       setShiftHandoffResult(payload);
       setShiftHandoffStatus("success");
+      setFollowUpBoardStatus("idle");
+      setFollowUpBoardError("");
+      setFollowUpBoardMessage(
+        "Trusted handoff data is available for the follow-up focus board."
+      );
     } catch (error) {
       if (isAbortError(error)) {
         return;
@@ -2085,12 +2131,175 @@ export default function AppointmentReviewsWorkspace() {
 
       setShiftHandoffResult(null);
       setShiftHandoffStatus("failure");
+      setFollowUpBoardStatus("idle");
       setShiftHandoffError(
         error instanceof Error
           ? error.message
           : "Shift handoff preview failed safely."
       );
     }
+  }
+
+  async function loadFollowUpFocusBoard({ forceRefresh = false } = {}) {
+    if (followUpBoardStatus === "loading" || shiftHandoffStatus === "loading") {
+      return;
+    }
+
+    if (!forceRefresh && currentShiftHandoffResult) {
+      setFollowUpBoardStatus("success");
+      setFollowUpBoardError("");
+      setFollowUpBoardMessage(
+        "Operational follow-up board opened from the current trusted handoff preview."
+      );
+      resetInvalidFollowUpCategoryFilter(followUpFocusBoard);
+      return;
+    }
+
+    const reviewIdsForRequest = currentReviewIds;
+    const requestId = createShiftHandoffRequest({
+      reviewIds: reviewIdsForRequest
+    });
+    const activeAbortController = activeShiftHandoffAbortRef.current;
+
+    setFollowUpBoardStatus("loading");
+    setFollowUpBoardError("");
+    setFollowUpBoardMessage("");
+    setShiftHandoffStatus("loading");
+    setShiftHandoffResult(null);
+    setShiftHandoffError("");
+    setShiftHandoffCopyStatus("idle");
+
+    try {
+      const response = await fetch(
+        "/api/secretary/appointment-reviews/shift-handoff-preview",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          signal: activeAbortController?.signal,
+          body: JSON.stringify({})
+        }
+      );
+      const payload = await response.json();
+
+      if (
+        !isActiveShiftHandoffRequest({
+          requestId,
+          reviewIds: reviewIdsForRequest
+        })
+      ) {
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          payload?.reason ||
+            payload?.error?.message ||
+            "Operational follow-up board refresh failed safely."
+        );
+      }
+
+      if (!isSafeShiftHandoffResponse(payload)) {
+        throw new Error("Follow-up board source handoff response was unsafe.");
+      }
+
+      setShiftHandoffResult(payload);
+      setShiftHandoffStatus("success");
+      setFollowUpBoardStatus("success");
+      setFollowUpBoardMessage(
+        "Operational follow-up board loaded from the existing shift handoff preview route."
+      );
+      resetInvalidFollowUpCategoryFilter(
+        buildAppointmentReviewFollowUpFocusBoard(payload, {
+          categoryFilter: followUpBoardCategoryFilter,
+          sessionFilter: followUpBoardSessionFilter,
+          guidedSession: guidedReviewSession
+        })
+      );
+    } catch (error) {
+      if (isAbortError(error)) {
+        return;
+      }
+
+      if (
+        !isActiveShiftHandoffRequest({
+          requestId,
+          reviewIds: reviewIdsForRequest
+        })
+      ) {
+        return;
+      }
+
+      setShiftHandoffResult(null);
+      setShiftHandoffStatus("failure");
+      setFollowUpBoardStatus("failure");
+      setFollowUpBoardError(
+        error instanceof Error
+          ? error.message
+          : "Operational follow-up board refresh failed safely."
+      );
+      setShiftHandoffError(
+        error instanceof Error
+          ? error.message
+          : "Shift handoff preview failed safely."
+      );
+    }
+  }
+
+  function resetInvalidFollowUpCategoryFilter(board) {
+    if (
+      followUpBoardCategoryFilter !== FOLLOW_UP_CATEGORY_FILTER_ALL &&
+      !board.categories.some(
+        (category) => category.code === followUpBoardCategoryFilter
+      )
+    ) {
+      setFollowUpBoardCategoryFilter(FOLLOW_UP_CATEGORY_FILTER_ALL);
+    }
+  }
+
+  function clearFollowUpFocusFilters() {
+    setFollowUpBoardCategoryFilter(FOLLOW_UP_CATEGORY_FILTER_ALL);
+    setFollowUpBoardSessionFilter(GUIDED_SESSION_FILTERS.ALL);
+    setFollowUpBoardMessage(
+      "Operational follow-up focus filters cleared locally."
+    );
+  }
+
+  function resetFollowUpBoardState() {
+    setFollowUpBoardStatus("idle");
+    setFollowUpBoardError("");
+    setFollowUpBoardMessage("");
+    setFollowUpBoardCategoryFilter(FOLLOW_UP_CATEGORY_FILTER_ALL);
+    setFollowUpBoardSessionFilter(GUIDED_SESSION_FILTERS.ALL);
+  }
+
+  function openNextUnreviewedInFollowUpFocus() {
+    if (!currentShiftHandoffResult) {
+      setFollowUpBoardMessage(
+        "Load the operational follow-up board before opening the next focused review."
+      );
+      return;
+    }
+
+    const nextReviewId = findNextUnreviewedAppointmentReviewInFocus(
+      followUpFocusBoard,
+      {
+        selectedReviewId
+      }
+    );
+
+    if (!nextReviewId) {
+      setFollowUpBoardMessage(
+        "No unreviewed reviews remain in the current follow-up focus."
+      );
+      return;
+    }
+
+    setSelectedReviewId(nextReviewId);
+    setFollowUpBoardMessage(
+      "Opened the next unreviewed review in the current follow-up focus."
+    );
   }
 
   function createShiftHandoffRequest({ reviewIds }) {
@@ -2692,6 +2901,218 @@ export default function AppointmentReviewsWorkspace() {
                 placeholder="Generate a shift handoff preview to render the safe internal brief."
               />
             </label>
+          </section>
+        ) : null}
+
+        {!loading && !loadError ? (
+          <section
+            className="appointment-review-follow-up-board"
+            aria-labelledby="appointment-review-follow-up-board-title"
+          >
+            <div>
+              <span>Operational focus · Local filters</span>
+              <h3 id="appointment-review-follow-up-board-title">
+                Operational Follow-up Focus Board
+              </h3>
+              <p>
+                Groups the current trusted handoff items by deterministic
+                resolution-guidance categories. Categories are operational
+                verification tags only; they do not recommend, rank, assign,
+                execute, persist, book, or check calendar availability.
+              </p>
+            </div>
+
+            <div className="appointment-review-follow-up-board-controls">
+              <button
+                type="button"
+                className="appointment-review-follow-up-board-button"
+                onClick={() => loadFollowUpFocusBoard()}
+                disabled={
+                  followUpBoardStatus === "loading" ||
+                  shiftHandoffStatus === "loading"
+                }
+              >
+                Load Operational Follow-up Board
+              </button>
+              <button
+                type="button"
+                className="appointment-review-follow-up-board-button secondary"
+                onClick={() => loadFollowUpFocusBoard({ forceRefresh: true })}
+                disabled={
+                  followUpBoardStatus === "loading" ||
+                  shiftHandoffStatus === "loading"
+                }
+              >
+                Refresh from Handoff Preview
+              </button>
+              <button
+                type="button"
+                className="appointment-review-follow-up-board-button secondary"
+                onClick={openNextUnreviewedInFollowUpFocus}
+                disabled={!currentShiftHandoffResult}
+              >
+                Open Next Unreviewed in Current Focus
+              </button>
+              <button
+                type="button"
+                className="appointment-review-follow-up-board-button secondary"
+                onClick={clearFollowUpFocusFilters}
+              >
+                Clear Focus Filters
+              </button>
+              <label>
+                Follow-up category
+                <select
+                  value={followUpBoardCategoryFilter}
+                  onChange={(event) =>
+                    setFollowUpBoardCategoryFilter(event.target.value)
+                  }
+                >
+                  {followUpBoardCategoryOptions.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Session status
+                <select
+                  value={followUpBoardSessionFilter}
+                  onChange={(event) =>
+                    setFollowUpBoardSessionFilter(event.target.value)
+                  }
+                >
+                  {FOLLOW_UP_BOARD_SESSION_FILTER_OPTIONS.map(
+                    ([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    )
+                  )}
+                </select>
+              </label>
+            </div>
+
+            <p className="appointment-review-follow-up-board-state">
+              {followUpBoardStatus === "loading"
+                ? "Operational follow-up board is loading through the existing handoff preview route. Duplicate requests are ignored."
+                : null}
+              {followUpBoardStatus === "success"
+                ? `${followUpFocusBoard.filteredReviewCount} focused reviews from ${followUpFocusBoard.totalReviews} trusted handoff reviews.`
+                : null}
+              {followUpBoardStatus === "failure"
+                ? followUpBoardError ||
+                  "Operational follow-up board failed safely."
+                : null}
+              {followUpBoardStatus === "idle"
+                ? "Idle: load the board to focus by operational follow-up category."
+                : null}
+              {followUpBoardMessage ? ` ${followUpBoardMessage}` : null}
+            </p>
+
+            <dl className="appointment-review-follow-up-board-summary">
+              <div>
+                <dt>Total handoff reviews</dt>
+                <dd>{followUpFocusBoard.totalReviews}</dd>
+              </div>
+              <div>
+                <dt>Focused reviews</dt>
+                <dd>{followUpFocusBoard.filteredReviewCount}</dd>
+              </div>
+              <div>
+                <dt>Category count model</dt>
+                <dd>overlapping</dd>
+              </div>
+              <div>
+                <dt>Session state sent</dt>
+                <dd>{String(followUpFocusBoard.sentToServer === true)}</dd>
+              </div>
+            </dl>
+
+            {currentShiftHandoffResult ? (
+              <>
+                <div className="appointment-review-follow-up-board-categories">
+                  {followUpFocusBoard.categories.length === 0 ? (
+                    <span>No follow-up categories in the current handoff.</span>
+                  ) : null}
+                  {followUpFocusBoard.categories.map((category) => (
+                    <button
+                      key={category.code}
+                      type="button"
+                      className="appointment-review-follow-up-board-chip"
+                      onClick={() => setFollowUpBoardCategoryFilter(category.code)}
+                    >
+                      <span>{category.label}</span>
+                      <strong>{category.count}</strong>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="appointment-review-follow-up-board-items">
+                  {followUpFocusBoard.items.length === 0 ? (
+                    <p>No reviews match the current follow-up focus filters.</p>
+                  ) : null}
+                  {followUpFocusBoard.items.map((item) => (
+                    <article key={item.reviewId}>
+                      <div>
+                        <strong>{item.reviewId}</strong>
+                        <span>
+                          {QUEUE_READINESS_LABELS[item.readiness] ||
+                            item.readiness}
+                        </span>
+                      </div>
+                      <div className="appointment-review-follow-up-board-tags">
+                        {item.followUpCategoryLabels.map((label) => (
+                          <span key={label}>{label}</span>
+                        ))}
+                      </div>
+                      <dl>
+                        <div>
+                          <dt>Trusted state</dt>
+                          <dd>{item.trustedCurrentState}</dd>
+                        </div>
+                        <div>
+                          <dt>Observed version</dt>
+                          <dd>{item.observedReviewVersion}</dd>
+                        </div>
+                        <div>
+                          <dt>Session status</dt>
+                          <dd>{item.sessionStatus}</dd>
+                        </div>
+                        <div>
+                          <dt>Version reset</dt>
+                          <dd>{String(item.sessionVersionChanged === true)}</dd>
+                        </div>
+                      </dl>
+                      <button
+                        type="button"
+                        className="appointment-review-follow-up-board-button secondary"
+                        onClick={() => setSelectedReviewId(item.reviewId)}
+                      >
+                        Open review
+                      </button>
+                    </article>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="appointment-review-follow-up-board-empty">
+                <strong>No trusted handoff data loaded</strong>
+                <span>
+                  The board reuses the current Sprint 14F structured handoff
+                  result or loads it through the existing handoff preview route
+                  with an empty request body.
+                </span>
+              </div>
+            )}
+
+            <small>
+              Category counts are not mutually exclusive: one review can appear
+              in multiple deterministic categories. Session and checklist marks
+              remain local and are not included in handoff requests or copied
+              brief text.
+            </small>
           </section>
         ) : null}
 
@@ -5415,6 +5836,17 @@ function isSafeShiftHandoffResponse(payload) {
   );
 }
 
+function isCurrentShiftHandoffResult(result, reviewIds) {
+  return Boolean(
+    result &&
+      Array.isArray(result.items) &&
+      reviewIdsMatch(
+        result.items.map((item) => item.reviewId),
+        reviewIds
+      )
+  );
+}
+
 function isSafeShiftHandoffItem(item) {
   return (
     item &&
@@ -5427,6 +5859,7 @@ function isSafeShiftHandoffItem(item) {
     item.branches.every(isSafeShiftHandoffBranch) &&
     Array.isArray(item.unresolvedChecks) &&
     Array.isArray(item.followUpCategories) &&
+    item.branches.every((branch) => typeof branch.guidanceCategory === "string") &&
     item.validationOnly === true &&
     item.executionEnabled === false &&
     item.executionAvailable === false &&

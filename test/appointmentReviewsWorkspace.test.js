@@ -8,6 +8,10 @@ const workspaceSource = fs.readFileSync(
   "utf8"
 );
 const cssSource = fs.readFileSync("app/globals.css", "utf8");
+const followUpBoardHelperSource = fs.readFileSync(
+  "src/secretary/appointmentReviewFollowUpFocusBoard.js",
+  "utf8"
+);
 
 test("dashboard page exposes appointment reviews as a separate workspace panel", () => {
   assert.match(
@@ -571,6 +575,132 @@ test("appointment reviews workspace reconciles guided session on queue refresh",
     /Readiness and guided-session filters combine locally/
   );
   assert.doesNotMatch(workspaceSource, /sessionCompleted|locallyResolved/);
+});
+
+test("appointment reviews workspace exposes operational follow-up focus board", () => {
+  assert.match(workspaceSource, /appointmentReviewFollowUpFocusBoard/);
+  assert.match(workspaceSource, /Operational Follow-up Focus Board/);
+  assert.match(workspaceSource, /Load Operational Follow-up Board/);
+  assert.match(workspaceSource, /Refresh from Handoff Preview/);
+  assert.match(workspaceSource, /Open Next Unreviewed in Current Focus/);
+  assert.match(workspaceSource, /Clear Focus Filters/);
+  assert.match(workspaceSource, /All follow-up categories/);
+  assert.match(workspaceSource, /Category count model/);
+  assert.match(workspaceSource, /overlapping/);
+  assert.match(followUpBoardHelperSource, /No current validation blocker/);
+  assert.match(workspaceSource, /followUpCategoryLabels/);
+  assert.match(workspaceSource, /sessionStatus/);
+  assert.match(workspaceSource, /sessionVersionChanged/);
+  assert.match(workspaceSource, /No trusted handoff data loaded/);
+  assert.doesNotMatch(
+    workspaceSource,
+    /recommendedAction|preferredAction|bestAction|should approve|should reject/i
+  );
+  assert.doesNotMatch(workspaceSource, /high priority|low priority|risk score/i);
+});
+
+test("appointment reviews workspace reuses current handoff data for the follow-up board", () => {
+  const loadBoardSource = workspaceSource.slice(
+    workspaceSource.indexOf("async function loadFollowUpFocusBoard"),
+    workspaceSource.indexOf("function resetInvalidFollowUpCategoryFilter")
+  );
+
+  assert.match(loadBoardSource, /currentShiftHandoffResult/);
+  assert.match(loadBoardSource, /setFollowUpBoardStatus\("success"\)/);
+  assert.match(loadBoardSource, /Operational follow-up board opened/);
+  assert.match(loadBoardSource, /return;/);
+  assert.match(loadBoardSource, /shift-handoff-preview/);
+  assert.doesNotMatch(workspaceSource, /follow-up-board-preview/);
+  assert.doesNotMatch(workspaceSource, /follow-up-focus-preview/);
+  assert.doesNotMatch(loadBoardSource, /resolution-guidance-preview/);
+});
+
+test("appointment reviews workspace loads board through existing handoff route without local state payloads", () => {
+  const loadBoardSource = workspaceSource.slice(
+    workspaceSource.indexOf("async function loadFollowUpFocusBoard"),
+    workspaceSource.indexOf("function resetInvalidFollowUpCategoryFilter")
+  );
+  const boardFetchSource = loadBoardSource.slice(
+    loadBoardSource.indexOf("await fetch"),
+    loadBoardSource.indexOf("const payload = await response.json();")
+  );
+
+  assert.match(
+    boardFetchSource,
+    /\/api\/secretary\/appointment-reviews\/shift-handoff-preview/
+  );
+  assert.match(boardFetchSource, /method: "POST"/);
+  assert.match(boardFetchSource, /body: JSON\.stringify\(\{\}\)/);
+  assert.doesNotMatch(
+    boardFetchSource,
+    /guidedReviewSession|resolutionChecklistSession|followUpBoardCategoryFilter/
+  );
+  assert.doesNotMatch(
+    boardFetchSource,
+    /reviewedLocally|sessionStatus|checkedItem|checklist|clipboard|plainTextBrief/
+  );
+  assert.match(loadBoardSource, /isActiveShiftHandoffRequest/);
+  assert.match(workspaceSource, /Duplicate requests are ignored/);
+});
+
+test("appointment reviews workspace keeps follow-up board local and deterministic", () => {
+  const nextFocusSource = workspaceSource.slice(
+    workspaceSource.indexOf("function openNextUnreviewedInFollowUpFocus"),
+    workspaceSource.indexOf("function createShiftHandoffRequest")
+  );
+  const clearFocusSource = workspaceSource.slice(
+    workspaceSource.indexOf("function clearFollowUpFocusFilters"),
+    workspaceSource.indexOf("function resetFollowUpBoardState")
+  );
+  const resetFocusSource = workspaceSource.slice(
+    workspaceSource.indexOf("function resetFollowUpBoardState"),
+    workspaceSource.indexOf("function openNextUnreviewedInFollowUpFocus")
+  );
+
+  assert.match(nextFocusSource, /findNextUnreviewedAppointmentReviewInFocus/);
+  assert.match(nextFocusSource, /setSelectedReviewId\(nextReviewId\)/);
+  assert.doesNotMatch(nextFocusSource, /fetch\(/);
+  assert.doesNotMatch(nextFocusSource, /runDecision|runResolution|runShift/);
+  assert.match(clearFocusSource, /FOLLOW_UP_CATEGORY_FILTER_ALL/);
+  assert.match(clearFocusSource, /GUIDED_SESSION_FILTERS\.ALL/);
+  assert.match(resetFocusSource, /setFollowUpBoardStatus\("idle"\)/);
+  assert.match(workspaceSource, /resetFollowUpBoardState\(\);/);
+  assert.match(workspaceSource, /isCurrentShiftHandoffResult/);
+});
+
+test("appointment reviews workspace preserves clipboard and checklist separation from follow-up board", () => {
+  const copyFunctionStart = workspaceSource.indexOf("async function copyShiftHandoffBrief");
+  const copyFunctionSource = workspaceSource.slice(copyFunctionStart, copyFunctionStart + 1200);
+  const loadBoardSource = workspaceSource.slice(
+    workspaceSource.indexOf("async function loadFollowUpFocusBoard"),
+    workspaceSource.indexOf("function resetInvalidFollowUpCategoryFilter")
+  );
+
+  assert.doesNotMatch(copyFunctionSource, /followUpBoard|followUpFocusBoard/);
+  assert.doesNotMatch(copyFunctionSource, /guidedReviewSession/);
+  assert.doesNotMatch(copyFunctionSource, /resolutionChecklistSession/);
+  assert.doesNotMatch(loadBoardSource, /setResolutionChecklistSession/);
+  assert.doesNotMatch(loadBoardSource, /toggleResolutionChecklistItem/);
+  assert.match(workspaceSource, /copied\s+brief text/i);
+});
+
+test("appointment reviews workspace follow-up board helper stays pure and source-safe", () => {
+  assert.match(followUpBoardHelperSource, /GUIDANCE_CATEGORIES/);
+  assert.match(followUpBoardHelperSource, /guidanceCategory/);
+  assert.match(followUpBoardHelperSource, /countsMayOverlap/);
+  assert.doesNotMatch(
+    followUpBoardHelperSource,
+    /fetch\(|localStorage|sessionStorage|indexedDB|document\.cookie/
+  );
+  assert.doesNotMatch(followUpBoardHelperSource, /process\.env|AsyncLocalStorage/);
+  assert.doesNotMatch(
+    followUpBoardHelperSource,
+    /createAppointment|createCalendarEvent|googleapis|prisma|supabase|redis/
+  );
+  assert.doesNotMatch(
+    followUpBoardHelperSource,
+    /patientName|patientPhone|patientEmail|rawMessage|adapter|runtime/
+  );
 });
 
 test("appointment reviews workspace hardens resolution guidance against stale responses", () => {
@@ -1955,6 +2085,14 @@ test("appointment reviews workspace styles are present", () => {
   assert.match(cssSource, /\.appointment-review-shift-handoff-button/);
   assert.match(cssSource, /\.appointment-review-shift-handoff-state/);
   assert.match(cssSource, /\.appointment-review-shift-handoff-brief/);
+  assert.match(cssSource, /\.appointment-review-follow-up-board/);
+  assert.match(cssSource, /\.appointment-review-follow-up-board-controls/);
+  assert.match(cssSource, /\.appointment-review-follow-up-board-summary/);
+  assert.match(cssSource, /\.appointment-review-follow-up-board-button/);
+  assert.match(cssSource, /\.appointment-review-follow-up-board-state/);
+  assert.match(cssSource, /\.appointment-review-follow-up-board-categories/);
+  assert.match(cssSource, /\.appointment-review-follow-up-board-items/);
+  assert.match(cssSource, /\.appointment-review-follow-up-board-tags/);
   assert.match(cssSource, /\.appointment-review-guided-session/);
   assert.match(cssSource, /\.appointment-review-guided-session-controls/);
   assert.match(cssSource, /\.appointment-review-guided-session-summary/);

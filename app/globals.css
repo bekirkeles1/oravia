@@ -2023,6 +2023,8 @@ blockquote {
 .appointment-review-decision-empty,
 .appointment-review-decision-comparison,
 .appointment-review-decision-comparison-empty,
+.appointment-review-follow-up-board,
+.appointment-review-follow-up-board-empty,
 .appointment-review-guided-session,
 .appointment-review-queue-readiness,
 .appointment-review-shift-handoff,
@@ -2122,6 +2124,13 @@ blockquote {
   background: #fbfbf7;
 }
 
+.appointment-review-follow-up-board {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  background: #f9fbf8;
+}
+
 .appointment-review-queue-readiness {
   display: grid;
   gap: 14px;
@@ -2187,6 +2196,11 @@ blockquote {
   gap: 6px;
 }
 
+.appointment-review-follow-up-board > div:first-child {
+  display: grid;
+  gap: 6px;
+}
+
 .appointment-review-queue-readiness > div:first-child {
   display: grid;
   gap: 6px;
@@ -2227,6 +2241,9 @@ blockquote {
 .appointment-review-decision-comparison span,
 .appointment-review-decision-comparison p,
 .appointment-review-decision-comparison-empty span,
+.appointment-review-follow-up-board span,
+.appointment-review-follow-up-board p,
+.appointment-review-follow-up-board-empty span,
 .appointment-review-guided-session span,
 .appointment-review-guided-session p,
 .appointment-review-queue-readiness span,
@@ -2282,6 +2299,12 @@ blockquote {
   text-transform: uppercase;
 }
 
+.appointment-review-follow-up-board > div:first-child > span {
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
 .appointment-review-queue-readiness > div:first-child > span {
   font-size: 0.76rem;
   font-weight: 900;
@@ -2322,6 +2345,8 @@ blockquote {
 .appointment-review-decision-preview p,
 .appointment-review-decision-comparison h3,
 .appointment-review-decision-comparison p,
+.appointment-review-follow-up-board h3,
+.appointment-review-follow-up-board p,
 .appointment-review-guided-session h3,
 .appointment-review-guided-session p,
 .appointment-review-queue-readiness h3,
@@ -2358,6 +2383,9 @@ blockquote {
 .appointment-review-decision-comparison-grid,
 .appointment-review-decision-comparison-paths,
 .appointment-review-decision-comparison-paths article dl,
+.appointment-review-follow-up-board-controls,
+.appointment-review-follow-up-board-summary,
+.appointment-review-follow-up-board-items article dl,
 .appointment-review-guided-session-controls,
 .appointment-review-guided-session-summary,
 .appointment-review-queue-readiness-controls,
@@ -2398,6 +2426,9 @@ blockquote {
 .appointment-review-decision-comparison-paths article dl div,
 .appointment-review-decision-comparison-list,
 .appointment-review-decision-comparison-empty,
+.appointment-review-follow-up-board-summary div,
+.appointment-review-follow-up-board-items article,
+.appointment-review-follow-up-board-empty,
 .appointment-review-guided-session-summary div,
 .appointment-review-queue-readiness-summary div,
 .appointment-review-shift-handoff-summary div,
@@ -2459,6 +2490,23 @@ blockquote {
   font-size: 0.78rem;
   font-weight: 900;
   text-transform: uppercase;
+}
+
+.appointment-review-follow-up-board-controls label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.appointment-review-follow-up-board-categories,
+.appointment-review-follow-up-board-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
 }
 
 .appointment-review-shift-handoff-items,
@@ -2541,6 +2589,7 @@ blockquote {
 .appointment-review-state-transition-controls select,
 .appointment-review-decision-controls input,
 .appointment-review-decision-controls select,
+.appointment-review-follow-up-board-controls select,
 .appointment-review-guided-session-controls select,
 .appointment-review-queue-readiness-controls select,
 .appointment-review-controlled-action-validation-controls input,
@@ -2628,6 +2677,30 @@ blockquote {
   background: #fbfbf7;
 }
 
+.appointment-review-follow-up-board-button,
+.appointment-review-follow-up-board-chip {
+  align-self: end;
+  justify-self: start;
+  width: fit-content;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font-weight: 800;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.appointment-review-follow-up-board-button.secondary {
+  background: #f9fbf8;
+}
+
+.appointment-review-follow-up-board-chip {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .appointment-review-queue-readiness-button {
   align-self: end;
   justify-self: start;
@@ -2705,6 +2778,7 @@ blockquote {
 .appointment-review-state-transition-button:disabled,
 .appointment-review-decision-button:disabled,
 .appointment-review-decision-comparison-button:disabled,
+.appointment-review-follow-up-board-button:disabled,
 .appointment-review-guided-session-button:disabled,
 .appointment-review-queue-readiness-button:disabled,
 .appointment-review-shift-handoff-button:disabled,
@@ -2736,6 +2810,14 @@ blockquote {
   border: 1px dashed rgba(105, 112, 46, 0.3);
   border-radius: 8px;
   background: rgba(105, 112, 46, 0.08);
+  font-weight: 800;
+}
+
+.appointment-review-follow-up-board-state {
+  padding: 10px 12px;
+  border: 1px dashed rgba(83, 116, 65, 0.3);
+  border-radius: 8px;
+  background: rgba(83, 116, 65, 0.08);
   font-weight: 800;
 }
 
@@ -2982,6 +3064,7 @@ blockquote {
 
 .appointment-review-readiness-badges span,
 .appointment-review-readiness-badges small,
+.appointment-review-follow-up-board-tags span,
 .appointment-review-session-badges span,
 .appointment-review-session-badges small {
   width: fit-content;
@@ -3025,6 +3108,9 @@ blockquote {
   .appointment-review-decision-comparison-grid,
   .appointment-review-decision-comparison-paths,
   .appointment-review-decision-comparison-paths article dl,
+  .appointment-review-follow-up-board-controls,
+  .appointment-review-follow-up-board-summary,
+  .appointment-review-follow-up-board-items article dl,
   .appointment-review-guided-session-controls,
   .appointment-review-guided-session-summary,
   .appointment-review-resolution-guidance-grid,
