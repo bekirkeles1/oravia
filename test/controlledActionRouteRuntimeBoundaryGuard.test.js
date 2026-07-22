@@ -330,11 +330,13 @@ test("route runtime adapter keeps a narrow immutable public contract", () => {
     "adapterSource",
     "adapterType",
     "applyAppointmentReviewDecision",
+    "createAppointmentFromApprovedReview",
     "getAppointmentReviewById",
     "getAppointmentReviewQueue",
     "getControlledActionDependencies",
     "getRuntimeDescriptor",
     "listAppointmentReviews",
+    "listCreatedAppointments",
     "schemaVersion",
   ].sort());
   assert.equal(Object.isFrozen(adapter), true);

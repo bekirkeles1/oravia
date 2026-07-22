@@ -166,6 +166,7 @@ const VALIDATION_RECEIPT_CORRELATION_FIELDS = [
 
 const DECISION_PREVIEW_ACTIONS = ["approve", "reject"];
 const DECISION_EXECUTION_CONFIRMATION = "apply_in_memory";
+const APPOINTMENT_CREATION_CONFIRMATION = "create_in_memory_appointment";
 
 const INITIAL_DECISION_PREVIEW = {
   mock: true,
@@ -214,6 +215,23 @@ const INITIAL_DECISION_EXECUTION = {
   externalCallPerformed: false,
   reviewStateChanged: false,
   repositoryVersionChanged: false
+};
+
+const INITIAL_APPOINTMENT_CREATION = {
+  appointmentCreation: true,
+  storage: "in_memory",
+  persistence: "not_persisted",
+  durablePersistence: false,
+  calendarWritten: false,
+  calendarEventCreated: false,
+  messageSent: false,
+  emailSent: false,
+  whatsappSent: false,
+  databasePersisted: false,
+  externalCallPerformed: false,
+  appointmentCreated: false,
+  reviewVersionChanged: false,
+  appointmentRepositoryVersionChanged: false
 };
 
 const INITIAL_DECISION_COMPARISON = {
@@ -459,6 +477,14 @@ export default function AppointmentReviewsWorkspace() {
   const [decisionExecutionError, setDecisionExecutionError] = useState("");
   const [decisionExecutionConfirmation, setDecisionExecutionConfirmation] =
     useState(null);
+  const [appointmentCreationStatus, setAppointmentCreationStatus] =
+    useState("idle");
+  const [appointmentCreationResult, setAppointmentCreationResult] =
+    useState(null);
+  const [appointmentCreationError, setAppointmentCreationError] = useState("");
+  const [appointmentCreationConfirmation, setAppointmentCreationConfirmation] =
+    useState(null);
+  const [createdAppointments, setCreatedAppointments] = useState([]);
   const [decisionComparisonStatus, setDecisionComparisonStatus] =
     useState("idle");
   const [decisionComparisonResult, setDecisionComparisonResult] =
@@ -531,6 +557,9 @@ export default function AppointmentReviewsWorkspace() {
   const decisionExecutionRequestSequenceRef = useRef(0);
   const activeDecisionExecutionRequestRef = useRef(null);
   const activeDecisionExecutionAbortRef = useRef(null);
+  const appointmentCreationRequestSequenceRef = useRef(0);
+  const activeAppointmentCreationRequestRef = useRef(null);
+  const activeAppointmentCreationAbortRef = useRef(null);
   const decisionComparisonRequestSequenceRef = useRef(0);
   const activeDecisionComparisonRequestRef = useRef(null);
   const activeDecisionComparisonAbortRef = useRef(null);
@@ -566,6 +595,8 @@ export default function AppointmentReviewsWorkspace() {
     decisionPreviewResult || INITIAL_DECISION_PREVIEW;
   const displayedDecisionExecution =
     decisionExecutionResult || INITIAL_DECISION_EXECUTION;
+  const displayedAppointmentCreation =
+    appointmentCreationResult || INITIAL_APPOINTMENT_CREATION;
   const executableDecisionPreview = isExecutableDecisionPreviewForReview(
     decisionPreviewResult,
     selectedReview
@@ -585,6 +616,8 @@ export default function AppointmentReviewsWorkspace() {
     resolutionChecklistSession.branches.approve;
   const rejectResolutionChecklist =
     resolutionChecklistSession.branches.reject;
+  const appointmentCreationCandidate =
+    getAppointmentCreationCandidate(selectedReview);
   const displayedQueueReadiness =
     queueReadinessResult || INITIAL_QUEUE_READINESS_PREVIEW;
   const displayedShiftHandoff =
@@ -733,6 +766,7 @@ export default function AppointmentReviewsWorkspace() {
       invalidateValidationReceiptRequest();
       invalidateDecisionPreviewRequest();
       invalidateDecisionExecutionRequest();
+      invalidateAppointmentCreationRequest();
       invalidateDecisionComparisonRequest();
       invalidateResolutionGuidanceRequest();
       invalidateQueueReadinessRequest();
@@ -748,6 +782,7 @@ export default function AppointmentReviewsWorkspace() {
     invalidateValidationReceiptRequest();
     invalidateDecisionPreviewRequest();
     invalidateDecisionExecutionRequest();
+    invalidateAppointmentCreationRequest();
     invalidateDecisionComparisonRequest();
     invalidateResolutionGuidanceRequest();
     setActionIntentDryRunStatus("idle");
@@ -796,6 +831,7 @@ export default function AppointmentReviewsWorkspace() {
     setDecisionPreviewResult(null);
     setDecisionPreviewError("");
     resetDecisionExecutionState();
+    resetAppointmentCreationState();
     setDecisionComparisonStatus("idle");
     setDecisionComparisonResult(null);
     setDecisionComparisonError("");
@@ -847,11 +883,32 @@ export default function AppointmentReviewsWorkspace() {
     });
   }
 
+  async function refreshCreatedAppointmentsFromTrustedServer() {
+    const response = await fetch("/api/secretary/appointments");
+
+    if (!response.ok) {
+      throw new Error("Appointment list refresh failed safely.");
+    }
+
+    const payload = await response.json();
+
+    setCreatedAppointments(
+      Array.isArray(payload.appointments) ? payload.appointments : []
+    );
+  }
+
   function resetDecisionExecutionState() {
     setDecisionExecutionStatus("idle");
     setDecisionExecutionResult(null);
     setDecisionExecutionError("");
     setDecisionExecutionConfirmation(null);
+  }
+
+  function resetAppointmentCreationState() {
+    setAppointmentCreationStatus("idle");
+    setAppointmentCreationResult(null);
+    setAppointmentCreationError("");
+    setAppointmentCreationConfirmation(null);
   }
 
   function invalidateOldVersionDecisionStateAfterExecution() {
@@ -874,12 +931,25 @@ export default function AppointmentReviewsWorkspace() {
     setDecisionComparisonError("");
   }
 
+  function invalidateOldVersionStateAfterAppointmentCreation() {
+    invalidateOldVersionDecisionStateAfterExecution();
+  }
+
   function buildDecisionExecutionIdempotencyKey(preview) {
     return [
       "decision_execution",
       preview.reviewId,
       preview.action,
       preview.observedReviewVersion
+    ].join(":");
+  }
+
+  function buildAppointmentCreationIdempotencyKey(review, candidate) {
+    return [
+      "appointment_creation",
+      review.id,
+      candidate.expectedReviewVersion,
+      candidate.selectedSlotId
     ].join(":");
   }
 
@@ -1880,6 +1950,158 @@ export default function AppointmentReviewsWorkspace() {
       activeRequest.requestId === requestId &&
       activeRequest.reviewId === confirmation.reviewId &&
       activeRequest.action === confirmation.action &&
+      activeRequest.expectedReviewVersion ===
+        confirmation.expectedReviewVersion &&
+      activeRequest.idempotencyKey === confirmation.idempotencyKey &&
+      selectedReviewIdRef.current === confirmation.reviewId
+    );
+  }
+
+  function openAppointmentCreationConfirmation() {
+    if (!appointmentCreationCandidate) {
+      setAppointmentCreationStatus("failure");
+      setAppointmentCreationError(
+        "Select a current approved review with a complete appointment candidate before creation confirmation."
+      );
+      return;
+    }
+
+    setAppointmentCreationConfirmation({
+      reviewId: selectedReview.id,
+      expectedReviewVersion: appointmentCreationCandidate.expectedReviewVersion,
+      idempotencyKey: buildAppointmentCreationIdempotencyKey(
+        selectedReview,
+        appointmentCreationCandidate
+      ),
+      candidate: appointmentCreationCandidate
+    });
+    setAppointmentCreationStatus("confirming");
+    setAppointmentCreationResult(null);
+    setAppointmentCreationError("");
+  }
+
+  function cancelAppointmentCreationConfirmation() {
+    invalidateAppointmentCreationRequest();
+    resetAppointmentCreationState();
+  }
+
+  async function confirmAppointmentCreation() {
+    if (appointmentCreationStatus === "loading") {
+      return;
+    }
+
+    if (!appointmentCreationConfirmation || !selectedReview) {
+      setAppointmentCreationStatus("failure");
+      setAppointmentCreationError(
+        "Open the explicit appointment creation confirmation before submitting."
+      );
+      return;
+    }
+
+    const confirmation = appointmentCreationConfirmation;
+    const requestId = startAppointmentCreationRequest(confirmation);
+    const activeAbortController = activeAppointmentCreationAbortRef.current;
+
+    setAppointmentCreationStatus("loading");
+    setAppointmentCreationError("");
+
+    try {
+      const response = await fetch(
+        `/api/secretary/appointment-reviews/${encodeURIComponent(
+          confirmation.reviewId
+        )}/appointment-creation`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          signal: activeAbortController?.signal,
+          body: JSON.stringify({
+            expectedReviewVersion: confirmation.expectedReviewVersion,
+            idempotencyKey: confirmation.idempotencyKey,
+            confirmation: APPOINTMENT_CREATION_CONFIRMATION
+          })
+        }
+      );
+      const payload = await response.json();
+
+      if (!isActiveAppointmentCreationRequest({ requestId, confirmation })) {
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          payload?.reason ||
+            "Appointment creation was blocked safely. Refresh trusted review state."
+        );
+      }
+
+      if (!isSafeAppointmentCreationResponse(payload)) {
+        throw new Error(
+          "Appointment creation response was unsafe or incomplete."
+        );
+      }
+
+      setAppointmentCreationResult(payload);
+      setAppointmentCreationStatus("success");
+      setAppointmentCreationConfirmation(null);
+      invalidateOldVersionStateAfterAppointmentCreation();
+      await refreshAppointmentReviewsFromTrustedServer({
+        preserveReviewId: payload.reviewId
+      });
+      await refreshCreatedAppointmentsFromTrustedServer();
+    } catch (error) {
+      if (isAbortError(error)) {
+        return;
+      }
+
+      if (!isActiveAppointmentCreationRequest({ requestId, confirmation })) {
+        return;
+      }
+
+      setAppointmentCreationStatus("failure");
+      setAppointmentCreationError(
+        error instanceof Error
+          ? error.message
+          : "Appointment creation failed safely. Refresh trusted state."
+      );
+    }
+  }
+
+  function startAppointmentCreationRequest(confirmation) {
+    invalidateAppointmentCreationRequest();
+
+    const requestId = appointmentCreationRequestSequenceRef.current + 1;
+    const abortController = new AbortController();
+
+    appointmentCreationRequestSequenceRef.current = requestId;
+    activeAppointmentCreationAbortRef.current = abortController;
+    activeAppointmentCreationRequestRef.current = {
+      requestId,
+      ...confirmation
+    };
+
+    return requestId;
+  }
+
+  function invalidateAppointmentCreationRequest() {
+    appointmentCreationRequestSequenceRef.current += 1;
+    activeAppointmentCreationRequestRef.current = null;
+
+    if (activeAppointmentCreationAbortRef.current) {
+      activeAppointmentCreationAbortRef.current.abort();
+      activeAppointmentCreationAbortRef.current = null;
+    }
+  }
+
+  function isActiveAppointmentCreationRequest({ requestId, confirmation }) {
+    const activeRequest = activeAppointmentCreationRequestRef.current;
+
+    return (
+      isMountedRef.current &&
+      activeRequest &&
+      activeRequest.requestId === requestId &&
+      activeRequest.reviewId === confirmation.reviewId &&
       activeRequest.expectedReviewVersion ===
         confirmation.expectedReviewVersion &&
       activeRequest.idempotencyKey === confirmation.idempotencyKey &&
@@ -4231,6 +4453,203 @@ export default function AppointmentReviewsWorkspace() {
 
         {!loading && !loadError ? (
           <section
+            className="appointment-review-decision-execution"
+            aria-labelledby="appointment-review-appointment-creation-title"
+          >
+            <div>
+              <span>Appointment creation · In-memory only</span>
+              <h3 id="appointment-review-appointment-creation-title">
+                Approved Review Appointment Creation
+              </h3>
+              <p>
+                Creates one appointment only from the current trusted approved
+                review. The request never includes doctor, patient, slot, time,
+                duration, treatment, or purpose overrides.
+              </p>
+            </div>
+
+            {selectedReview ? (
+              <>
+                <div className="appointment-review-decision-execution-controls">
+                  <button
+                    type="button"
+                    className="appointment-review-decision-execution-button"
+                    onClick={openAppointmentCreationConfirmation}
+                    disabled={
+                      !appointmentCreationCandidate ||
+                      appointmentCreationStatus === "loading"
+                    }
+                  >
+                    Prepare In-memory Appointment
+                  </button>
+                  <button
+                    type="button"
+                    className="appointment-review-decision-execution-button secondary"
+                    onClick={cancelAppointmentCreationConfirmation}
+                    disabled={appointmentCreationStatus === "loading"}
+                  >
+                    Cancel Appointment Creation
+                  </button>
+                </div>
+
+                <p className="appointment-review-decision-execution-state">
+                  {appointmentCreationStatus === "idle"
+                    ? "Idle: select a current approved review with no linked appointment."
+                    : null}
+                  {appointmentCreationStatus === "confirming"
+                    ? "Explicit confirmation is open. No appointment request has been sent."
+                    : null}
+                  {appointmentCreationStatus === "loading"
+                    ? "Creating the in-memory appointment through the controlled route. Duplicate submissions are disabled."
+                    : null}
+                  {appointmentCreationStatus === "success" &&
+                  appointmentCreationResult?.matchingReplay === true
+                    ? "Matching replay returned the original appointment receipt. No duplicate appointment was created."
+                    : null}
+                  {appointmentCreationStatus === "success" &&
+                  appointmentCreationResult?.matchingReplay !== true
+                    ? "Appointment created in the active in-memory runtime only."
+                    : null}
+                  {appointmentCreationStatus === "failure"
+                    ? `${appointmentCreationError} Refresh trusted review state before retrying.`
+                    : null}
+                </p>
+
+                {appointmentCreationConfirmation ? (
+                  <div className="appointment-review-decision-execution-confirmation">
+                    <strong>Create In-memory Appointment</strong>
+                    <dl>
+                      <div>
+                        <dt>reviewId</dt>
+                        <dd>{appointmentCreationConfirmation.reviewId}</dd>
+                      </div>
+                      <div>
+                        <dt>doctor</dt>
+                        <dd>
+                          {
+                            appointmentCreationConfirmation.candidate
+                              .doctorName
+                          }
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>start</dt>
+                        <dd>
+                          {appointmentCreationConfirmation.candidate.startAt}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>end</dt>
+                        <dd>{appointmentCreationConfirmation.candidate.endAt}</dd>
+                      </div>
+                      <div>
+                        <dt>duration</dt>
+                        <dd>
+                          {
+                            appointmentCreationConfirmation.candidate
+                              .durationMinutes
+                          }{" "}
+                          minutes
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>purpose</dt>
+                        <dd>
+                          {
+                            appointmentCreationConfirmation.candidate
+                              .appointmentPurposeLabel
+                          }
+                        </dd>
+                      </div>
+                    </dl>
+                    <small>
+                      In-memory only. No calendar provider event, durable
+                      persistence, patient message, email, or WhatsApp message
+                      is created.
+                    </small>
+                    <button
+                      type="button"
+                      className="appointment-review-decision-execution-button"
+                      onClick={confirmAppointmentCreation}
+                      disabled={appointmentCreationStatus === "loading"}
+                    >
+                      Create In-memory Appointment
+                    </button>
+                  </div>
+                ) : null}
+
+                <dl className="appointment-review-decision-execution-grid">
+                  <div>
+                    <dt>accepted</dt>
+                    <dd>
+                      {appointmentCreationResult
+                        ? String(appointmentCreationResult.accepted)
+                        : "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>code</dt>
+                    <dd>{appointmentCreationResult?.code || "not_run"}</dd>
+                  </div>
+                  <div>
+                    <dt>appointmentId</dt>
+                    <dd>
+                      {appointmentCreationResult?.appointmentId || "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>appointmentCreated</dt>
+                    <dd>
+                      {String(displayedAppointmentCreation.appointmentCreated)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>calendarWritten</dt>
+                    <dd>
+                      {String(displayedAppointmentCreation.calendarWritten)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>messageSent</dt>
+                    <dd>{String(displayedAppointmentCreation.messageSent)}</dd>
+                  </div>
+                  <div>
+                    <dt>durablePersistence</dt>
+                    <dd>
+                      {String(displayedAppointmentCreation.durablePersistence)}
+                    </dd>
+                  </div>
+                </dl>
+
+                <div className="appointment-review-decision-list">
+                  <strong>Created in-memory appointments</strong>
+                  {createdAppointments.length ? (
+                    createdAppointments.map((appointment) => (
+                      <span key={appointment.id}>
+                        {appointment.id} · {appointment.doctor?.name} ·{" "}
+                        {appointment.startAt} · {appointment.appointmentPurposeLabel} ·{" "}
+                        calendarWritten {String(appointment.calendarWritten)}
+                      </span>
+                    ))
+                  ) : (
+                    <span>No in-memory appointment has been created from this workspace session.</span>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="appointment-review-decision-execution-empty">
+                <strong>No selected appointment review</strong>
+                <span>
+                  Select an approved review before preparing appointment
+                  creation.
+                </span>
+              </div>
+            )}
+          </section>
+        ) : null}
+
+        {!loading && !loadError ? (
+          <section
             className="appointment-review-decision-comparison"
             aria-labelledby="appointment-review-decision-comparison-title"
           >
@@ -6384,6 +6803,91 @@ function isSafeDecisionExecutionResponse(payload) {
         payload.receipt.calendarWritten === false &&
         payload.receipt.messageSent === false))
   );
+}
+
+function isSafeAppointmentCreationResponse(payload) {
+  return (
+    payload &&
+    payload.appointmentCreation === true &&
+    payload.storage === "in_memory" &&
+    payload.persistence === "not_persisted" &&
+    payload.durablePersistence === false &&
+    payload.calendarWritten === false &&
+    payload.calendarEventCreated === false &&
+    payload.messageSent === false &&
+    payload.emailSent === false &&
+    payload.whatsappSent === false &&
+    payload.databasePersisted === false &&
+    payload.externalCallPerformed === false &&
+    typeof payload.accepted === "boolean" &&
+    (payload.accepted === false ||
+      (payload.receipt &&
+        payload.receipt.receiptKind ===
+          "appointment_review_appointment_creation_receipt_v1" &&
+        payload.receipt.durablePersistence === false &&
+        payload.receipt.calendarWritten === false &&
+        payload.receipt.messageSent === false))
+  );
+}
+
+function getAppointmentCreationCandidate(review) {
+  if (!review || review.metadata?.controlledActionState !== "needs_clinic_review") {
+    return null;
+  }
+
+  if (review.metadata?.linkedAppointmentId) {
+    return null;
+  }
+
+  const selectedSlot = review.selectedSlot || {};
+  const startAt = selectedSlot.startAt || selectedSlot.start_at;
+  const endAt = selectedSlot.endAt || selectedSlot.end_at;
+  const appointmentPurpose =
+    review.appointmentPurpose || selectedSlot.appointmentPurpose;
+  const appointmentPurposeLabel =
+    review.appointmentPurposeLabel || selectedSlot.appointmentPurposeLabel;
+
+  if (
+    !selectedSlot.id ||
+    !selectedSlot.doctorId ||
+    !selectedSlot.doctorName ||
+    !startAt ||
+    !endAt ||
+    !Number.isSafeInteger(selectedSlot.durationMinutes) ||
+    !appointmentPurpose ||
+    !appointmentPurposeLabel
+  ) {
+    return null;
+  }
+
+  return {
+    reviewId: review.id,
+    expectedReviewVersion: inferReviewVersion(review),
+    selectedSlotId: selectedSlot.id,
+    doctorId: selectedSlot.doctorId,
+    doctorName: selectedSlot.doctorName,
+    startAt,
+    endAt,
+    durationMinutes: selectedSlot.durationMinutes,
+    appointmentPurpose,
+    appointmentPurposeLabel
+  };
+}
+
+function inferReviewVersion(review) {
+  if (Number.isSafeInteger(review.version)) {
+    return review.version;
+  }
+
+  if (review.metadata?.linkedAppointmentId) {
+    return 3;
+  }
+
+  if (review.metadata?.controlledActionState === "needs_clinic_review") {
+    return 2;
+  }
+
+  return 1;
 }
 
 function isSafeShiftHandoffItem(item) {

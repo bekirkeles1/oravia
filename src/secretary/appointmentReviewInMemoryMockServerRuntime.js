@@ -8,11 +8,17 @@ const {
   createInMemoryAppointmentReviewExecutionIdempotencyStore,
 } = require("./appointmentReviewExecutionIdempotencyStore");
 const {
+  createInMemoryAppointmentReviewAppointmentRepository,
+} = require("./appointmentReviewAppointmentRepository");
+const {
   createInMemoryMockAppointmentReviewControlledActionRuntimeDependencyProvider,
 } = require("./appointmentReviewInMemoryMockControlledActionRuntimeDependencyProvider");
 const {
   applyAppointmentReviewDecision,
 } = require("../api/secretaryAppointmentReviewDecisionExecutionService");
+const {
+  createAppointmentFromApprovedReview,
+} = require("../api/secretaryAppointmentReviewAppointmentCreationService");
 
 const RUNTIME_TYPE = "appointment_review_server_runtime_v1";
 const SCHEMA_VERSION = 1;
@@ -50,6 +56,10 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
     });
   const executionIdempotencyStore =
     createInMemoryAppointmentReviewExecutionIdempotencyStore();
+  const appointmentCreationIdempotencyStore =
+    createInMemoryAppointmentReviewExecutionIdempotencyStore();
+  const appointmentRepository =
+    createInMemoryAppointmentReviewAppointmentRepository();
 
   return Object.freeze({
     runtimeType: RUNTIME_TYPE,
@@ -83,6 +93,23 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
         applyReviewControlledActionStateTransition:
           repository.applyReviewControlledActionStateTransition,
       });
+    },
+    createAppointmentFromApprovedReview(input) {
+      return createAppointmentFromApprovedReview({
+        ...input,
+        resolveReviewSnapshot(reviewId) {
+          return repository.getVersionedSnapshotById(reviewId);
+        },
+        appointmentRepository,
+        idempotencyStore: appointmentCreationIdempotencyStore,
+        previewReviewAppointmentCreationLink:
+          repository.previewReviewAppointmentCreationLink,
+        applyReviewAppointmentCreationLink:
+          repository.applyReviewAppointmentCreationLink,
+      });
+    },
+    listCreatedAppointments() {
+      return appointmentRepository.listAppointments();
     },
   });
 }

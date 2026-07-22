@@ -8,6 +8,8 @@ const ALLOWED_REVIEW_STATUSES = Object.freeze([
 const REQUIRED_REPOSITORY_METHODS = Object.freeze(["add", "list", "getById"]);
 const VERSIONED_SNAPSHOT_METHOD = "getVersionedSnapshotById";
 const STATE_TRANSITION_METHOD = "applyReviewControlledActionStateTransition";
+const APPOINTMENT_LINK_METHOD = "applyReviewAppointmentCreationLink";
+const APPOINTMENT_LINK_PREVIEW_METHOD = "previewReviewAppointmentCreationLink";
 const APPOINTMENT_REVIEW_REPOSITORY_SNAPSHOT_TYPE =
   "appointment_review_repository_snapshot_v1";
 const APPOINTMENT_REVIEW_REPOSITORY_SNAPSHOT_SCHEMA_VERSION = 1;
@@ -183,6 +185,63 @@ function createInMemoryAppointmentReviewRepository(options = {}) {
         databasePersisted: false,
       });
     },
+    previewReviewAppointmentCreationLink(input) {
+      return validateAppointmentLinkAgainstStoredReview(input, reviews);
+    },
+    applyReviewAppointmentCreationLink(input) {
+      const preview = validateAppointmentLinkAgainstStoredReview(input, reviews);
+
+      if (!preview || preview.status !== "ok") {
+        return preview;
+      }
+
+      const validation = preview.validation;
+      const storedReview = reviews.get(validation.reviewId);
+      const previousSnapshot = createVersionedSnapshot(storedReview);
+      const updatedReview = {
+        ...cloneValue(storedReview.review),
+        requiresSecretaryConfirmation: true,
+        bookingCreated: false,
+        calendarChecked: false,
+        metadata: {
+          ...(storedReview.review.metadata || {}),
+          controlledActionState: validation.expectedState,
+          linkedAppointmentId: validation.appointmentId,
+          appointmentCreationStorage: IN_MEMORY_REPOSITORY_TYPE,
+          appointmentCreationPersistence: NOT_PERSISTED,
+        },
+      };
+      const nextVersion = storedReview.version + 1;
+      const updatedStoredReview = {
+        review: updatedReview,
+        version: nextVersion,
+      };
+
+      reviews.set(validation.reviewId, updatedStoredReview);
+
+      return deepFreeze({
+        status: "ok",
+        applied: true,
+        reviewStateChanged: false,
+        reviewMutated: true,
+        repositoryVersionChanged: true,
+        reviewId: validation.reviewId,
+        state: validation.expectedState,
+        linkedAppointmentId: validation.appointmentId,
+        previousReviewVersion: storedReview.version,
+        nextReviewVersion: nextVersion,
+        previousSnapshot,
+        reviewSnapshot: createVersionedSnapshot(updatedStoredReview),
+        storage: IN_MEMORY_REPOSITORY_TYPE,
+        durablePersistence: false,
+        receiptPersisted: false,
+        bookingCreated: false,
+        calendarChecked: false,
+        appointmentCreated: true,
+        calendarEventCreated: false,
+        databasePersisted: false,
+      });
+    },
   });
 }
 
@@ -352,6 +411,138 @@ function validateStateTransitionInput(input) {
   };
 }
 
+function validateAppointmentLinkInput(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return validationError(
+      "invalid_appointment_link_input",
+      "Appointment link input must be an object."
+    );
+  }
+
+  const reviewId = normalizeReviewId(input.reviewId);
+  const expectedState = normalizeControlledActionState(input.expectedState);
+  const appointmentId = normalizeText(input.appointmentId);
+
+  if (!reviewId) {
+    return validationError(
+      "missing_review_id",
+      "Appointment link input requires a safe reviewId."
+    );
+  }
+
+  if (!expectedState) {
+    return validationError(
+      "missing_expected_state",
+      "Appointment link input requires expectedState."
+    );
+  }
+
+  if (!appointmentId || !/^[a-z0-9_:-]+$/.test(appointmentId)) {
+    return validationError(
+      "invalid_appointment_id",
+      "Appointment link input requires a safe appointmentId."
+    );
+  }
+
+  if (
+    !Number.isSafeInteger(input.expectedVersion) ||
+    input.expectedVersion < 1
+  ) {
+    return validationError(
+      "invalid_expected_version",
+      "Appointment link input requires a positive safe expectedVersion."
+    );
+  }
+
+  return {
+    ok: true,
+    reviewId,
+    expectedState,
+    expectedVersion: input.expectedVersion,
+    appointmentId,
+  };
+}
+
+function validateAppointmentLinkAgainstStoredReview(input, reviews) {
+  const validation = validateAppointmentLinkInput(input);
+
+  if (!validation.ok) {
+    return createStateTransitionErrorResult(validation.error);
+  }
+
+  const storedReview = reviews.get(validation.reviewId);
+
+  if (!storedReview) {
+    return createStateTransitionErrorResult({
+      code: "review_not_found",
+      message: "Appointment review item was not found.",
+    });
+  }
+
+  const currentState = normalizeControlledActionState(
+    storedReview.review?.metadata?.controlledActionState
+  );
+
+  if (currentState !== validation.expectedState) {
+    return createStateTransitionConflictResult({
+      code: "review_state_conflict",
+      message: "Appointment review state changed before appointment link.",
+      reviewId: validation.reviewId,
+      currentState,
+      expectedState: validation.expectedState,
+      currentVersion: storedReview.version,
+      expectedVersion: validation.expectedVersion,
+    });
+  }
+
+  if (storedReview.version !== validation.expectedVersion) {
+    return createStateTransitionConflictResult({
+      code: "review_version_conflict",
+      message: "Appointment review version changed before appointment link.",
+      reviewId: validation.reviewId,
+      currentState,
+      expectedState: validation.expectedState,
+      currentVersion: storedReview.version,
+      expectedVersion: validation.expectedVersion,
+    });
+  }
+
+  if (normalizeText(storedReview.review?.metadata?.linkedAppointmentId)) {
+    return createStateTransitionConflictResult({
+      code: "appointment_already_created_for_review",
+      message: "Appointment review already has a linked appointment.",
+      reviewId: validation.reviewId,
+      currentState,
+      expectedState: validation.expectedState,
+      currentVersion: storedReview.version,
+      expectedVersion: validation.expectedVersion,
+    });
+  }
+
+  return deepFreeze({
+    status: "ok",
+    applied: false,
+    linkPreview: true,
+    reviewStateChanged: false,
+    reviewMutated: false,
+    repositoryVersionChanged: false,
+    reviewId: validation.reviewId,
+    state: validation.expectedState,
+    linkedAppointmentId: validation.appointmentId,
+    currentReviewVersion: storedReview.version,
+    nextReviewVersion: storedReview.version + 1,
+    validation,
+    storage: IN_MEMORY_REPOSITORY_TYPE,
+    durablePersistence: false,
+    receiptPersisted: false,
+    bookingCreated: false,
+    calendarChecked: false,
+    appointmentCreated: false,
+    calendarEventCreated: false,
+    databasePersisted: false,
+  });
+}
+
 function createVersionedSnapshot(storedReview) {
   return {
     snapshotType: APPOINTMENT_REVIEW_REPOSITORY_SNAPSHOT_TYPE,
@@ -451,6 +642,10 @@ function normalizeControlledActionState(value) {
   return String(value || "").trim();
 }
 
+function normalizeText(value) {
+  return String(value || "").trim();
+}
+
 function cloneValue(value) {
   return value ? JSON.parse(JSON.stringify(value)) : value;
 }
@@ -473,6 +668,8 @@ module.exports = {
   ALLOWED_REVIEW_STATUSES,
   APPOINTMENT_REVIEW_REPOSITORY_SNAPSHOT_SCHEMA_VERSION,
   APPOINTMENT_REVIEW_REPOSITORY_SNAPSHOT_TYPE,
+  APPOINTMENT_LINK_METHOD,
+  APPOINTMENT_LINK_PREVIEW_METHOD,
   PENDING_SECRETARY_REVIEW,
   STATE_TRANSITION_METHOD,
   assertAppointmentReviewVersionedSnapshotCapability,

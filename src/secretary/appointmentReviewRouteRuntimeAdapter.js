@@ -50,6 +50,12 @@ function createAppointmentReviewRouteRuntimeAdapter(options) {
     applyAppointmentReviewDecision(input) {
       return runtime.applyAppointmentReviewDecision(input);
     },
+    createAppointmentFromApprovedReview(input) {
+      return runtime.createAppointmentFromApprovedReview(input);
+    },
+    listCreatedAppointments() {
+      return runtime.listCreatedAppointments();
+    },
   });
 }
 

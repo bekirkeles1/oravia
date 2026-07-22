@@ -159,6 +159,8 @@ test("route runtime adapter exposes a narrow frozen route-facing contract", () =
     "getAppointmentReviewQueue",
     "getControlledActionDependencies",
     "applyAppointmentReviewDecision",
+    "createAppointmentFromApprovedReview",
+    "listCreatedAppointments",
   ]);
   assert.equal(adapter.adapterType, "appointment_review_route_runtime_adapter_v1");
   assert.equal(adapter.schemaVersion, 1);

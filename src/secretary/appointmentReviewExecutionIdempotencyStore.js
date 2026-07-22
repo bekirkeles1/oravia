@@ -31,6 +31,54 @@ function createInMemoryAppointmentReviewExecutionIdempotencyStore() {
 
       return freezeClone(records.get(key).result);
     },
+    reserveResult({ idempotencyKey, requestFingerprint }) {
+      const key = normalizeText(idempotencyKey);
+      const fingerprint = normalizeText(requestFingerprint);
+
+      if (!key || !fingerprint) {
+        return freezeClone({
+          accepted: false,
+          code: "invalid_idempotency_store_input",
+          reason: "Execution idempotency store input is invalid.",
+        });
+      }
+
+      if (records.has(key)) {
+        const existing = records.get(key);
+
+        if (existing.requestFingerprint !== fingerprint) {
+          return freezeClone({
+            accepted: false,
+            code: "idempotency_key_conflict",
+            reason:
+              "idempotencyKey was previously used for a different execution request.",
+          });
+        }
+
+        return freezeClone({
+          accepted: true,
+          reserved: false,
+          matchingReplay: true,
+          code: "idempotency_result_already_reserved",
+        });
+      }
+
+      records.set(
+        key,
+        freezeClone({
+          idempotencyKey: key,
+          requestFingerprint: fingerprint,
+          result: null,
+        })
+      );
+
+      return freezeClone({
+        accepted: true,
+        reserved: true,
+        matchingReplay: false,
+        code: "idempotency_result_reserved",
+      });
+    },
     storeResult({ idempotencyKey, requestFingerprint, result }) {
       const key = normalizeText(idempotencyKey);
       const fingerprint = normalizeText(requestFingerprint);
@@ -52,6 +100,24 @@ function createInMemoryAppointmentReviewExecutionIdempotencyStore() {
             code: "idempotency_key_conflict",
             reason:
               "idempotencyKey was previously used for a different execution request.",
+          });
+        }
+
+        if (!existing.result) {
+          records.set(
+            key,
+            freezeClone({
+              idempotencyKey: key,
+              requestFingerprint: fingerprint,
+              result,
+            })
+          );
+
+          return freezeClone({
+            accepted: true,
+            stored: true,
+            matchingReplay: false,
+            code: "idempotency_result_stored",
           });
         }
 
