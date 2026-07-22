@@ -416,15 +416,26 @@ test("appointment reviews workspace shows selected-review resolution guidance pr
 
   assert.match(workspaceSource, /INITIAL_RESOLUTION_GUIDANCE_PREVIEW/);
   assert.match(workspaceSource, /runResolutionGuidancePreview/);
+  assert.match(workspaceSource, /createResolutionChecklistSession/);
+  assert.match(workspaceSource, /toggleResolutionChecklistItem/);
+  assert.match(workspaceSource, /clearResolutionChecklistSession/);
   assert.match(workspaceSource, /isSafeResolutionGuidanceResponse/);
   assert.match(workspaceSource, /Resolution Guidance Preview/);
   assert.match(workspaceSource, /Generate Resolution Guidance/);
+  assert.match(workspaceSource, /Re-run Trusted Guidance Preview/);
+  assert.match(workspaceSource, /Clear Local Checklist Marks/);
   assert.match(workspaceSource, /Operational follow-up dry-run/);
   assert.match(workspaceSource, /Approve guidance/);
   assert.match(workspaceSource, /Reject guidance/);
   assert.match(workspaceSource, /approveResolutionGuidance/);
   assert.match(workspaceSource, /rejectResolutionGuidance/);
+  assert.match(workspaceSource, /approveResolutionChecklist/);
+  assert.match(workspaceSource, /rejectResolutionChecklist/);
   assert.match(workspaceSource, /Internal Follow-up Summary - not sent or saved/);
+  assert.match(workspaceSource, /Local checklist session/);
+  assert.match(workspaceSource, /local session notes only/);
+  assert.match(workspaceSource, /do not\s+change server validation/);
+  assert.match(workspaceSource, /not\s+persisted/i);
   assert.match(workspaceSource, /requiredCheck/);
   assert.match(workspaceSource, /rerunAfterVerification/);
   assert.match(workspaceSource, /guidancePersisted/);
@@ -438,6 +449,11 @@ test("appointment reviews workspace shows selected-review resolution guidance pr
   assert.match(workspaceSource, /\/resolution-guidance-preview`/);
   assert.match(guidanceRequestSource, /method: "POST"/);
   assert.match(guidanceRequestSource, /body: JSON\.stringify\(\{\}\)/);
+  assert.doesNotMatch(guidanceRequestSource, new RegExp("checked" + "ItemKeys"));
+  assert.doesNotMatch(guidanceRequestSource, new RegExp("checklist" + "Progress"));
+  assert.doesNotMatch(guidanceRequestSource, new RegExp("local" + "ReviewState"));
+  assert.doesNotMatch(guidanceRequestSource, new RegExp("completed" + "Checks"));
+  assert.doesNotMatch(guidanceRequestSource, new RegExp("verified" + "Checks"));
   assert.doesNotMatch(guidanceRequestSource, /reviewId:/);
   assert.doesNotMatch(guidanceRequestSource, /currentState:/);
   assert.doesNotMatch(guidanceRequestSource, /observedReviewVersion/);
@@ -453,6 +469,7 @@ test("appointment reviews workspace hardens resolution guidance against stale re
   assert.match(workspaceSource, /createResolutionGuidanceRequest/);
   assert.match(workspaceSource, /invalidateResolutionGuidanceRequest/);
   assert.match(workspaceSource, /resetResolutionGuidanceState/);
+  assert.match(workspaceSource, /setResolutionChecklistSession/);
   assert.match(workspaceSource, /isActiveResolutionGuidanceRequest/);
   assert.match(workspaceSource, /activeResolutionGuidanceAbortRef\.current\.abort\(\)/);
   assert.match(workspaceSource, /signal: activeAbortController\?\.signal/);
@@ -465,15 +482,12 @@ test("appointment reviews workspace hardens resolution guidance against stale re
   );
   assert.match(
     workspaceSource,
-    /setResolutionGuidanceResult\(payload\);\s+setResolutionGuidanceStatus\("success"\);/
+    /setResolutionGuidanceResult\(payload\);[\s\S]*createResolutionChecklistSession\(payload, currentSession\)[\s\S]*setResolutionGuidanceStatus\("success"\);/
   );
+  assert.doesNotMatch(workspaceSource, /setResolutionGuidanceResult\(null\);\s+setResolutionGuidanceStatus\("failure"\);/);
   assert.match(
     workspaceSource,
-    /setResolutionGuidanceResult\(null\);\s+setResolutionGuidanceStatus\("failure"\);/
-  );
-  assert.match(
-    workspaceSource,
-    /setResolutionGuidanceStatus\("loading"\);\s+setResolutionGuidanceResult\(null\);\s+setResolutionGuidanceError\(""\);/
+    /setResolutionGuidanceStatus\("loading"\);\s+setResolutionGuidanceError\(""\);/
   );
   assert.match(
     workspaceSource,
@@ -518,8 +532,35 @@ test("appointment reviews workspace keeps resolution guidance non-executable and
   assert.match(workspaceSource, /branch\.summaryPersisted === false/);
   assert.match(workspaceSource, /branch\.messageSent === false/);
   assert.match(workspaceSource, /branch\.taskAssigned === false/);
+  assert.match(workspaceSource, /branch\.checklist\.every\(isSafeResolutionChecklistItem\)/);
+  assert.match(workspaceSource, /typeof item\.code === "string"/);
+  assert.match(workspaceSource, /typeof item\.label === "string"/);
+  assert.doesNotMatch(workspaceSource, new RegExp("ready to " + "execute", "i"));
+  assert.doesNotMatch(workspaceSource, new RegExp("approval " + "authorized", "i"));
+  assert.doesNotMatch(workspaceSource, new RegExp("rejection " + "authorized", "i"));
+  assert.doesNotMatch(workspaceSource, new RegExp("action " + "completed", "i"));
+  assert.doesNotMatch(workspaceSource, new RegExp("review " + "resolved", "i"));
   assert.doesNotMatch(workspaceSource, /setReviews\([^)]*resolutionGuidance/i);
   assert.doesNotMatch(workspaceSource, /setSelectedReviewId\(.*resolutionGuidance/i);
+});
+
+test("appointment reviews workspace renders interactive local checklist progress without validation claims", () => {
+  assert.match(workspaceSource, /Local progress:/);
+  assert.match(workspaceSource, /progressText/);
+  assert.match(workspaceSource, /checked=\{item\.reviewed\}/);
+  assert.match(workspaceSource, /branchName: "approve"/);
+  assert.match(workspaceSource, /branchName: "reject"/);
+  assert.match(workspaceSource, /itemCode: item\.code/);
+  assert.match(workspaceSource, /clearLocalResolutionChecklist/);
+  assert.match(workspaceSource, /trusted\s+re-evaluation ignores these marks/i);
+  assert.doesNotMatch(workspaceSource, /\d+\s*%/);
+  assert.doesNotMatch(workspaceSource, /probability/i);
+  assert.doesNotMatch(workspaceSource, /confidence/i);
+  assert.doesNotMatch(workspaceSource, /validation complete/i);
+  assert.doesNotMatch(workspaceSource, /server verified/i);
+  assert.doesNotMatch(workspaceSource, /blocker was cleared/i);
+  assert.doesNotMatch(workspaceSource, /should approve/i);
+  assert.doesNotMatch(workspaceSource, /should reject/i);
 });
 
 test("appointment reviews workspace styles resolution guidance preview responsively", () => {
@@ -527,6 +568,10 @@ test("appointment reviews workspace styles resolution guidance preview responsiv
   assert.match(cssSource, /appointment-review-resolution-guidance-grid/);
   assert.match(cssSource, /appointment-review-resolution-guidance-paths/);
   assert.match(cssSource, /appointment-review-resolution-guidance-summary/);
+  assert.match(cssSource, /appointment-review-resolution-guidance-controls/);
+  assert.match(cssSource, /appointment-review-resolution-guidance-notice/);
+  assert.match(cssSource, /appointment-review-resolution-guidance-progress/);
+  assert.match(cssSource, /appointment-review-resolution-guidance-ready/);
   assert.match(cssSource, /appointment-review-resolution-guidance-button/);
   assert.match(cssSource, /appointment-review-resolution-guidance-state/);
   assert.match(

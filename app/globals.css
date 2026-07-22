@@ -2680,6 +2680,7 @@ blockquote {
 
 .appointment-review-resolution-guidance-grid,
 .appointment-review-resolution-guidance-paths,
+.appointment-review-resolution-guidance-controls,
 .appointment-review-resolution-guidance-paths article dl {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2690,6 +2691,7 @@ blockquote {
 .appointment-review-resolution-guidance-grid div,
 .appointment-review-resolution-guidance-paths article,
 .appointment-review-resolution-guidance-paths article dl div,
+.appointment-review-resolution-guidance-notice,
 .appointment-review-resolution-guidance-summary,
 .appointment-review-resolution-guidance-empty {
   padding: 12px;
@@ -2715,6 +2717,14 @@ blockquote {
   opacity: 0.65;
 }
 
+.appointment-review-resolution-guidance-notice {
+  display: grid;
+  gap: 6px;
+  border-style: dashed;
+  border-color: rgba(107, 103, 45, 0.3);
+  background: rgba(107, 103, 45, 0.06);
+}
+
 .appointment-review-resolution-guidance-state {
   padding: 10px 12px;
   border: 1px dashed rgba(107, 103, 45, 0.3);
@@ -2730,6 +2740,32 @@ blockquote {
   padding-left: 18px;
   color: var(--muted);
   line-height: 1.45;
+}
+
+.appointment-review-resolution-guidance-paths li {
+  list-style-position: outside;
+}
+
+.appointment-review-resolution-guidance-paths label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.appointment-review-resolution-guidance-paths input {
+  margin-top: 3px;
+}
+
+.appointment-review-resolution-guidance-progress,
+.appointment-review-resolution-guidance-ready {
+  margin: 4px 0 0;
+  padding: 8px 10px;
+  border: 1px dashed rgba(107, 103, 45, 0.24);
+  border-radius: 8px;
+  background: rgba(107, 103, 45, 0.06);
+  color: var(--muted);
+  font-weight: 800;
 }
 
 .appointment-review-resolution-guidance-summary pre {
@@ -2835,6 +2871,7 @@ blockquote {
   .appointment-review-decision-comparison-paths article dl,
   .appointment-review-resolution-guidance-grid,
   .appointment-review-resolution-guidance-paths,
+  .appointment-review-resolution-guidance-controls,
   .appointment-review-resolution-guidance-paths article dl,
   .appointment-review-queue-readiness-controls,
   .appointment-review-queue-readiness-summary,

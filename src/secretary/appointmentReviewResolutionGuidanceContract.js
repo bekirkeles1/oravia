@@ -119,6 +119,112 @@ const SAFETY_FIELDS = Object.freeze({
   taskAssigned: false,
 });
 
+const CHECKLIST_ITEMS_BY_CATEGORY = Object.freeze({
+  [GUIDANCE_CATEGORIES.REQUEST_CORRECTION_REQUIRED]: Object.freeze([
+    Object.freeze({
+      code: "request_correction_required.verify_selected_review_id",
+      label: "Verify the selected review id is present.",
+    }),
+    Object.freeze({
+      code: "request_correction_required.verify_supported_action_metadata",
+      label:
+        "Verify the action metadata is one of the supported dry-run actions.",
+    }),
+    Object.freeze({
+      code: "request_correction_required.rerun_after_metadata_correction",
+      label: "Rerun the preview only after the request metadata is corrected.",
+    }),
+  ]),
+  [GUIDANCE_CATEGORIES.REVIEW_STATE_CHECK_REQUIRED]: Object.freeze([
+    Object.freeze({
+      code: "review_state_check_required.refresh_selected_review",
+      label: "Refresh the selected review details from the server boundary.",
+    }),
+    Object.freeze({
+      code: "review_state_check_required.confirm_trusted_current_state",
+      label: "Verify the trusted current state shown in this preview.",
+    }),
+    Object.freeze({
+      code: "review_state_check_required.do_not_override_state",
+      label: "Do not manually override the review state from this preview.",
+    }),
+  ]),
+  [GUIDANCE_CATEGORIES.REFRESH_REVIEW_REQUIRED]: Object.freeze([
+    Object.freeze({
+      code: "refresh_review_required.refresh_queue_or_detail",
+      label: "Refresh the appointment review queue or selected review details.",
+    }),
+    Object.freeze({
+      code: "refresh_review_required.confirm_latest_observed_version",
+      label:
+        "Confirm the latest observed review version from the server boundary.",
+    }),
+    Object.freeze({
+      code: "refresh_review_required.rerun_after_refreshed_context",
+      label: "Rerun the preview after the refreshed context is visible.",
+    }),
+  ]),
+  [GUIDANCE_CATEGORIES.ACTOR_VERIFICATION_REQUIRED]: Object.freeze([
+    Object.freeze({
+      code: "actor_verification_required.verify_internal_actor_context",
+      label: "Verify the internal secretary actor context for the preview boundary.",
+    }),
+    Object.freeze({
+      code: "actor_verification_required.confirm_required_permission_context",
+      label:
+        "Confirm the required controlled-action permission is present in the safe context.",
+    }),
+    Object.freeze({
+      code: "actor_verification_required.no_production_auth_claim",
+      label:
+        "Do not treat this preview as production authentication or authorization.",
+    }),
+  ]),
+  [GUIDANCE_CATEGORIES.IDEMPOTENCY_REVIEW_REQUIRED]: Object.freeze([
+    Object.freeze({
+      code: "idempotency_review_required.review_safe_replay_condition",
+      label: "Review the existing safe idempotency or replay condition.",
+    }),
+    Object.freeze({
+      code: "idempotency_review_required.do_not_persist_idempotency_record",
+      label: "Do not create or persist a new idempotency record from this preview.",
+    }),
+    Object.freeze({
+      code: "idempotency_review_required.rerun_after_condition_review",
+      label: "Rerun only after the existing condition is understood.",
+    }),
+  ]),
+  [GUIDANCE_CATEGORIES.EXECUTION_POLICY_REVIEW_REQUIRED]: Object.freeze([
+    Object.freeze({
+      code: "execution_policy_review_required.verify_validation_only_policy",
+      label: "Verify the validation-only execution policy context.",
+    }),
+    Object.freeze({
+      code: "execution_policy_review_required.confirm_execution_disabled",
+      label: "Confirm execution remains disabled and no executor is available.",
+    }),
+    Object.freeze({
+      code: "execution_policy_review_required.do_not_bypass_policy",
+      label: "Do not bypass policy or execute from this preview.",
+    }),
+  ]),
+  [GUIDANCE_CATEGORIES.MANUAL_INTERNAL_REVIEW_REQUIRED]: Object.freeze([
+    Object.freeze({
+      code: "manual_internal_review_required.review_reason_code_and_stage",
+      label: "Review the safe reason code and blocking stage.",
+    }),
+    Object.freeze({
+      code: "manual_internal_review_required.do_not_infer_operational_cause",
+      label: "Do not infer a specific operational cause from this preview.",
+    }),
+    Object.freeze({
+      code: "manual_internal_review_required.rerun_after_internal_review",
+      label:
+        "Rerun only after internal review confirms the next validation step.",
+    }),
+  ]),
+});
+
 function buildAppointmentReviewResolutionGuidance(comparisonResult) {
   if (!isValidComparisonResult(comparisonResult)) {
     return rejectResolutionGuidance({
@@ -182,11 +288,7 @@ function createBranchGuidance(path, action) {
       explanation:
         "No validation blocker was found in the current dry-run. The action has not been executed.",
       requiredCheck: "none",
-      checklist: [
-        "Confirm this is still the selected review before taking any separate operational step.",
-        "Keep execution disabled until a controlled execution boundary exists.",
-        "Do not treat this preview as approval, rejection, booking, or persistence.",
-      ],
+      checklist: [],
       escalationCategory: "none",
       rerunAfterVerification: false,
       ...createSafetyFields(),
@@ -204,7 +306,7 @@ function createBranchGuidance(path, action) {
     category: mapping.category,
     explanation: mapping.explanation,
     requiredCheck: mapping.requiredCheck,
-    checklist: mapping.checklist,
+    checklist: createChecklistItems(mapping.category),
     escalationCategory: mapping.escalationCategory,
     rerunAfterVerification: mapping.rerunAfterVerification,
     ...createSafetyFields(),
@@ -218,11 +320,6 @@ function resolveGuidanceMapping(reasonCode, blockingStage) {
       explanation:
         "The preview input or action metadata is not structurally ready for this dry-run path.",
       requiredCheck: "request_metadata",
-      checklist: [
-        "Verify the selected review id is present.",
-        "Verify the action metadata is one of the supported dry-run actions.",
-        "Rerun the preview only after the request metadata is corrected.",
-      ],
       escalationCategory: "internal_request_review",
       rerunAfterVerification: true,
     };
@@ -234,11 +331,6 @@ function resolveGuidanceMapping(reasonCode, blockingStage) {
       explanation:
         "The trusted current review state blocks this dry-run path.",
       requiredCheck: "trusted_review_state",
-      checklist: [
-        "Refresh the selected review details from the server boundary.",
-        "Verify the trusted current state shown in this preview.",
-        "Do not manually override the review state from this preview.",
-      ],
       escalationCategory: "internal_state_review",
       rerunAfterVerification: true,
     };
@@ -250,11 +342,6 @@ function resolveGuidanceMapping(reasonCode, blockingStage) {
       explanation:
         "The observed review version no longer matches the expected validation context.",
       requiredCheck: "trusted_review_version",
-      checklist: [
-        "Refresh the appointment review queue or selected review details.",
-        "Confirm the latest observed review version from the server boundary.",
-        "Rerun the preview after the refreshed context is visible.",
-      ],
       escalationCategory: "internal_version_review",
       rerunAfterVerification: true,
     };
@@ -266,11 +353,6 @@ function resolveGuidanceMapping(reasonCode, blockingStage) {
       explanation:
         "The internal actor verification or authorization context is not ready for this dry-run path.",
       requiredCheck: "internal_actor_verification",
-      checklist: [
-        "Verify the internal secretary actor context for the preview boundary.",
-        "Confirm the required controlled-action permission is present in the safe context.",
-        "Do not treat this preview as production authentication or authorization.",
-      ],
       escalationCategory: "internal_actor_review",
       rerunAfterVerification: true,
     };
@@ -282,11 +364,6 @@ function resolveGuidanceMapping(reasonCode, blockingStage) {
       explanation:
         "The safe idempotency or replay context requires internal review before rerunning this path.",
       requiredCheck: "idempotency_context",
-      checklist: [
-        "Review the existing safe idempotency or replay condition.",
-        "Do not create or persist a new idempotency record from this preview.",
-        "Rerun only after the existing condition is understood.",
-      ],
       escalationCategory: "internal_idempotency_review",
       rerunAfterVerification: true,
     };
@@ -298,11 +375,6 @@ function resolveGuidanceMapping(reasonCode, blockingStage) {
       explanation:
         "The controlled-action validation boundary requires execution-policy review while execution remains disabled.",
       requiredCheck: "execution_policy_context",
-      checklist: [
-        "Verify the validation-only execution policy context.",
-        "Confirm execution remains disabled and no executor is available.",
-        "Do not bypass policy or execute from this preview.",
-      ],
       escalationCategory: "internal_policy_review",
       rerunAfterVerification: true,
     };
@@ -313,14 +385,16 @@ function resolveGuidanceMapping(reasonCode, blockingStage) {
     explanation:
       "Manual internal review is required before rerunning the preview.",
     requiredCheck: "manual_internal_review",
-    checklist: [
-      "Review the safe reason code and blocking stage.",
-      "Do not infer a specific operational cause from this preview.",
-      "Rerun only after internal review confirms the next validation step.",
-    ],
     escalationCategory: "manual_internal_review",
     rerunAfterVerification: true,
   };
+}
+
+function createChecklistItems(category) {
+  return (CHECKLIST_ITEMS_BY_CATEGORY[category] || []).map((item) => ({
+    code: item.code,
+    label: item.label,
+  }));
 }
 
 function createInternalFollowUpSummary({
@@ -481,6 +555,7 @@ function deepFreeze(value) {
 
 module.exports = {
   ACTOR_CODES,
+  CHECKLIST_ITEMS_BY_CATEGORY,
   EXECUTION_POLICY_CODES,
   GUIDANCE_CATEGORIES,
   IDEMPOTENCY_CODES,

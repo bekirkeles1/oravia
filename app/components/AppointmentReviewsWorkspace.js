@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import {
+  clearResolutionChecklistSession,
+  createResolutionChecklistSession,
+  toggleResolutionChecklistItem
+} from "../../src/secretary/appointmentReviewResolutionChecklistSession";
 
 const ACTION_INTENT_DRY_RUN = {
   validationOnly: true,
@@ -363,6 +368,9 @@ export default function AppointmentReviewsWorkspace() {
   const [resolutionGuidanceResult, setResolutionGuidanceResult] =
     useState(null);
   const [resolutionGuidanceError, setResolutionGuidanceError] = useState("");
+  const [resolutionChecklistSession, setResolutionChecklistSession] = useState(
+    () => createResolutionChecklistSession(null)
+  );
   const [queueReadinessStatus, setQueueReadinessStatus] = useState("idle");
   const [queueReadinessResult, setQueueReadinessResult] = useState(null);
   const [queueReadinessError, setQueueReadinessError] = useState("");
@@ -438,6 +446,10 @@ export default function AppointmentReviewsWorkspace() {
   const approveResolutionGuidance =
     resolutionGuidanceResult?.approve || null;
   const rejectResolutionGuidance = resolutionGuidanceResult?.reject || null;
+  const approveResolutionChecklist =
+    resolutionChecklistSession.branches.approve;
+  const rejectResolutionChecklist =
+    resolutionChecklistSession.branches.reject;
   const displayedQueueReadiness =
     queueReadinessResult || INITIAL_QUEUE_READINESS_PREVIEW;
   const currentReviewIds = reviews.map((review) => review.id);
@@ -1649,7 +1661,6 @@ export default function AppointmentReviewsWorkspace() {
     const activeAbortController = activeResolutionGuidanceAbortRef.current;
 
     setResolutionGuidanceStatus("loading");
-    setResolutionGuidanceResult(null);
     setResolutionGuidanceError("");
 
     try {
@@ -1692,6 +1703,9 @@ export default function AppointmentReviewsWorkspace() {
       }
 
       setResolutionGuidanceResult(payload);
+      setResolutionChecklistSession((currentSession) =>
+        createResolutionChecklistSession(payload, currentSession)
+      );
       setResolutionGuidanceStatus("success");
     } catch (error) {
       if (isAbortError(error)) {
@@ -1707,7 +1721,6 @@ export default function AppointmentReviewsWorkspace() {
         return;
       }
 
-      setResolutionGuidanceResult(null);
       setResolutionGuidanceStatus("failure");
       setResolutionGuidanceError(
         error instanceof Error
@@ -1749,6 +1762,22 @@ export default function AppointmentReviewsWorkspace() {
     setResolutionGuidanceStatus("idle");
     setResolutionGuidanceResult(null);
     setResolutionGuidanceError("");
+    setResolutionChecklistSession(createResolutionChecklistSession(null));
+  }
+
+  function toggleResolutionChecklistReview({ branchName, itemCode }) {
+    setResolutionChecklistSession((currentSession) =>
+      toggleResolutionChecklistItem(currentSession, {
+        branchName,
+        itemCode
+      })
+    );
+  }
+
+  function clearLocalResolutionChecklist() {
+    setResolutionChecklistSession((currentSession) =>
+      clearResolutionChecklistSession(currentSession)
+    );
   }
 
   function isActiveResolutionGuidanceRequest({ requestId, reviewId }) {
@@ -2898,14 +2927,29 @@ export default function AppointmentReviewsWorkspace() {
 
             {selectedReview ? (
               <>
-                <button
-                  type="button"
-                  className="appointment-review-resolution-guidance-button"
-                  onClick={runResolutionGuidancePreview}
-                  disabled={resolutionGuidanceStatus === "loading"}
-                >
-                  Generate Resolution Guidance
-                </button>
+                <div className="appointment-review-resolution-guidance-controls">
+                  <button
+                    type="button"
+                    className="appointment-review-resolution-guidance-button"
+                    onClick={runResolutionGuidancePreview}
+                    disabled={resolutionGuidanceStatus === "loading"}
+                  >
+                    {resolutionGuidanceResult
+                      ? "Re-run Trusted Guidance Preview"
+                      : "Generate Resolution Guidance"}
+                  </button>
+                  <button
+                    type="button"
+                    className="appointment-review-resolution-guidance-button"
+                    onClick={clearLocalResolutionChecklist}
+                    disabled={
+                      !resolutionGuidanceResult ||
+                      resolutionGuidanceStatus === "loading"
+                    }
+                  >
+                    Clear Local Checklist Marks
+                  </button>
+                </div>
 
                 <p className="appointment-review-resolution-guidance-state">
                   {resolutionGuidanceStatus === "loading"
@@ -2922,6 +2966,24 @@ export default function AppointmentReviewsWorkspace() {
                     ? "Idle: no resolution guidance preview for this selected review."
                     : null}
                 </p>
+
+                {resolutionGuidanceResult ? (
+                  <div className="appointment-review-resolution-guidance-notice">
+                    <strong>Local checklist session</strong>
+                    <span>
+                      Checklist marks are local session notes only. They do not
+                      change server validation, review state, authorization,
+                      execution policy, persistence, booking, or calendar
+                      behavior.
+                    </span>
+                    <small>
+                      Total local progress:{" "}
+                      {resolutionChecklistSession.totals.progressText}. Trusted
+                      re-evaluation ignores these marks and sends no checklist
+                      data.
+                    </small>
+                  </div>
+                ) : null}
 
                 <dl className="appointment-review-resolution-guidance-grid">
                   <div>
@@ -3050,13 +3112,36 @@ export default function AppointmentReviewsWorkspace() {
                         </dd>
                       </div>
                     </dl>
-                    <ul>
-                      {(approveResolutionGuidance?.checklist || [
-                        "No generated checklist for this path yet."
-                      ]).map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
-                    </ul>
+                    <p className="appointment-review-resolution-guidance-progress">
+                      Local progress: {approveResolutionChecklist.progressText}
+                    </p>
+                    {approveResolutionChecklist.total > 0 ? (
+                      <ul>
+                        {approveResolutionChecklist.items.map((item) => (
+                          <li key={item.itemKey}>
+                            <label>
+                              <input
+                                type="checkbox"
+                                checked={item.reviewed}
+                                onChange={() =>
+                                  toggleResolutionChecklistReview({
+                                    branchName: "approve",
+                                    itemCode: item.code
+                                  })
+                                }
+                              />
+                              <span>{item.label}</span>
+                            </label>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="appointment-review-resolution-guidance-ready">
+                        {approveResolutionGuidance?.explanation ||
+                          "No checklist items are generated until trusted guidance is available."}{" "}
+                        Execution remains disabled.
+                      </p>
+                    )}
                   </article>
                   <article>
                     <span>Reject guidance</span>
@@ -3101,13 +3186,36 @@ export default function AppointmentReviewsWorkspace() {
                         </dd>
                       </div>
                     </dl>
-                    <ul>
-                      {(rejectResolutionGuidance?.checklist || [
-                        "No generated checklist for this path yet."
-                      ]).map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
-                    </ul>
+                    <p className="appointment-review-resolution-guidance-progress">
+                      Local progress: {rejectResolutionChecklist.progressText}
+                    </p>
+                    {rejectResolutionChecklist.total > 0 ? (
+                      <ul>
+                        {rejectResolutionChecklist.items.map((item) => (
+                          <li key={item.itemKey}>
+                            <label>
+                              <input
+                                type="checkbox"
+                                checked={item.reviewed}
+                                onChange={() =>
+                                  toggleResolutionChecklistReview({
+                                    branchName: "reject",
+                                    itemCode: item.code
+                                  })
+                                }
+                              />
+                              <span>{item.label}</span>
+                            </label>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="appointment-review-resolution-guidance-ready">
+                        {rejectResolutionGuidance?.explanation ||
+                          "No checklist items are generated until trusted guidance is available."}{" "}
+                        Execution remains disabled.
+                      </p>
+                    )}
                   </article>
                 </div>
 
@@ -4525,6 +4633,7 @@ function isSafeResolutionGuidanceBranch(branch) {
     typeof branch.category === "string" &&
     typeof branch.requiredCheck === "string" &&
     Array.isArray(branch.checklist) &&
+    branch.checklist.every(isSafeResolutionChecklistItem) &&
     branch.validationOnly === true &&
     branch.executionAvailable === false &&
     branch.actionPerformed === false &&
@@ -4540,6 +4649,18 @@ function isSafeResolutionGuidanceBranch(branch) {
     branch.summaryPersisted === false &&
     branch.messageSent === false &&
     branch.taskAssigned === false
+  );
+}
+
+function isSafeResolutionChecklistItem(item) {
+  return (
+    item &&
+    typeof item === "object" &&
+    !Array.isArray(item) &&
+    typeof item.code === "string" &&
+    typeof item.label === "string" &&
+    item.code.length > 0 &&
+    item.label.length > 0
   );
 }
 

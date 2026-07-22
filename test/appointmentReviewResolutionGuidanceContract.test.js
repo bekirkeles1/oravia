@@ -130,6 +130,8 @@ test("resolution guidance maps both passed decision paths without choosing a pat
     GUIDANCE_CATEGORIES.NO_ADDITIONAL_VALIDATION_CHECK
   );
   assert.equal(result.reject.requiredCheck, "none");
+  assert.deepEqual(result.approve.checklist, []);
+  assert.deepEqual(result.reject.checklist, []);
   assert.equal(result.internalFollowUpSummary.includes("Execution remains disabled"), true);
   assert.doesNotMatch(
     serialized,
@@ -161,6 +163,18 @@ test("resolution guidance maps request metadata blocks", () => {
     GUIDANCE_CATEGORIES.REQUEST_CORRECTION_REQUIRED
   );
   assert.equal(result.approve.requiredCheck, "request_metadata");
+  assert.deepEqual(
+    result.approve.checklist.map((item) => item.code),
+    [
+      "request_correction_required.verify_selected_review_id",
+      "request_correction_required.verify_supported_action_metadata",
+      "request_correction_required.rerun_after_metadata_correction",
+    ]
+  );
+  assert.equal(
+    result.approve.checklist[0].label,
+    "Verify the selected review id is present."
+  );
   assert.equal(result.approve.rerunAfterVerification, true);
 });
 
@@ -269,6 +283,40 @@ test("resolution guidance is immutable, deterministic, and does not mutate input
   assert.deepEqual(first, second);
   assert.equal(Object.isFrozen(first), true);
   assert.equal(Object.isFrozen(first.approve), true);
+  assert.equal(Object.isFrozen(first.approve.checklist), true);
+  assert.equal(Object.isFrozen(first.approve.checklist[0]), true);
+});
+
+test("resolution guidance creates deterministic stable checklist item identities", () => {
+  const first = buildAppointmentReviewResolutionGuidance(
+    createComparison({
+      approve: blockedPath({ code: "unsupported_action_intent" }),
+      reject: blockedPath({ code: "unsupported_action_intent" }),
+    })
+  );
+  const second = buildAppointmentReviewResolutionGuidance(
+    createComparison({
+      approve: blockedPath({ code: "unsupported_action_intent" }),
+      reject: blockedPath({ code: "unsupported_action_intent" }),
+    })
+  );
+
+  for (const branchName of ["approve", "reject"]) {
+    for (const item of first[branchName].checklist) {
+      assert.equal(typeof item.code, "string");
+      assert.equal(typeof item.label, "string");
+      assert.match(item.code, /^request_correction_required\.[a-z0-9_]+$/);
+      assert.doesNotMatch(item.code, /\d{4,}|random|timestamp|Date\.now/);
+      assert.equal(item.label.length > 0, true);
+    }
+  }
+
+  assert.deepEqual(first.approve.checklist, second.approve.checklist);
+  assert.deepEqual(first.reject.checklist, second.reject.checklist);
+  assert.deepEqual(
+    first.approve.checklist.map((item) => item.code),
+    first.reject.checklist.map((item) => item.code)
+  );
 });
 
 test("resolution guidance contract source has no side-effect integrations", () => {
@@ -278,7 +326,7 @@ test("resolution guidance contract source has no side-effect integrations", () =
   );
 
   assert.doesNotMatch(source, /fetch\(/);
-  assert.doesNotMatch(source, /process\.env/);
+  assert.doesNotMatch(source, new RegExp(["process", "env"].join("[.]")));
   assert.doesNotMatch(source, new RegExp("create" + "Appointment"));
   assert.doesNotMatch(source, new RegExp("create" + "CalendarEvent"));
   assert.doesNotMatch(source, new RegExp("get" + "CalendarProvider"));

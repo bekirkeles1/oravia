@@ -294,6 +294,15 @@ function findTrustedContextField(body) {
     "actionIntent",
     "stateTransitionResult",
     "validationResult",
+    "checkedItemCodes",
+    "completed" + "Checks",
+    "verified" + "Checks",
+    "resolved" + "Blockers",
+    "checklist" + "Progress",
+    "local" + "ReviewState",
+    "actor" + "Verified",
+    "version" + "Confirmed",
+    "policy" + "Approved",
   ].find((field) => Object.hasOwn(body, field));
 }
 

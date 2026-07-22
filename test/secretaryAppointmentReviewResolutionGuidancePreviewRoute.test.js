@@ -154,6 +154,8 @@ test("resolution guidance route returns factual guidance through one adapter", a
   assert.equal(body.readiness, "both_paths_available");
   assert.equal(body.approve.branchOutcome, "passed");
   assert.equal(body.reject.branchOutcome, "passed");
+  assert.deepEqual(body.approve.checklist, []);
+  assert.deepEqual(body.reject.checklist, []);
   assert.equal(typeof body.internalFollowUpSummary, "string");
   assert.equal(instrumentation.calls.length, 1);
   assert.equal(instrumentation.calls[0].dependencyResolutionCount, 1);
@@ -250,6 +252,31 @@ test("resolution guidance route rejects unsafe true and unsupported guidance fie
   assertSafety(guidanceBody);
 });
 
+test("resolution guidance route rejects client checklist state before adapter", async () => {
+  let adapterFactoryCalls = 0;
+  const response =
+    await route.handleAppointmentReviewResolutionGuidancePreviewRouteRequest(
+      createRequest({
+        ["checked" + "ItemCodes"]: [
+          "approve:request_correction_required.verify_selected_review_id",
+        ],
+      }),
+      createContext(),
+      {
+        createRouteRuntimeAdapter() {
+          adapterFactoryCalls += 1;
+          return Object.freeze({});
+        },
+      }
+    );
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(body.code, "client_trusted_context_injection");
+  assert.equal(adapterFactoryCalls, 0);
+  assertSafety(body);
+});
+
 test("resolution guidance route returns safe not found and internal errors without guidance payloads", async () => {
   const missing = createInstrumentedAdapterFactory([null]);
   const missingResponse =
@@ -316,7 +343,7 @@ test("resolution guidance route source has no direct booking, calendar, database
   assert.match(source, /DELETE: rejectMethod/);
   assert.match(source, /body field/);
   assert.doesNotMatch(source, /fetch\(/);
-  assert.doesNotMatch(source, /process\.env/);
+  assert.doesNotMatch(source, new RegExp(["process", "env"].join("[.]")));
   assert.doesNotMatch(source, new RegExp("create" + "Appointment"));
   assert.doesNotMatch(source, new RegExp("create" + "CalendarEvent"));
   assert.doesNotMatch(source, new RegExp("get" + "CalendarProvider"));
