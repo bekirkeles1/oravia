@@ -279,6 +279,46 @@ const INITIAL_QUEUE_READINESS_PREVIEW = {
   items: []
 };
 
+const INITIAL_SHIFT_HANDOFF_PREVIEW = {
+  mock: true,
+  dryRun: true,
+  shiftHandoffPreview: true,
+  validationOnly: true,
+  controlledHandlingOnly: true,
+  executionEnabled: false,
+  executorAvailable: false,
+  executionAvailable: false,
+  executionRequested: false,
+  actionPerformed: false,
+  commandDispatched: false,
+  commandPersisted: false,
+  receiptPersisted: false,
+  bookingCreated: false,
+  calendarChecked: false,
+  appointmentCreated: false,
+  calendarEventCreated: false,
+  databasePersisted: false,
+  persistence: "not_persisted",
+  reviewMutated: false,
+  reviewStateChanged: false,
+  repositoryVersionChanged: false,
+  queueMutated: false,
+  queueCountChanged: false,
+  handoffPersisted: false,
+  handoffSent: false,
+  summary: {
+    totalReviews: 0,
+    bothPathsAvailable: 0,
+    approvePathOnly: 0,
+    rejectPathOnly: 0,
+    bothPathsBlocked: 0,
+    requiresFollowUp: 0,
+    noCurrentValidationBlocker: 0
+  },
+  items: [],
+  plainTextBrief: ""
+};
+
 export default function AppointmentReviewsWorkspace() {
   const [reviews, setReviews] = useState([]);
   const [summary, setSummary] = useState({
@@ -375,6 +415,10 @@ export default function AppointmentReviewsWorkspace() {
   const [queueReadinessResult, setQueueReadinessResult] = useState(null);
   const [queueReadinessError, setQueueReadinessError] = useState("");
   const [queueReadinessFilter, setQueueReadinessFilter] = useState("all");
+  const [shiftHandoffStatus, setShiftHandoffStatus] = useState("idle");
+  const [shiftHandoffResult, setShiftHandoffResult] = useState(null);
+  const [shiftHandoffError, setShiftHandoffError] = useState("");
+  const [shiftHandoffCopyStatus, setShiftHandoffCopyStatus] = useState("idle");
   const [
     selectedValidationReceiptActionIntent,
     setSelectedValidationReceiptActionIntent
@@ -416,6 +460,9 @@ export default function AppointmentReviewsWorkspace() {
   const queueReadinessRequestSequenceRef = useRef(0);
   const activeQueueReadinessRequestRef = useRef(null);
   const activeQueueReadinessAbortRef = useRef(null);
+  const shiftHandoffRequestSequenceRef = useRef(0);
+  const activeShiftHandoffRequestRef = useRef(null);
+  const activeShiftHandoffAbortRef = useRef(null);
   const selectedReview =
     reviews.find((review) => review.id === selectedReviewId) || null;
   const displayedActionIntentDryRun =
@@ -452,6 +499,8 @@ export default function AppointmentReviewsWorkspace() {
     resolutionChecklistSession.branches.reject;
   const displayedQueueReadiness =
     queueReadinessResult || INITIAL_QUEUE_READINESS_PREVIEW;
+  const displayedShiftHandoff =
+    shiftHandoffResult || INITIAL_SHIFT_HANDOFF_PREVIEW;
   const currentReviewIds = reviews.map((review) => review.id);
   const queueReadinessItems = getCurrentQueueReadinessItems({
     result: queueReadinessResult,
@@ -493,6 +542,8 @@ export default function AppointmentReviewsWorkspace() {
         invalidateQueueReadinessRequest();
         resetQueueReadinessState();
         setReviews(nextReviews);
+        invalidateShiftHandoffRequest();
+        resetShiftHandoffState();
         setSelectedReviewId((currentSelectedReviewId) => {
           if (
             currentSelectedReviewId &&
@@ -523,6 +574,8 @@ export default function AppointmentReviewsWorkspace() {
         invalidateQueueReadinessRequest();
         resetQueueReadinessState();
         setLoading(false);
+        invalidateShiftHandoffRequest();
+        resetShiftHandoffState();
         setLoadError(
           error instanceof Error
             ? error.message
@@ -551,6 +604,7 @@ export default function AppointmentReviewsWorkspace() {
       invalidateDecisionComparisonRequest();
       invalidateResolutionGuidanceRequest();
       invalidateQueueReadinessRequest();
+      invalidateShiftHandoffRequest();
     };
   }, []);
 
@@ -1914,6 +1968,157 @@ export default function AppointmentReviewsWorkspace() {
     );
   }
 
+  async function runShiftHandoffPreview() {
+    if (shiftHandoffStatus === "loading") {
+      return;
+    }
+
+    const reviewIdsForRequest = currentReviewIds;
+    const requestId = createShiftHandoffRequest({
+      reviewIds: reviewIdsForRequest
+    });
+    const activeAbortController = activeShiftHandoffAbortRef.current;
+
+    setShiftHandoffStatus("loading");
+    setShiftHandoffResult(null);
+    setShiftHandoffError("");
+    setShiftHandoffCopyStatus("idle");
+
+    try {
+      const response = await fetch(
+        "/api/secretary/appointment-reviews/shift-handoff-preview",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          signal: activeAbortController?.signal,
+          body: JSON.stringify({})
+        }
+      );
+      const payload = await response.json();
+
+      if (
+        !isActiveShiftHandoffRequest({
+          requestId,
+          reviewIds: reviewIdsForRequest
+        })
+      ) {
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          payload?.reason ||
+            payload?.error?.message ||
+            "Shift handoff preview failed safely."
+        );
+      }
+
+      if (!isSafeShiftHandoffResponse(payload)) {
+        throw new Error("Shift handoff response was unsafe or incomplete.");
+      }
+
+      setShiftHandoffResult(payload);
+      setShiftHandoffStatus("success");
+    } catch (error) {
+      if (isAbortError(error)) {
+        return;
+      }
+
+      if (
+        !isActiveShiftHandoffRequest({
+          requestId,
+          reviewIds: reviewIdsForRequest
+        })
+      ) {
+        return;
+      }
+
+      setShiftHandoffResult(null);
+      setShiftHandoffStatus("failure");
+      setShiftHandoffError(
+        error instanceof Error
+          ? error.message
+          : "Shift handoff preview failed safely."
+      );
+    }
+  }
+
+  function createShiftHandoffRequest({ reviewIds }) {
+    invalidateShiftHandoffRequest();
+
+    const requestId = shiftHandoffRequestSequenceRef.current + 1;
+    const abortController = new AbortController();
+
+    shiftHandoffRequestSequenceRef.current = requestId;
+    activeShiftHandoffAbortRef.current = abortController;
+    activeShiftHandoffRequestRef.current = {
+      requestId,
+      reviewIds: [...reviewIds]
+    };
+
+    return requestId;
+  }
+
+  function invalidateShiftHandoffRequest() {
+    shiftHandoffRequestSequenceRef.current += 1;
+    activeShiftHandoffRequestRef.current = null;
+
+    if (activeShiftHandoffAbortRef.current) {
+      activeShiftHandoffAbortRef.current.abort();
+      activeShiftHandoffAbortRef.current = null;
+    }
+  }
+
+  function resetShiftHandoffState() {
+    setShiftHandoffStatus("idle");
+    setShiftHandoffResult(null);
+    setShiftHandoffError("");
+    setShiftHandoffCopyStatus("idle");
+  }
+
+  function isActiveShiftHandoffRequest({ requestId, reviewIds }) {
+    const activeRequest = activeShiftHandoffRequestRef.current;
+
+    return (
+      isMountedRef.current &&
+      activeRequest &&
+      activeRequest.requestId === requestId &&
+      reviewIdsMatch(activeRequest.reviewIds, reviewIds) &&
+      reviewIdsMatch(currentReviewIds, reviewIds)
+    );
+  }
+
+  async function copyShiftHandoffBrief() {
+    const brief = shiftHandoffResult?.plainTextBrief;
+
+    if (!brief || typeof brief !== "string") {
+      setShiftHandoffCopyStatus("No local brief is available to copy.");
+      return;
+    }
+
+    if (
+      typeof navigator === "undefined" ||
+      !navigator.clipboard ||
+      typeof navigator.clipboard.writeText !== "function"
+    ) {
+      setShiftHandoffCopyStatus(
+        "Clipboard is unavailable. Select the visible brief manually."
+      );
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(brief);
+      setShiftHandoffCopyStatus("Copied locally");
+    } catch {
+      setShiftHandoffCopyStatus(
+        "Clipboard copy failed safely. Select the visible brief manually."
+      );
+    }
+  }
+
   return (
     <section
       className="appointment-reviews-workspace-section"
@@ -2062,6 +2267,173 @@ export default function AppointmentReviewsWorkspace() {
                 <dd>{String(displayedQueueReadiness.queueMutated)}</dd>
               </div>
             </dl>
+          </section>
+        ) : null}
+
+        {!loading && !loadError ? (
+          <section
+            className="appointment-review-shift-handoff"
+            aria-labelledby="appointment-review-shift-handoff-title"
+          >
+            <div>
+              <span>Internal handoff preview · Not sent</span>
+              <h3 id="appointment-review-shift-handoff-title">
+                Secretary Shift Handoff Brief
+              </h3>
+              <p>
+                Generates a server-controlled internal brief from the trusted
+                queue. It does not recommend a decision, perform actions, save
+                the handoff, send messages, book appointments, or check calendar
+                availability.
+              </p>
+            </div>
+
+            <div className="appointment-review-shift-handoff-controls">
+              <button
+                type="button"
+                className="appointment-review-shift-handoff-button"
+                onClick={runShiftHandoffPreview}
+                disabled={shiftHandoffStatus === "loading"}
+              >
+                Generate Shift Handoff Preview
+              </button>
+              <button
+                type="button"
+                className="appointment-review-shift-handoff-button secondary"
+                onClick={copyShiftHandoffBrief}
+                disabled={
+                  shiftHandoffStatus === "loading" ||
+                  !shiftHandoffResult?.plainTextBrief
+                }
+              >
+                Copy Internal Brief
+              </button>
+            </div>
+
+            <p className="appointment-review-shift-handoff-state">
+              {shiftHandoffStatus === "loading"
+                ? "Shift handoff preview is running. Duplicate requests are ignored."
+                : null}
+              {shiftHandoffStatus === "success"
+                ? "Shift handoff preview received. The brief is local and was not sent or saved."
+                : null}
+              {shiftHandoffStatus === "failure"
+                ? shiftHandoffError ||
+                  "Shift handoff preview failed safely."
+                : null}
+              {shiftHandoffStatus === "idle"
+                ? "Idle: no shift handoff preview for the current queue."
+                : null}
+              {shiftHandoffCopyStatus !== "idle"
+                ? ` ${shiftHandoffCopyStatus}.`
+                : null}
+            </p>
+
+            <dl className="appointment-review-shift-handoff-summary">
+              <div>
+                <dt>Total reviews</dt>
+                <dd>{displayedShiftHandoff.summary.totalReviews}</dd>
+              </div>
+              <div>
+                <dt>Both paths available</dt>
+                <dd>{displayedShiftHandoff.summary.bothPathsAvailable}</dd>
+              </div>
+              <div>
+                <dt>Approve path only</dt>
+                <dd>{displayedShiftHandoff.summary.approvePathOnly}</dd>
+              </div>
+              <div>
+                <dt>Reject path only</dt>
+                <dd>{displayedShiftHandoff.summary.rejectPathOnly}</dd>
+              </div>
+              <div>
+                <dt>Both paths blocked</dt>
+                <dd>{displayedShiftHandoff.summary.bothPathsBlocked}</dd>
+              </div>
+              <div>
+                <dt>validationOnly</dt>
+                <dd>{String(displayedShiftHandoff.validationOnly)}</dd>
+              </div>
+              <div>
+                <dt>executionEnabled</dt>
+                <dd>{String(displayedShiftHandoff.executionEnabled)}</dd>
+              </div>
+              <div>
+                <dt>persistence</dt>
+                <dd>{displayedShiftHandoff.persistence}</dd>
+              </div>
+            </dl>
+
+            {shiftHandoffResult ? (
+              <div className="appointment-review-shift-handoff-items">
+                {shiftHandoffResult.items.length === 0 ? (
+                  <p>No appointment reviews are currently in the queue.</p>
+                ) : null}
+                {shiftHandoffResult.items.map((item) => (
+                  <article key={item.reviewId}>
+                    <div>
+                      <strong>{item.reviewId}</strong>
+                      <span>
+                        {QUEUE_READINESS_LABELS[item.readiness] ||
+                          item.readiness}
+                      </span>
+                    </div>
+                    <dl>
+                      <div>
+                        <dt>Trusted state</dt>
+                        <dd>{item.trustedCurrentState}</dd>
+                      </div>
+                      <div>
+                        <dt>Observed version</dt>
+                        <dd>{item.observedReviewVersion}</dd>
+                      </div>
+                      <div>
+                        <dt>Approve outcome</dt>
+                        <dd>
+                          {item.branches.find(
+                            (branch) => branch.action === "approve"
+                          )?.outcome || "not_run"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Reject outcome</dt>
+                        <dd>
+                          {item.branches.find(
+                            (branch) => branch.action === "reject"
+                          )?.outcome || "not_run"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Unresolved checks</dt>
+                        <dd>
+                          {item.unresolvedChecks.length > 0
+                            ? item.unresolvedChecks.join(", ")
+                            : "none"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Follow-up categories</dt>
+                        <dd>
+                          {item.followUpCategories.length > 0
+                            ? item.followUpCategories.join(", ")
+                            : "none"}
+                        </dd>
+                      </div>
+                    </dl>
+                  </article>
+                ))}
+              </div>
+            ) : null}
+
+            <label className="appointment-review-shift-handoff-brief">
+              Internal Shift Handoff Brief - not sent or saved
+              <textarea
+                readOnly
+                rows={14}
+                value={displayedShiftHandoff.plainTextBrief}
+                placeholder="Generate a shift handoff preview to render the safe internal brief."
+              />
+            </label>
           </section>
         ) : null}
 
@@ -4720,6 +5092,91 @@ function isSafeQueueReadinessItem(item) {
     item.reject &&
     ["passed", "blocked"].includes(item.approve.outcome) &&
     ["passed", "blocked"].includes(item.reject.outcome)
+  );
+}
+
+function isSafeShiftHandoffResponse(payload) {
+  return (
+    payload &&
+    payload.mock === true &&
+    payload.dryRun === true &&
+    payload.shiftHandoffPreview === true &&
+    payload.validationOnly === true &&
+    payload.controlledHandlingOnly === true &&
+    payload.executionEnabled === false &&
+    payload.executorAvailable === false &&
+    payload.executionAvailable === false &&
+    payload.executionRequested === false &&
+    payload.actionPerformed === false &&
+    payload.commandDispatched === false &&
+    payload.commandPersisted === false &&
+    payload.receiptPersisted === false &&
+    payload.bookingCreated === false &&
+    payload.calendarChecked === false &&
+    payload.appointmentCreated === false &&
+    payload.calendarEventCreated === false &&
+    payload.databasePersisted === false &&
+    payload.persistence === "not_persisted" &&
+    payload.reviewMutated === false &&
+    payload.reviewStateChanged === false &&
+    payload.repositoryVersionChanged === false &&
+    payload.queueMutated === false &&
+    payload.queueCountChanged === false &&
+    payload.handoffPersisted === false &&
+    payload.handoffSent === false &&
+    payload.mode === "validation_only" &&
+    payload.preview === "secretary_shift_handoff_preview" &&
+    payload.accepted === true &&
+    payload.summary &&
+    Number.isSafeInteger(payload.summary.totalReviews) &&
+    Array.isArray(payload.items) &&
+    payload.items.length === payload.summary.totalReviews &&
+    payload.items.every(isSafeShiftHandoffItem) &&
+    typeof payload.plainTextBrief === "string" &&
+    !payload.plainTextBrief.includes("[object Object]")
+  );
+}
+
+function isSafeShiftHandoffItem(item) {
+  return (
+    item &&
+    typeof item.reviewId === "string" &&
+    typeof item.trustedCurrentState === "string" &&
+    Number.isSafeInteger(item.observedReviewVersion) &&
+    Object.hasOwn(QUEUE_READINESS_LABELS, item.readiness) &&
+    Array.isArray(item.branches) &&
+    item.branches.length === 2 &&
+    item.branches.every(isSafeShiftHandoffBranch) &&
+    Array.isArray(item.unresolvedChecks) &&
+    Array.isArray(item.followUpCategories) &&
+    item.validationOnly === true &&
+    item.executionEnabled === false &&
+    item.executionAvailable === false &&
+    item.actionPerformed === false &&
+    item.bookingCreated === false &&
+    item.calendarChecked === false &&
+    item.databasePersisted === false &&
+    item.persistence === "not_persisted" &&
+    item.reviewMutated === false &&
+    item.repositoryVersionChanged === false
+  );
+}
+
+function isSafeShiftHandoffBranch(branch) {
+  return (
+    branch &&
+    ["approve", "reject"].includes(branch.action) &&
+    ["passed", "blocked"].includes(branch.outcome) &&
+    typeof branch.requiredCheck === "string" &&
+    typeof branch.followUpCategory === "string" &&
+    typeof branch.guidanceCategory === "string" &&
+    branch.executionEnabled === false &&
+    branch.executionAvailable === false &&
+    branch.actionPerformed === false &&
+    branch.bookingCreated === false &&
+    branch.calendarChecked === false &&
+    branch.databasePersisted === false &&
+    branch.persistence === "not_persisted"
   );
 }
 

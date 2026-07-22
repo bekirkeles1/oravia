@@ -1690,6 +1690,104 @@ test("appointment reviews workspace has no approval, booking, or calendar action
   assert.doesNotMatch(workspaceSource, /randevunuz oluşturuldu/i);
 });
 
+test("appointment reviews workspace exposes queue-level shift handoff preview", () => {
+  assert.match(workspaceSource, /shiftHandoffStatus/);
+  assert.match(workspaceSource, /shiftHandoffResult/);
+  assert.match(workspaceSource, /shiftHandoffCopyStatus/);
+  assert.match(workspaceSource, /runShiftHandoffPreview/);
+  assert.match(
+    workspaceSource,
+    /\/api\/secretary\/appointment-reviews\/shift-handoff-preview/
+  );
+  assert.match(workspaceSource, /method: "POST"/);
+  assert.match(workspaceSource, /body: JSON\.stringify\(\{\}\)/);
+  assert.match(workspaceSource, /Generate Shift Handoff Preview/);
+  assert.match(workspaceSource, /Copy Internal Brief/);
+  assert.match(workspaceSource, /Secretary Shift Handoff Brief/);
+  assert.match(workspaceSource, /Internal Shift Handoff Brief - not sent or saved/);
+  assert.match(workspaceSource, /readOnly/);
+  assert.match(workspaceSource, /plainTextBrief/);
+  const handoffRouteIndex = workspaceSource.indexOf(
+    '"/api/secretary/appointment-reviews/shift-handoff-preview"'
+  );
+  const handoffRequestSource = workspaceSource.slice(
+    handoffRouteIndex,
+    handoffRouteIndex + 300
+  );
+  assert.match(handoffRequestSource, /body: JSON\.stringify\(\{\}\)/);
+  assert.doesNotMatch(
+    handoffRequestSource,
+    /body: JSON\.stringify\(\{[\s\S]*(reviewId|reviewIds|items|plainTextBrief)/
+  );
+  assert.doesNotMatch(workspaceSource, /checkedItemKeys|completedChecks/);
+});
+
+test("appointment reviews workspace hardens shift handoff against stale responses", () => {
+  assert.match(workspaceSource, /shiftHandoffRequestSequenceRef/);
+  assert.match(workspaceSource, /activeShiftHandoffRequestRef/);
+  assert.match(workspaceSource, /activeShiftHandoffAbortRef/);
+  assert.match(workspaceSource, /createShiftHandoffRequest/);
+  assert.match(workspaceSource, /invalidateShiftHandoffRequest/);
+  assert.match(workspaceSource, /resetShiftHandoffState/);
+  assert.match(workspaceSource, /isActiveShiftHandoffRequest/);
+  assert.match(workspaceSource, /activeShiftHandoffAbortRef\.current\.abort\(\)/);
+  assert.match(
+    workspaceSource,
+    /if \(\s+!\s*isActiveShiftHandoffRequest\(\{[\s\S]*requestId,[\s\S]*reviewIds: reviewIdsForRequest[\s\S]*\}\)\s+\) \{\s+return;\s+\}/
+  );
+  assert.match(
+    workspaceSource,
+    /reviewIdsMatch\(currentReviewIds, reviewIds\)/
+  );
+  assert.match(
+    workspaceSource,
+    /setReviews\(nextReviews\);\s+invalidateShiftHandoffRequest\(\);\s+resetShiftHandoffState\(\);/
+  );
+  assert.doesNotMatch(workspaceSource, /setSelectedReviewId\(.*shiftHandoff/i);
+  assert.doesNotMatch(workspaceSource, /setResolutionGuidanceResult\(.*shiftHandoff/i);
+  assert.doesNotMatch(workspaceSource, /setResolutionChecklistSession\(.*shiftHandoff/i);
+});
+
+test("appointment reviews workspace copies only the server-returned handoff brief after explicit action", () => {
+  const copyFunctionStart = workspaceSource.indexOf("async function copyShiftHandoffBrief");
+  const copyFunctionSource = workspaceSource.slice(copyFunctionStart, copyFunctionStart + 1200);
+  const previewFunctionStart = workspaceSource.indexOf("async function runShiftHandoffPreview");
+  const previewFunctionSource = workspaceSource.slice(previewFunctionStart, previewFunctionStart + 2600);
+
+  assert.match(copyFunctionSource, /navigator\.clipboard\.writeText\(brief\)/);
+  assert.match(copyFunctionSource, /const brief = shiftHandoffResult\?\.plainTextBrief/);
+  assert.match(copyFunctionSource, /Copied locally/);
+  assert.match(copyFunctionSource, /Clipboard is unavailable/);
+  assert.match(copyFunctionSource, /Clipboard copy failed safely/);
+  assert.doesNotMatch(previewFunctionSource, /clipboard\.writeText/);
+  assert.doesNotMatch(copyFunctionSource, /resolutionChecklistSession/);
+  assert.doesNotMatch(copyFunctionSource, /fetch\(/);
+  assert.doesNotMatch(copyFunctionSource, /localStorage|sessionStorage|document\.execCommand/);
+});
+
+test("appointment reviews workspace validates shift handoff safety fields", () => {
+  assert.match(workspaceSource, /isSafeShiftHandoffResponse/);
+  assert.match(workspaceSource, /payload\.shiftHandoffPreview === true/);
+  assert.match(workspaceSource, /payload\.executionEnabled === false/);
+  assert.match(workspaceSource, /payload\.bookingCreated === false/);
+  assert.match(workspaceSource, /payload\.calendarChecked === false/);
+  assert.match(workspaceSource, /payload\.databasePersisted === false/);
+  assert.match(workspaceSource, /payload\.handoffPersisted === false/);
+  assert.match(workspaceSource, /payload\.handoffSent === false/);
+  assert.match(workspaceSource, /payload\.preview === "secretary_shift_handoff_preview"/);
+  assert.match(workspaceSource, /isSafeShiftHandoffItem/);
+  assert.match(workspaceSource, /isSafeShiftHandoffBranch/);
+});
+
+test("appointment reviews workspace uses neutral handoff wording without automatic action claims", () => {
+  assert.doesNotMatch(workspaceSource, /recommendedAction|preferredAction|bestAction/);
+  assert.doesNotMatch(workspaceSource, /should approve|should reject/i);
+  assert.doesNotMatch(workspaceSource, /automatic decision/i);
+  assert.doesNotMatch(workspaceSource, /assignedTo/);
+  assert.doesNotMatch(workspaceSource, /delivered|synchronized/i);
+  assert.doesNotMatch(workspaceSource, /handoff saved|message sent|task assigned/i);
+});
+
 test("appointment reviews workspace styles are present", () => {
   assert.match(cssSource, /Appointment Reviews Workspace/);
   assert.match(cssSource, /\.appointment-reviews-workspace-section/);
@@ -1731,6 +1829,13 @@ test("appointment reviews workspace styles are present", () => {
   assert.match(cssSource, /\.appointment-review-queue-readiness-button/);
   assert.match(cssSource, /\.appointment-review-queue-readiness-state/);
   assert.match(cssSource, /\.appointment-review-readiness-badges/);
+  assert.match(cssSource, /\.appointment-review-shift-handoff/);
+  assert.match(cssSource, /\.appointment-review-shift-handoff-controls/);
+  assert.match(cssSource, /\.appointment-review-shift-handoff-summary/);
+  assert.match(cssSource, /\.appointment-review-shift-handoff-items/);
+  assert.match(cssSource, /\.appointment-review-shift-handoff-button/);
+  assert.match(cssSource, /\.appointment-review-shift-handoff-state/);
+  assert.match(cssSource, /\.appointment-review-shift-handoff-brief/);
   assert.match(cssSource, /\.appointment-review-validation-receipt-preview/);
   assert.match(cssSource, /\.appointment-review-validation-receipt-grid/);
   assert.match(cssSource, /\.appointment-review-validation-receipt-controls/);
