@@ -462,6 +462,117 @@ test("appointment reviews workspace shows selected-review resolution guidance pr
   assert.doesNotMatch(guidanceRequestSource, /guidance:/);
 });
 
+test("appointment reviews workspace exposes guided review session controls", () => {
+  assert.match(workspaceSource, /appointmentReviewGuidedSession/);
+  assert.match(workspaceSource, /GUIDED_SESSION_FILTER_OPTIONS/);
+  assert.match(workspaceSource, /Guided Review Session/);
+  assert.match(workspaceSource, /Local guided session · Not persisted/);
+  assert.match(workspaceSource, /No guided review session is active/);
+  assert.match(workspaceSource, /Start Guided Review Session/);
+  assert.match(workspaceSource, /Mark Reviewed Locally/);
+  assert.match(workspaceSource, /Mark as Unreviewed Locally/);
+  assert.match(workspaceSource, /Open Next Unreviewed Review/);
+  assert.match(workspaceSource, /Reset Local Session/);
+  assert.match(workspaceSource, /Session filter/);
+  assert.match(workspaceSource, /All session reviews/);
+  assert.match(workspaceSource, /Reviewed locally/);
+  assert.match(workspaceSource, /Version reset/);
+  assert.match(workspaceSource, /reviewed locally/);
+  assert.match(workspaceSource, /remaining/);
+  assert.match(workspaceSource, /Session persistence/);
+  assert.match(workspaceSource, /not sent to preview/);
+  assert.match(workspaceSource, /Session status/);
+  assert.match(workspaceSource, /not_started/);
+  assert.match(workspaceSource, /local mark reset after version change/);
+  assert.match(workspaceSource, /versionChangeNotice/);
+});
+
+test("appointment reviews workspace keeps guided session local and separate from server workflows", () => {
+  const startSessionSource = workspaceSource.slice(
+    workspaceSource.indexOf("function startGuidedReviewSession"),
+    workspaceSource.indexOf("function resetGuidedReviewSession")
+  );
+  const resetSessionSource = workspaceSource.slice(
+    workspaceSource.indexOf("function resetGuidedReviewSession"),
+    workspaceSource.indexOf("function markSelectedReviewReviewedLocally")
+  );
+  const markSessionSource = workspaceSource.slice(
+    workspaceSource.indexOf("function markSelectedReviewReviewedLocally"),
+    workspaceSource.indexOf("function markSelectedReviewUnreviewedLocally")
+  );
+  const clearSessionSource = workspaceSource.slice(
+    workspaceSource.indexOf("function markSelectedReviewUnreviewedLocally"),
+    workspaceSource.indexOf("function openNextUnreviewedReview")
+  );
+  const nextSessionSource = workspaceSource.slice(
+    workspaceSource.indexOf("function openNextUnreviewedReview"),
+    workspaceSource.indexOf(
+      "return (",
+      workspaceSource.indexOf("function openNextUnreviewedReview")
+    )
+  );
+  const sessionSources = [
+    startSessionSource,
+    resetSessionSource,
+    markSessionSource,
+    clearSessionSource,
+    nextSessionSource,
+  ].join("\n");
+  const handoffCopySource = workspaceSource.slice(
+    workspaceSource.indexOf("async function copyShiftHandoffBrief"),
+    workspaceSource.indexOf("function startGuidedReviewSession")
+  );
+
+  assert.match(
+    startSessionSource,
+    /initializeAppointmentReviewGuidedSession\(reviews\)/
+  );
+  assert.match(
+    resetSessionSource,
+    /getEmptyAppointmentReviewGuidedSession\(\)/
+  );
+  assert.match(
+    markSessionSource,
+    /markAppointmentReviewGuidedSessionItem\(currentSession, selectedReview\)/
+  );
+  assert.match(
+    clearSessionSource,
+    /clearAppointmentReviewGuidedSessionItem\(currentSession, selectedReview\)/
+  );
+  assert.match(
+    nextSessionSource,
+    /findNextUnreviewedAppointmentReviewId\(\s+guidedReviewSession/
+  );
+  assert.match(nextSessionSource, /setSelectedReviewId\(nextReviewId\)/);
+  assert.match(nextSessionSource, /Navigation wraps to the beginning/);
+  assert.doesNotMatch(sessionSources, /fetch\(/);
+  assert.doesNotMatch(sessionSources, /localStorage|sessionStorage|indexedDB/);
+  assert.doesNotMatch(sessionSources, /document\.cookie|process\.env/);
+  assert.doesNotMatch(sessionSources, /setDecisionPreviewResult/);
+  assert.doesNotMatch(sessionSources, /setDecisionComparisonResult/);
+  assert.doesNotMatch(sessionSources, /setResolutionGuidanceResult/);
+  assert.doesNotMatch(sessionSources, /setResolutionChecklistSession/);
+  assert.doesNotMatch(sessionSources, /setShiftHandoffResult/);
+  assert.doesNotMatch(handoffCopySource, /guidedReviewSession/);
+});
+
+test("appointment reviews workspace reconciles guided session on queue refresh", () => {
+  assert.match(workspaceSource, /reconcileAppointmentReviewGuidedSession/);
+  assert.match(
+    workspaceSource,
+    /setGuidedReviewSession\(\(currentSession\) =>\s+currentSession\.active\s+\?\s+reconcileAppointmentReviewGuidedSession\(\s+currentSession,\s+nextReviews\s+\)\s+:\s+currentSession\s+\)/
+  );
+  assert.match(
+    workspaceSource,
+    /reconcileAppointmentReviewGuidedSession\(currentSession, \[\]\)/
+  );
+  assert.match(
+    workspaceSource,
+    /Readiness and guided-session filters combine locally/
+  );
+  assert.doesNotMatch(workspaceSource, /sessionCompleted|locallyResolved/);
+});
+
 test("appointment reviews workspace hardens resolution guidance against stale responses", () => {
   assert.match(workspaceSource, /resolutionGuidanceRequestSequenceRef/);
   assert.match(workspaceSource, /activeResolutionGuidanceRequestRef/);
@@ -632,11 +743,19 @@ test("appointment reviews workspace annotates queue rows and filters neutrally",
   assert.match(workspaceSource, /Approve path/);
   assert.match(workspaceSource, /Reject path/);
   assert.match(workspaceSource, /not_scanned/);
-  assert.match(workspaceSource, /No reviews match this readiness filter/);
-  assert.match(workspaceSource, /does not\s+mutate, reorder, or persist/);
+  assert.match(workspaceSource, /No reviews match the selected local filters/);
   assert.match(
     workspaceSource,
-    /queueReadinessFilter === "all"\s+\?\s+reviews\s+:\s+reviews\.filter/
+    /Readiness and guided-session filters combine locally/
+  );
+  assert.match(workspaceSource, /does not mutate, reorder, send, or persist/);
+  assert.match(
+    workspaceSource,
+    /const readinessFilteredReviews =\s+queueReadinessFilter === "all"\s+\?\s+reviews\s+:\s+reviews\.filter/
+  );
+  assert.match(
+    workspaceSource,
+    /const filteredReviews = filterAppointmentReviewsByGuidedSession\(\s+readinessFilteredReviews,[\s\S]*guidedReviewSession,[\s\S]*guidedReviewSessionFilter/
   );
   assert.match(
     workspaceSource,
@@ -1741,7 +1860,7 @@ test("appointment reviews workspace hardens shift handoff against stale response
   );
   assert.match(
     workspaceSource,
-    /setReviews\(nextReviews\);\s+invalidateShiftHandoffRequest\(\);\s+resetShiftHandoffState\(\);/
+    /setReviews\(nextReviews\);[\s\S]*reconcileAppointmentReviewGuidedSession\(\s+currentSession,\s+nextReviews\s+\)[\s\S]*invalidateShiftHandoffRequest\(\);\s+resetShiftHandoffState\(\);/
   );
   assert.doesNotMatch(workspaceSource, /setSelectedReviewId\(.*shiftHandoff/i);
   assert.doesNotMatch(workspaceSource, /setResolutionGuidanceResult\(.*shiftHandoff/i);
@@ -1836,6 +1955,12 @@ test("appointment reviews workspace styles are present", () => {
   assert.match(cssSource, /\.appointment-review-shift-handoff-button/);
   assert.match(cssSource, /\.appointment-review-shift-handoff-state/);
   assert.match(cssSource, /\.appointment-review-shift-handoff-brief/);
+  assert.match(cssSource, /\.appointment-review-guided-session/);
+  assert.match(cssSource, /\.appointment-review-guided-session-controls/);
+  assert.match(cssSource, /\.appointment-review-guided-session-summary/);
+  assert.match(cssSource, /\.appointment-review-guided-session-button/);
+  assert.match(cssSource, /\.appointment-review-guided-session-state/);
+  assert.match(cssSource, /\.appointment-review-session-badges/);
   assert.match(cssSource, /\.appointment-review-validation-receipt-preview/);
   assert.match(cssSource, /\.appointment-review-validation-receipt-grid/);
   assert.match(cssSource, /\.appointment-review-validation-receipt-controls/);

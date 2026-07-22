@@ -2,6 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  GUIDED_SESSION_FILTERS,
+  clearAppointmentReviewGuidedSessionItem,
+  initializeAppointmentReviewGuidedSession,
+  getEmptyAppointmentReviewGuidedSession,
+  filterAppointmentReviewsByGuidedSession,
+  findNextUnreviewedAppointmentReviewId,
+  getAppointmentReviewGuidedSessionItem,
+  markAppointmentReviewGuidedSessionItem,
+  reconcileAppointmentReviewGuidedSession
+} from "../../src/secretary/appointmentReviewGuidedSession";
+import {
   clearResolutionChecklistSession,
   createResolutionChecklistSession,
   toggleResolutionChecklistItem
@@ -237,6 +248,13 @@ const QUEUE_READINESS_FILTERS = [
   ["both_paths_blocked", "Both paths blocked"]
 ];
 
+const GUIDED_SESSION_FILTER_OPTIONS = [
+  [GUIDED_SESSION_FILTERS.ALL, "All session reviews"],
+  [GUIDED_SESSION_FILTERS.UNREVIEWED, "Unreviewed"],
+  [GUIDED_SESSION_FILTERS.REVIEWED, "Reviewed locally"],
+  [GUIDED_SESSION_FILTERS.VERSION_CHANGED, "Version reset"]
+];
+
 const QUEUE_READINESS_LABELS = {
   both_paths_available: "Both paths available",
   approve_path_only: "Approve path only",
@@ -419,6 +437,14 @@ export default function AppointmentReviewsWorkspace() {
   const [shiftHandoffResult, setShiftHandoffResult] = useState(null);
   const [shiftHandoffError, setShiftHandoffError] = useState("");
   const [shiftHandoffCopyStatus, setShiftHandoffCopyStatus] = useState("idle");
+  const [guidedReviewSession, setGuidedReviewSession] = useState(() =>
+    getEmptyAppointmentReviewGuidedSession()
+  );
+  const [guidedReviewSessionFilter, setGuidedReviewSessionFilter] = useState(
+    GUIDED_SESSION_FILTERS.ALL
+  );
+  const [guidedReviewSessionMessage, setGuidedReviewSessionMessage] =
+    useState("");
   const [
     selectedValidationReceiptActionIntent,
     setSelectedValidationReceiptActionIntent
@@ -509,7 +535,7 @@ export default function AppointmentReviewsWorkspace() {
   const queueReadinessItemsById = Object.fromEntries(
     queueReadinessItems.map((item) => [item.reviewId, item])
   );
-  const filteredReviews =
+  const readinessFilteredReviews =
     queueReadinessFilter === "all"
       ? reviews
       : reviews.filter(
@@ -517,6 +543,15 @@ export default function AppointmentReviewsWorkspace() {
             queueReadinessItemsById[review.id]?.readiness ===
             queueReadinessFilter
         );
+  const filteredReviews = filterAppointmentReviewsByGuidedSession(
+    readinessFilteredReviews,
+    guidedReviewSession,
+    guidedReviewSessionFilter
+  );
+  const selectedGuidedSessionItem = getAppointmentReviewGuidedSessionItem(
+    guidedReviewSession,
+    selectedReview
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -542,6 +577,14 @@ export default function AppointmentReviewsWorkspace() {
         invalidateQueueReadinessRequest();
         resetQueueReadinessState();
         setReviews(nextReviews);
+        setGuidedReviewSession((currentSession) =>
+          currentSession.active
+            ? reconcileAppointmentReviewGuidedSession(
+                currentSession,
+                nextReviews
+              )
+            : currentSession
+        );
         invalidateShiftHandoffRequest();
         resetShiftHandoffState();
         setSelectedReviewId((currentSelectedReviewId) => {
@@ -568,6 +611,11 @@ export default function AppointmentReviewsWorkspace() {
         }
 
         setReviews([]);
+        setGuidedReviewSession((currentSession) =>
+          currentSession.active
+            ? reconcileAppointmentReviewGuidedSession(currentSession, [])
+            : currentSession
+        );
         setSelectedReviewId("");
         invalidateResolutionGuidanceRequest();
         resetResolutionGuidanceState();
@@ -2119,6 +2167,79 @@ export default function AppointmentReviewsWorkspace() {
     }
   }
 
+  function startGuidedReviewSession() {
+    setGuidedReviewSession(initializeAppointmentReviewGuidedSession(reviews));
+    setGuidedReviewSessionFilter(GUIDED_SESSION_FILTERS.ALL);
+    setGuidedReviewSessionMessage(
+      reviews.length > 0
+        ? "Guided review session started locally for the current queue."
+        : "Guided review session started locally with an empty queue."
+    );
+  }
+
+  function resetGuidedReviewSession() {
+    setGuidedReviewSession(getEmptyAppointmentReviewGuidedSession());
+    setGuidedReviewSessionFilter(GUIDED_SESSION_FILTERS.ALL);
+    setGuidedReviewSessionMessage(
+      "Guided review session reset locally. Server queue and previews were not changed."
+    );
+  }
+
+  function markSelectedReviewReviewedLocally() {
+    if (!selectedReview || !guidedReviewSession.active) {
+      setGuidedReviewSessionMessage(
+        "Start a guided review session and select a review before marking it locally."
+      );
+      return;
+    }
+
+    setGuidedReviewSession((currentSession) =>
+      markAppointmentReviewGuidedSessionItem(currentSession, selectedReview)
+    );
+    setGuidedReviewSessionMessage(
+      "Selected review marked reviewed locally for this workspace session only."
+    );
+  }
+
+  function markSelectedReviewUnreviewedLocally() {
+    if (!selectedReview || !guidedReviewSession.active) {
+      setGuidedReviewSessionMessage(
+        "Start a guided review session and select a review before clearing a local mark."
+      );
+      return;
+    }
+
+    setGuidedReviewSession((currentSession) =>
+      clearAppointmentReviewGuidedSessionItem(currentSession, selectedReview)
+    );
+    setGuidedReviewSessionMessage(
+      "Selected review local mark cleared. Server state was not changed."
+    );
+  }
+
+  function openNextUnreviewedReview() {
+    const nextReviewId = findNextUnreviewedAppointmentReviewId(
+      guidedReviewSession,
+      {
+        selectedReviewId
+      }
+    );
+
+    if (!nextReviewId) {
+      setGuidedReviewSessionMessage(
+        guidedReviewSession.active
+          ? "No unreviewed session reviews remain. Local session progress is complete."
+          : "Start a guided review session before opening the next unreviewed review."
+      );
+      return;
+    }
+
+    setSelectedReviewId(nextReviewId);
+    setGuidedReviewSessionMessage(
+      "Opened the next unreviewed review in queue order. Navigation wraps to the beginning when needed."
+    );
+  }
+
   return (
     <section
       className="appointment-reviews-workspace-section"
@@ -2171,6 +2292,143 @@ export default function AppointmentReviewsWorkspace() {
             {String(summary.safety?.usesDatabase === true)}.
           </small>
         </div>
+
+        {!loading && !loadError ? (
+          <section
+            className="appointment-review-guided-session"
+            aria-labelledby="appointment-review-guided-session-title"
+          >
+            <div>
+              <span>Local guided session · Not persisted</span>
+              <h3 id="appointment-review-guided-session-title">
+                Guided Review Session
+              </h3>
+              <p>
+                Tracks which reviews were inspected locally during this
+                component session. Local marks do not approve, reject, validate,
+                authorize, execute, persist, book, check calendar availability,
+                or change trusted review state.
+              </p>
+            </div>
+
+            <div className="appointment-review-guided-session-controls">
+              <button
+                type="button"
+                className="appointment-review-guided-session-button"
+                onClick={startGuidedReviewSession}
+              >
+                Start Guided Review Session
+              </button>
+              <button
+                type="button"
+                className="appointment-review-guided-session-button"
+                onClick={markSelectedReviewReviewedLocally}
+                disabled={
+                  !guidedReviewSession.active ||
+                  !selectedReview ||
+                  selectedGuidedSessionItem?.reviewedLocally === true
+                }
+              >
+                Mark Reviewed Locally
+              </button>
+              <button
+                type="button"
+                className="appointment-review-guided-session-button secondary"
+                onClick={markSelectedReviewUnreviewedLocally}
+                disabled={
+                  !guidedReviewSession.active ||
+                  !selectedReview ||
+                  selectedGuidedSessionItem?.reviewedLocally !== true
+                }
+              >
+                Mark as Unreviewed Locally
+              </button>
+              <button
+                type="button"
+                className="appointment-review-guided-session-button secondary"
+                onClick={openNextUnreviewedReview}
+                disabled={!guidedReviewSession.active}
+              >
+                Open Next Unreviewed Review
+              </button>
+              <button
+                type="button"
+                className="appointment-review-guided-session-button secondary"
+                onClick={resetGuidedReviewSession}
+                disabled={!guidedReviewSession.active}
+              >
+                Reset Local Session
+              </button>
+              <label>
+                Session filter
+                <select
+                  value={guidedReviewSessionFilter}
+                  onChange={(event) =>
+                    setGuidedReviewSessionFilter(event.target.value)
+                  }
+                >
+                  {GUIDED_SESSION_FILTER_OPTIONS.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <p className="appointment-review-guided-session-state">
+              {guidedReviewSession.active
+                ? `${guidedReviewSession.totals.progressText}. ${guidedReviewSession.totals.remaining} remaining.`
+                : "No guided review session is active."}
+              {guidedReviewSession.totals.stale > 0
+                ? ` ${guidedReviewSession.totals.stale} version reset.`
+                : null}
+              {guidedReviewSession.versionChangeNotice
+                ? ` ${guidedReviewSession.versionChangeNotice}`
+                : null}
+              {guidedReviewSessionMessage
+                ? ` ${guidedReviewSessionMessage}`
+                : null}
+            </p>
+
+            <dl className="appointment-review-guided-session-summary">
+              <div>
+                <dt>Total session reviews</dt>
+                <dd>{guidedReviewSession.totals.total}</dd>
+              </div>
+              <div>
+                <dt>Reviewed locally</dt>
+                <dd>{guidedReviewSession.totals.reviewed}</dd>
+              </div>
+              <div>
+                <dt>Remaining</dt>
+                <dd>{guidedReviewSession.totals.remaining}</dd>
+              </div>
+              <div>
+                <dt>Version reset</dt>
+                <dd>{guidedReviewSession.totals.stale}</dd>
+              </div>
+              <div>
+                <dt>Selected local status</dt>
+                <dd>
+                  {selectedGuidedSessionItem?.status ||
+                    (guidedReviewSession.active ? "not_in_session" : "inactive")}
+                </dd>
+              </div>
+              <div>
+                <dt>Session persistence</dt>
+                <dd>{String(guidedReviewSession.persisted === true)}</dd>
+              </div>
+            </dl>
+
+            <small>
+              Readiness and session filters combine locally: a row must match
+              both selected filters. Session marks are not sent to preview,
+              comparison, readiness, guidance, handoff, collection, or detail
+              routes.
+            </small>
+          </section>
+        ) : null}
 
         {!loading && !loadError ? (
           <section
@@ -4666,6 +4924,10 @@ export default function AppointmentReviewsWorkspace() {
           <div className="appointment-reviews-list">
             {filteredReviews.map((review) => {
               const readinessItem = queueReadinessItemsById[review.id] || null;
+              const guidedSessionItem = getAppointmentReviewGuidedSessionItem(
+                guidedReviewSession,
+                review
+              );
 
               return (
                 <article className="appointment-review-item" key={review.id}>
@@ -4684,6 +4946,17 @@ export default function AppointmentReviewsWorkspace() {
                         <small>
                           approve: {readinessItem.approve.outcome} · reject:{" "}
                           {readinessItem.reject.outcome}
+                        </small>
+                      </div>
+                    ) : null}
+                    {guidedSessionItem ? (
+                      <div className="appointment-review-session-badges">
+                        <span>{guidedSessionItem.status}</span>
+                        <small>
+                          version: {guidedSessionItem.observedReviewVersion}
+                          {guidedSessionItem.versionChanged
+                            ? " · local mark reset after version change"
+                            : ""}
                         </small>
                       </div>
                     ) : null}
@@ -4732,6 +5005,10 @@ export default function AppointmentReviewsWorkspace() {
                       <dt>Secretary confirmation</dt>
                       <dd>{String(review.requiresSecretaryConfirmation === true)}</dd>
                     </div>
+                    <div>
+                      <dt>Session status</dt>
+                      <dd>{guidedSessionItem?.status || "not_started"}</dd>
+                    </div>
                   </dl>
                 </article>
               );
@@ -4744,10 +5021,11 @@ export default function AppointmentReviewsWorkspace() {
         reviews.length > 0 &&
         filteredReviews.length === 0 ? (
           <div className="appointment-reviews-empty-state">
-            <strong>No reviews match this readiness filter</strong>
+            <strong>No reviews match the selected local filters</strong>
             <span>
-              Filtering is local to the dry-run scan display. It does not
-              mutate, reorder, or persist the appointment review queue.
+              Readiness and guided-session filters combine locally. Filtering
+              does not mutate, reorder, send, or persist the appointment review
+              queue.
             </span>
           </div>
         ) : null}
