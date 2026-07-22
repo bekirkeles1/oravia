@@ -2023,6 +2023,8 @@ blockquote {
 .appointment-review-decision-empty,
 .appointment-review-decision-comparison,
 .appointment-review-decision-comparison-empty,
+.appointment-review-decision-execution,
+.appointment-review-decision-execution-empty,
 .appointment-review-follow-up-board,
 .appointment-review-follow-up-board-empty,
 .appointment-review-guided-session,
@@ -2131,6 +2133,13 @@ blockquote {
   background: #f9fbf8;
 }
 
+.appointment-review-decision-execution {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  background: #fbfaf6;
+}
+
 .appointment-review-queue-readiness {
   display: grid;
   gap: 14px;
@@ -2201,6 +2210,11 @@ blockquote {
   gap: 6px;
 }
 
+.appointment-review-decision-execution > div:first-child {
+  display: grid;
+  gap: 6px;
+}
+
 .appointment-review-queue-readiness > div:first-child {
   display: grid;
   gap: 6px;
@@ -2241,6 +2255,9 @@ blockquote {
 .appointment-review-decision-comparison span,
 .appointment-review-decision-comparison p,
 .appointment-review-decision-comparison-empty span,
+.appointment-review-decision-execution span,
+.appointment-review-decision-execution p,
+.appointment-review-decision-execution-empty span,
 .appointment-review-follow-up-board span,
 .appointment-review-follow-up-board p,
 .appointment-review-follow-up-board-empty span,
@@ -2305,6 +2322,12 @@ blockquote {
   text-transform: uppercase;
 }
 
+.appointment-review-decision-execution > div:first-child > span {
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
 .appointment-review-queue-readiness > div:first-child > span {
   font-size: 0.76rem;
   font-weight: 900;
@@ -2345,6 +2368,8 @@ blockquote {
 .appointment-review-decision-preview p,
 .appointment-review-decision-comparison h3,
 .appointment-review-decision-comparison p,
+.appointment-review-decision-execution h3,
+.appointment-review-decision-execution p,
 .appointment-review-follow-up-board h3,
 .appointment-review-follow-up-board p,
 .appointment-review-guided-session h3,
@@ -2383,6 +2408,9 @@ blockquote {
 .appointment-review-decision-comparison-grid,
 .appointment-review-decision-comparison-paths,
 .appointment-review-decision-comparison-paths article dl,
+.appointment-review-decision-execution-controls,
+.appointment-review-decision-execution-grid,
+.appointment-review-decision-execution-confirmation dl,
 .appointment-review-follow-up-board-controls,
 .appointment-review-follow-up-board-summary,
 .appointment-review-follow-up-board-items article dl,
@@ -2426,6 +2454,9 @@ blockquote {
 .appointment-review-decision-comparison-paths article dl div,
 .appointment-review-decision-comparison-list,
 .appointment-review-decision-comparison-empty,
+.appointment-review-decision-execution-confirmation,
+.appointment-review-decision-execution-empty,
+.appointment-review-decision-execution-grid div,
 .appointment-review-follow-up-board-summary div,
 .appointment-review-follow-up-board-items article,
 .appointment-review-follow-up-board-empty,
@@ -2691,6 +2722,23 @@ blockquote {
   cursor: pointer;
 }
 
+.appointment-review-decision-execution-button {
+  align-self: end;
+  justify-self: start;
+  width: fit-content;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font-weight: 800;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.appointment-review-decision-execution-button.secondary {
+  background: #fbfaf6;
+}
+
 .appointment-review-follow-up-board-button.secondary {
   background: #f9fbf8;
 }
@@ -2778,6 +2826,7 @@ blockquote {
 .appointment-review-state-transition-button:disabled,
 .appointment-review-decision-button:disabled,
 .appointment-review-decision-comparison-button:disabled,
+.appointment-review-decision-execution-button:disabled,
 .appointment-review-follow-up-board-button:disabled,
 .appointment-review-guided-session-button:disabled,
 .appointment-review-queue-readiness-button:disabled,
@@ -2818,6 +2867,14 @@ blockquote {
   border: 1px dashed rgba(83, 116, 65, 0.3);
   border-radius: 8px;
   background: rgba(83, 116, 65, 0.08);
+  font-weight: 800;
+}
+
+.appointment-review-decision-execution-state {
+  padding: 10px 12px;
+  border: 1px dashed rgba(112, 89, 42, 0.3);
+  border-radius: 8px;
+  background: rgba(112, 89, 42, 0.08);
   font-weight: 800;
 }
 
@@ -3108,6 +3165,9 @@ blockquote {
   .appointment-review-decision-comparison-grid,
   .appointment-review-decision-comparison-paths,
   .appointment-review-decision-comparison-paths article dl,
+  .appointment-review-decision-execution-controls,
+  .appointment-review-decision-execution-grid,
+  .appointment-review-decision-execution-confirmation dl,
   .appointment-review-follow-up-board-controls,
   .appointment-review-follow-up-board-summary,
   .appointment-review-follow-up-board-items article dl,

@@ -181,6 +181,7 @@ test("server runtime factory validates state projection and exposes fixed immuta
     "getAppointmentReviewQueue",
     "getControlledActionRuntimeDependencyProvider",
     "getControlledActionDependencies",
+    "applyAppointmentReviewDecision",
   ]);
   assert.equal(Object.isFrozen(runtime), true);
   assert.equal(Object.isFrozen(queue), true);

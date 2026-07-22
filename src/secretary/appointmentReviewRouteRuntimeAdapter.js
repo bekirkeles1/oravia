@@ -47,6 +47,9 @@ function createAppointmentReviewRouteRuntimeAdapter(options) {
     getControlledActionDependencies() {
       return runtime.getControlledActionDependencies();
     },
+    applyAppointmentReviewDecision(input) {
+      return runtime.applyAppointmentReviewDecision(input);
+    },
   });
 }
 

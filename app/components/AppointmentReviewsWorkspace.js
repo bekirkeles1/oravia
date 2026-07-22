@@ -165,6 +165,7 @@ const VALIDATION_RECEIPT_CORRELATION_FIELDS = [
 ];
 
 const DECISION_PREVIEW_ACTIONS = ["approve", "reject"];
+const DECISION_EXECUTION_CONFIRMATION = "apply_in_memory";
 
 const INITIAL_DECISION_PREVIEW = {
   mock: true,
@@ -187,6 +188,30 @@ const INITIAL_DECISION_PREVIEW = {
   databasePersisted: false,
   persistence: "not_persisted",
   reviewMutated: false,
+  reviewStateChanged: false,
+  repositoryVersionChanged: false
+};
+
+const INITIAL_DECISION_EXECUTION = {
+  mock: true,
+  dryRun: false,
+  decisionExecution: true,
+  validationOnly: false,
+  controlledHandlingOnly: true,
+  executionMode: "in_memory_demo",
+  storage: "in_memory",
+  durablePersistence: false,
+  receiptPersisted: false,
+  bookingCreated: false,
+  calendarChecked: false,
+  appointmentCreated: false,
+  calendarEventCreated: false,
+  calendarWritten: false,
+  messageSent: false,
+  emailSent: false,
+  whatsappSent: false,
+  databasePersisted: false,
+  externalCallPerformed: false,
   reviewStateChanged: false,
   repositoryVersionChanged: false
 };
@@ -428,6 +453,12 @@ export default function AppointmentReviewsWorkspace() {
   const [decisionPreviewStatus, setDecisionPreviewStatus] = useState("idle");
   const [decisionPreviewResult, setDecisionPreviewResult] = useState(null);
   const [decisionPreviewError, setDecisionPreviewError] = useState("");
+  const [decisionExecutionStatus, setDecisionExecutionStatus] =
+    useState("idle");
+  const [decisionExecutionResult, setDecisionExecutionResult] = useState(null);
+  const [decisionExecutionError, setDecisionExecutionError] = useState("");
+  const [decisionExecutionConfirmation, setDecisionExecutionConfirmation] =
+    useState(null);
   const [decisionComparisonStatus, setDecisionComparisonStatus] =
     useState("idle");
   const [decisionComparisonResult, setDecisionComparisonResult] =
@@ -497,6 +528,9 @@ export default function AppointmentReviewsWorkspace() {
   const decisionPreviewRequestSequenceRef = useRef(0);
   const activeDecisionPreviewRequestRef = useRef(null);
   const activeDecisionPreviewAbortRef = useRef(null);
+  const decisionExecutionRequestSequenceRef = useRef(0);
+  const activeDecisionExecutionRequestRef = useRef(null);
+  const activeDecisionExecutionAbortRef = useRef(null);
   const decisionComparisonRequestSequenceRef = useRef(0);
   const activeDecisionComparisonRequestRef = useRef(null);
   const activeDecisionComparisonAbortRef = useRef(null);
@@ -530,6 +564,14 @@ export default function AppointmentReviewsWorkspace() {
     getValidationReceiptCorrelation(validationReceiptResult);
   const displayedDecisionPreview =
     decisionPreviewResult || INITIAL_DECISION_PREVIEW;
+  const displayedDecisionExecution =
+    decisionExecutionResult || INITIAL_DECISION_EXECUTION;
+  const executableDecisionPreview = isExecutableDecisionPreviewForReview(
+    decisionPreviewResult,
+    selectedReview
+  )
+    ? decisionPreviewResult
+    : null;
   const displayedDecisionComparison =
     decisionComparisonResult || INITIAL_DECISION_COMPARISON;
   const approveComparisonPath = decisionComparisonResult?.paths?.approve || null;
@@ -690,6 +732,7 @@ export default function AppointmentReviewsWorkspace() {
       invalidateControlledActionValidationRequest();
       invalidateValidationReceiptRequest();
       invalidateDecisionPreviewRequest();
+      invalidateDecisionExecutionRequest();
       invalidateDecisionComparisonRequest();
       invalidateResolutionGuidanceRequest();
       invalidateQueueReadinessRequest();
@@ -704,6 +747,7 @@ export default function AppointmentReviewsWorkspace() {
     invalidateControlledActionValidationRequest();
     invalidateValidationReceiptRequest();
     invalidateDecisionPreviewRequest();
+    invalidateDecisionExecutionRequest();
     invalidateDecisionComparisonRequest();
     invalidateResolutionGuidanceRequest();
     setActionIntentDryRunStatus("idle");
@@ -751,6 +795,7 @@ export default function AppointmentReviewsWorkspace() {
     setDecisionPreviewStatus("idle");
     setDecisionPreviewResult(null);
     setDecisionPreviewError("");
+    resetDecisionExecutionState();
     setDecisionComparisonStatus("idle");
     setDecisionComparisonResult(null);
     setDecisionComparisonError("");
@@ -758,6 +803,85 @@ export default function AppointmentReviewsWorkspace() {
     setResolutionGuidanceResult(null);
     setResolutionGuidanceError("");
   }, [selectedReviewId]);
+
+  async function refreshAppointmentReviewsFromTrustedServer({
+    preserveReviewId = selectedReviewIdRef.current
+  } = {}) {
+    const response = await fetch("/api/secretary/appointment-reviews");
+
+    if (!response.ok) {
+      throw new Error("Appointment review queue refresh failed safely.");
+    }
+
+    const payload = await response.json();
+    const nextReviews = Array.isArray(payload.reviews) ? payload.reviews : [];
+
+    setReviews(nextReviews);
+    setGuidedReviewSession((currentSession) =>
+      currentSession.active
+        ? reconcileAppointmentReviewGuidedSession(currentSession, nextReviews)
+        : currentSession
+    );
+    setSelectedReviewId((currentSelectedReviewId) => {
+      if (
+        preserveReviewId &&
+        nextReviews.some((review) => review.id === preserveReviewId)
+      ) {
+        return preserveReviewId;
+      }
+
+      if (
+        currentSelectedReviewId &&
+        nextReviews.some((review) => review.id === currentSelectedReviewId)
+      ) {
+        return currentSelectedReviewId;
+      }
+
+      return nextReviews[0]?.id || "";
+    });
+    setSummary({
+      source: payload.source || "mock",
+      mode: payload.mode || payload.safety?.mode || "read_only",
+      persistence: payload.persistence || "not_persisted",
+      safety: payload.safety || null
+    });
+  }
+
+  function resetDecisionExecutionState() {
+    setDecisionExecutionStatus("idle");
+    setDecisionExecutionResult(null);
+    setDecisionExecutionError("");
+    setDecisionExecutionConfirmation(null);
+  }
+
+  function invalidateOldVersionDecisionStateAfterExecution() {
+    invalidateDecisionPreviewRequest();
+    invalidateDecisionComparisonRequest();
+    invalidateResolutionGuidanceRequest();
+    invalidateQueueReadinessRequest();
+    invalidateShiftHandoffRequest();
+    resetResolutionGuidanceState();
+    resetQueueReadinessState();
+    resetShiftHandoffState();
+    resetFollowUpBoardState();
+    setResolutionChecklistSession(createResolutionChecklistSession(null));
+    setGuidedReviewSession(getEmptyAppointmentReviewGuidedSession());
+    setDecisionPreviewStatus("idle");
+    setDecisionPreviewResult(null);
+    setDecisionPreviewError("");
+    setDecisionComparisonStatus("idle");
+    setDecisionComparisonResult(null);
+    setDecisionComparisonError("");
+  }
+
+  function buildDecisionExecutionIdempotencyKey(preview) {
+    return [
+      "decision_execution",
+      preview.reviewId,
+      preview.action,
+      preview.observedReviewVersion
+    ].join(":");
+  }
 
   async function runActionIntentDryRun() {
     invalidateDecisionComparisonRequest();
@@ -1518,6 +1642,7 @@ export default function AppointmentReviewsWorkspace() {
     invalidateDecisionComparisonRequest();
     invalidateResolutionGuidanceRequest();
     resetResolutionGuidanceState();
+    resetDecisionExecutionState();
 
     if (decisionPreviewStatus === "loading") {
       return;
@@ -1609,6 +1734,157 @@ export default function AppointmentReviewsWorkspace() {
           : "Decision preview dry-run failed safely."
       );
     }
+  }
+
+  function openDecisionExecutionConfirmation() {
+    if (!executableDecisionPreview) {
+      setDecisionExecutionStatus("failure");
+      setDecisionExecutionError(
+        "Run a successful current-version decision preview before execution confirmation."
+      );
+      return;
+    }
+
+    setDecisionExecutionConfirmation({
+      reviewId: executableDecisionPreview.reviewId,
+      action: executableDecisionPreview.action,
+      expectedReviewVersion: executableDecisionPreview.observedReviewVersion,
+      projectedNextState: executableDecisionPreview.projectedNextState,
+      idempotencyKey: buildDecisionExecutionIdempotencyKey(
+        executableDecisionPreview
+      )
+    });
+    setDecisionExecutionStatus("confirming");
+    setDecisionExecutionResult(null);
+    setDecisionExecutionError("");
+  }
+
+  function cancelDecisionExecutionConfirmation() {
+    invalidateDecisionExecutionRequest();
+    resetDecisionExecutionState();
+  }
+
+  async function confirmDecisionExecution() {
+    if (decisionExecutionStatus === "loading") {
+      return;
+    }
+
+    if (!decisionExecutionConfirmation || !selectedReview) {
+      setDecisionExecutionStatus("failure");
+      setDecisionExecutionError(
+        "Open the explicit in-memory execution confirmation before submitting."
+      );
+      return;
+    }
+
+    const confirmation = decisionExecutionConfirmation;
+    const requestId = createDecisionExecutionRequest(confirmation);
+    const activeAbortController = activeDecisionExecutionAbortRef.current;
+
+    setDecisionExecutionStatus("loading");
+    setDecisionExecutionError("");
+
+    try {
+      const response = await fetch(
+        `/api/secretary/appointment-reviews/${encodeURIComponent(
+          confirmation.reviewId
+        )}/decision-execution`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          signal: activeAbortController?.signal,
+          body: JSON.stringify({
+            action: confirmation.action,
+            expectedReviewVersion: confirmation.expectedReviewVersion,
+            idempotencyKey: confirmation.idempotencyKey,
+            confirmation: DECISION_EXECUTION_CONFIRMATION
+          })
+        }
+      );
+      const payload = await response.json();
+
+      if (!isActiveDecisionExecutionRequest({ requestId, confirmation })) {
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          payload?.reason ||
+            "Decision execution was blocked safely. Refresh and rerun preview for stale versions."
+        );
+      }
+
+      if (!isSafeDecisionExecutionResponse(payload)) {
+        throw new Error("Decision execution response was unsafe or incomplete.");
+      }
+
+      setDecisionExecutionResult(payload);
+      setDecisionExecutionStatus("success");
+      setDecisionExecutionConfirmation(null);
+      invalidateOldVersionDecisionStateAfterExecution();
+      await refreshAppointmentReviewsFromTrustedServer({
+        preserveReviewId: payload.reviewId
+      });
+    } catch (error) {
+      if (isAbortError(error)) {
+        return;
+      }
+
+      if (!isActiveDecisionExecutionRequest({ requestId, confirmation })) {
+        return;
+      }
+
+      setDecisionExecutionStatus("failure");
+      setDecisionExecutionError(
+        error instanceof Error
+          ? error.message
+          : "Decision execution failed safely. Refresh and rerun preview."
+      );
+    }
+  }
+
+  function createDecisionExecutionRequest(confirmation) {
+    invalidateDecisionExecutionRequest();
+
+    const requestId = decisionExecutionRequestSequenceRef.current + 1;
+    const abortController = new AbortController();
+
+    decisionExecutionRequestSequenceRef.current = requestId;
+    activeDecisionExecutionAbortRef.current = abortController;
+    activeDecisionExecutionRequestRef.current = {
+      requestId,
+      ...confirmation
+    };
+
+    return requestId;
+  }
+
+  function invalidateDecisionExecutionRequest() {
+    decisionExecutionRequestSequenceRef.current += 1;
+    activeDecisionExecutionRequestRef.current = null;
+
+    if (activeDecisionExecutionAbortRef.current) {
+      activeDecisionExecutionAbortRef.current.abort();
+      activeDecisionExecutionAbortRef.current = null;
+    }
+  }
+
+  function isActiveDecisionExecutionRequest({ requestId, confirmation }) {
+    const activeRequest = activeDecisionExecutionRequestRef.current;
+
+    return (
+      isMountedRef.current &&
+      activeRequest &&
+      activeRequest.requestId === requestId &&
+      activeRequest.reviewId === confirmation.reviewId &&
+      activeRequest.action === confirmation.action &&
+      activeRequest.expectedReviewVersion ===
+        confirmation.expectedReviewVersion &&
+      activeRequest.idempotencyKey === confirmation.idempotencyKey &&
+      selectedReviewIdRef.current === confirmation.reviewId
+    );
   }
 
   function createDecisionPreviewRequest({ reviewId, action }) {
@@ -3749,6 +4025,212 @@ export default function AppointmentReviewsWorkspace() {
 
         {!loading && !loadError ? (
           <section
+            className="appointment-review-decision-execution"
+            aria-labelledby="appointment-review-decision-execution-title"
+          >
+            <div>
+              <span>Controlled execution · In-memory demo</span>
+              <h3 id="appointment-review-decision-execution-title">
+                Decision Execution Confirmation
+              </h3>
+              <p>
+                Applies the current successful decision preview only after an
+                explicit second confirmation. The server reruns trusted
+                validation and may change review state/version in the active
+                in-memory runtime. Durable persistence, booking, calendar, and
+                messaging remain unavailable.
+              </p>
+            </div>
+
+            {selectedReview ? (
+              <>
+                <div className="appointment-review-decision-execution-controls">
+                  <button
+                    type="button"
+                    className="appointment-review-decision-execution-button"
+                    onClick={openDecisionExecutionConfirmation}
+                    disabled={
+                      !executableDecisionPreview ||
+                      decisionExecutionStatus === "loading"
+                    }
+                  >
+                    {executableDecisionPreview?.action === "reject"
+                      ? "Prepare Reject Decision Application"
+                      : "Prepare Approve Decision Application"}
+                  </button>
+                  <button
+                    type="button"
+                    className="appointment-review-decision-execution-button secondary"
+                    onClick={cancelDecisionExecutionConfirmation}
+                    disabled={decisionExecutionStatus === "loading"}
+                  >
+                    Cancel Execution Confirmation
+                  </button>
+                </div>
+
+                <p className="appointment-review-decision-execution-state">
+                  {decisionExecutionStatus === "loading"
+                    ? "Decision execution is applying through the controlled in-memory route. Duplicate submissions are disabled."
+                    : null}
+                  {decisionExecutionStatus === "confirming"
+                    ? "Explicit confirmation is open. No request is sent until the in-memory application button is pressed."
+                    : null}
+                  {decisionExecutionStatus === "success" &&
+                  decisionExecutionResult?.matchingReplay === true
+                    ? "Matching replay returned the original receipt. No second mutation occurred."
+                    : null}
+                  {decisionExecutionStatus === "success" &&
+                  decisionExecutionResult?.matchingReplay !== true
+                    ? "Decision execution applied. Review state changed in the active in-memory runtime only."
+                    : null}
+                  {decisionExecutionStatus === "failure"
+                    ? `${decisionExecutionError} Refresh and rerun preview for stale versions.`
+                    : null}
+                  {decisionExecutionStatus === "idle"
+                    ? "Idle: run a successful current-version approve/reject preview before opening execution confirmation."
+                    : null}
+                </p>
+
+                {decisionExecutionConfirmation ? (
+                  <div className="appointment-review-decision-execution-confirmation">
+                    <strong>
+                      {decisionExecutionConfirmation.action === "approve"
+                        ? "Apply Approve Decision — In-memory Demo"
+                        : "Apply Reject Decision — In-memory Demo"}
+                    </strong>
+                    <dl>
+                      <div>
+                        <dt>reviewId</dt>
+                        <dd>{decisionExecutionConfirmation.reviewId}</dd>
+                      </div>
+                      <div>
+                        <dt>action</dt>
+                        <dd>{decisionExecutionConfirmation.action}</dd>
+                      </div>
+                      <div>
+                        <dt>preview observed version</dt>
+                        <dd>
+                          {decisionExecutionConfirmation.expectedReviewVersion}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>projected state</dt>
+                        <dd>{decisionExecutionConfirmation.projectedNextState}</dd>
+                      </div>
+                    </dl>
+                    <small>
+                      This applies only an in-memory review state transition.
+                      It does not create bookings, calendar events, patient
+                      messages, durable database records, or receipt
+                      persistence.
+                    </small>
+                    <button
+                      type="button"
+                      className="appointment-review-decision-execution-button"
+                      onClick={confirmDecisionExecution}
+                      disabled={decisionExecutionStatus === "loading"}
+                    >
+                      {decisionExecutionConfirmation.action === "approve"
+                        ? "Apply Approve Decision — In-memory Demo"
+                        : "Apply Reject Decision — In-memory Demo"}
+                    </button>
+                  </div>
+                ) : null}
+
+                <dl className="appointment-review-decision-execution-grid">
+                  <div>
+                    <dt>accepted</dt>
+                    <dd>
+                      {decisionExecutionResult
+                        ? String(decisionExecutionResult.accepted)
+                        : "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>code</dt>
+                    <dd>{decisionExecutionResult?.code || "not_run"}</dd>
+                  </div>
+                  <div>
+                    <dt>matchingReplay</dt>
+                    <dd>
+                      {decisionExecutionResult
+                        ? String(decisionExecutionResult.matchingReplay)
+                        : "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>previous state</dt>
+                    <dd>{decisionExecutionResult?.previousState || "not_run"}</dd>
+                  </div>
+                  <div>
+                    <dt>resulting state</dt>
+                    <dd>{decisionExecutionResult?.resultingState || "not_run"}</dd>
+                  </div>
+                  <div>
+                    <dt>previous version</dt>
+                    <dd>
+                      {decisionExecutionResult?.previousReviewVersion ||
+                        "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>resulting version</dt>
+                    <dd>
+                      {decisionExecutionResult?.resultingReviewVersion ||
+                        "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>repository version</dt>
+                    <dd>
+                      {decisionExecutionResult?.resultingRepositoryVersion ||
+                        "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>reviewStateChanged</dt>
+                    <dd>{String(displayedDecisionExecution.reviewStateChanged)}</dd>
+                  </div>
+                  <div>
+                    <dt>durablePersistence</dt>
+                    <dd>{String(displayedDecisionExecution.durablePersistence)}</dd>
+                  </div>
+                  <div>
+                    <dt>bookingCreated</dt>
+                    <dd>{String(displayedDecisionExecution.bookingCreated)}</dd>
+                  </div>
+                  <div>
+                    <dt>calendarWritten</dt>
+                    <dd>{String(displayedDecisionExecution.calendarWritten)}</dd>
+                  </div>
+                  <div>
+                    <dt>messageSent</dt>
+                    <dd>{String(displayedDecisionExecution.messageSent)}</dd>
+                  </div>
+                </dl>
+
+                <small>
+                  Execution eligibility never uses checklist marks, guided
+                  session status, focus-board categories, handoff content, or
+                  copied brief state. The request body contains action,
+                  expectedReviewVersion, idempotencyKey, and explicit
+                  confirmation only.
+                </small>
+              </>
+            ) : (
+              <div className="appointment-review-decision-execution-empty">
+                <strong>No selected appointment review</strong>
+                <span>
+                  Select a review and run a decision preview before opening
+                  controlled execution confirmation.
+                </span>
+              </div>
+            )}
+          </section>
+        ) : null}
+
+        {!loading && !loadError ? (
+          <section
             className="appointment-review-decision-comparison"
             aria-labelledby="appointment-review-decision-comparison-title"
           >
@@ -5844,6 +6326,63 @@ function isCurrentShiftHandoffResult(result, reviewIds) {
         result.items.map((item) => item.reviewId),
         reviewIds
       )
+  );
+}
+
+function isExecutableDecisionPreviewForReview(result, review) {
+  return Boolean(
+    result &&
+      review &&
+      result.accepted === true &&
+      result.previewPassed === true &&
+      result.reviewId === review.id &&
+      ["approve", "reject"].includes(result.action) &&
+      typeof result.projectedNextState === "string" &&
+      Number.isSafeInteger(result.observedReviewVersion) &&
+      result.executionEnabled === false &&
+      result.executionAvailable === false &&
+      result.actionPerformed === false &&
+      result.bookingCreated === false &&
+      result.calendarChecked === false &&
+      result.databasePersisted === false &&
+      result.reviewStateChanged === false
+  );
+}
+
+function isSafeDecisionExecutionResponse(payload) {
+  return (
+    payload &&
+    payload.mock === true &&
+    payload.dryRun === false &&
+    payload.decisionExecution === true &&
+    payload.validationOnly === false &&
+    payload.controlledHandlingOnly === true &&
+    payload.executionMode === "in_memory_demo" &&
+    payload.storage === "in_memory" &&
+    payload.durablePersistence === false &&
+    payload.receiptPersisted === false &&
+    payload.bookingCreated === false &&
+    payload.calendarChecked === false &&
+    payload.appointmentCreated === false &&
+    payload.calendarEventCreated === false &&
+    payload.calendarWritten === false &&
+    payload.messageSent === false &&
+    payload.emailSent === false &&
+    payload.whatsappSent === false &&
+    payload.databasePersisted === false &&
+    payload.externalCallPerformed === false &&
+    typeof payload.accepted === "boolean" &&
+    typeof payload.reviewStateChanged === "boolean" &&
+    typeof payload.repositoryVersionChanged === "boolean" &&
+    (payload.accepted === false ||
+      (payload.receipt &&
+        payload.receipt.receiptKind ===
+          "appointment_review_decision_execution_receipt_v1" &&
+        payload.receipt.durablePersistence === false &&
+        payload.receipt.receiptPersisted === false &&
+        payload.receipt.bookingCreated === false &&
+        payload.receipt.calendarWritten === false &&
+        payload.receipt.messageSent === false))
   );
 }
 

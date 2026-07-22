@@ -12,6 +12,10 @@ const followUpBoardHelperSource = fs.readFileSync(
   "src/secretary/appointmentReviewFollowUpFocusBoard.js",
   "utf8"
 );
+const decisionExecutionRouteSource = fs.readFileSync(
+  "app/api/secretary/appointment-reviews/[id]/decision-execution/route.js",
+  "utf8"
+);
 
 test("dashboard page exposes appointment reviews as a separate workspace panel", () => {
   assert.match(
@@ -286,6 +290,86 @@ test("appointment reviews workspace keeps decision preview validation-only and n
   assert.doesNotMatch(workspaceSource, /setReviews\([^)]*decisionPreview/i);
   assert.doesNotMatch(workspaceSource, /selectedReview\.status\s*=/);
   assert.doesNotMatch(workspaceSource, /setSelectedReviewId\(.*projectedNextState/);
+});
+
+test("appointment reviews workspace exposes two-step in-memory decision execution", () => {
+  assert.match(workspaceSource, /Decision Execution Confirmation/);
+  assert.match(workspaceSource, /Prepare Approve Decision Application/);
+  assert.match(workspaceSource, /Apply Approve Decision — In-memory Demo/);
+  assert.match(workspaceSource, /Apply Reject Decision — In-memory Demo/);
+  assert.match(workspaceSource, /explicit second confirmation/i);
+  assert.match(workspaceSource, /in-memory review state transition/i);
+  assert.match(workspaceSource, /does not create bookings, calendar events, patient\s+messages/i);
+  assert.match(workspaceSource, /decisionExecutionStatus === "confirming"/);
+  assert.match(workspaceSource, /No request is sent until the in-memory application button is pressed/);
+  assert.doesNotMatch(workspaceSource, />Approve<\/button>|>Reject<\/button>/);
+});
+
+test("appointment reviews workspace sends only safe execution request fields", () => {
+  const executionSource = workspaceSource.slice(
+    workspaceSource.indexOf("async function confirmDecisionExecution"),
+    workspaceSource.indexOf("function createDecisionExecutionRequest")
+  );
+
+  assert.match(executionSource, /decision-execution/);
+  assert.match(executionSource, /body: JSON\.stringify\(\{/);
+  assert.match(executionSource, /action: confirmation\.action/);
+  assert.match(
+    executionSource,
+    /expectedReviewVersion: confirmation\.expectedReviewVersion/
+  );
+  assert.match(executionSource, /idempotencyKey: confirmation\.idempotencyKey/);
+  assert.match(executionSource, /confirmation: DECISION_EXECUTION_CONFIRMATION/);
+  assert.doesNotMatch(
+    executionSource,
+    /nextState|trustedCurrentState|validationResult|comparisonResult|guidanceResult/
+  );
+  assert.doesNotMatch(
+    executionSource,
+    /guidedReviewSession|resolutionChecklistSession|followUpFocusBoard|shiftHandoffResult|plainTextBrief/
+  );
+});
+
+test("appointment reviews workspace invalidates old-version state after execution success", () => {
+  const successSource = workspaceSource.slice(
+    workspaceSource.indexOf("function invalidateOldVersionDecisionStateAfterExecution"),
+    workspaceSource.indexOf("function buildDecisionExecutionIdempotencyKey")
+  );
+
+  assert.match(successSource, /invalidateDecisionPreviewRequest\(\)/);
+  assert.match(successSource, /invalidateDecisionComparisonRequest\(\)/);
+  assert.match(successSource, /invalidateResolutionGuidanceRequest\(\)/);
+  assert.match(successSource, /invalidateQueueReadinessRequest\(\)/);
+  assert.match(successSource, /invalidateShiftHandoffRequest\(\)/);
+  assert.match(successSource, /resetFollowUpBoardState\(\)/);
+  assert.match(successSource, /createResolutionChecklistSession\(null\)/);
+  assert.match(successSource, /getEmptyAppointmentReviewGuidedSession\(\)/);
+  assert.match(workspaceSource, /refreshAppointmentReviewsFromTrustedServer/);
+  assert.match(workspaceSource, /Matching replay returned the original receipt/);
+  assert.match(workspaceSource, /Refresh and rerun preview for stale versions/);
+});
+
+test("appointment reviews workspace hardens execution against stale responses and duplicate submit", () => {
+  assert.match(workspaceSource, /activeDecisionExecutionRequestRef/);
+  assert.match(workspaceSource, /isActiveDecisionExecutionRequest/);
+  assert.match(workspaceSource, /decisionExecutionStatus === "loading"/);
+  assert.match(workspaceSource, /Duplicate submissions are disabled/);
+  assert.match(workspaceSource, /selectedReviewIdRef\.current === confirmation\.reviewId/);
+  assert.match(workspaceSource, /isSafeDecisionExecutionResponse/);
+});
+
+test("appointment reviews workspace route source rejects client trusted execution fields", () => {
+  assert.match(decisionExecutionRouteSource, /BODY_ALLOWED_FIELDS/);
+  assert.match(decisionExecutionRouteSource, /"action"/);
+  assert.match(decisionExecutionRouteSource, /"expectedReviewVersion"/);
+  assert.match(decisionExecutionRouteSource, /"idempotencyKey"/);
+  assert.match(decisionExecutionRouteSource, /"confirmation"/);
+  assert.match(decisionExecutionRouteSource, /nextState/);
+  assert.match(decisionExecutionRouteSource, /validationResult/);
+  assert.match(decisionExecutionRouteSource, /checkedItems/);
+  assert.match(decisionExecutionRouteSource, /guidedSession/);
+  assert.match(decisionExecutionRouteSource, /followUpFocusBoard/);
+  assert.match(decisionExecutionRouteSource, /plainTextBrief/);
 });
 
 test("appointment reviews workspace shows side-by-side decision path comparison dry-run", () => {
@@ -2072,6 +2156,12 @@ test("appointment reviews workspace styles are present", () => {
   assert.match(cssSource, /\.appointment-review-decision-comparison-empty/);
   assert.match(cssSource, /\.appointment-review-decision-comparison-button/);
   assert.match(cssSource, /\.appointment-review-decision-comparison-state/);
+  assert.match(cssSource, /\.appointment-review-decision-execution/);
+  assert.match(cssSource, /\.appointment-review-decision-execution-controls/);
+  assert.match(cssSource, /\.appointment-review-decision-execution-grid/);
+  assert.match(cssSource, /\.appointment-review-decision-execution-button/);
+  assert.match(cssSource, /\.appointment-review-decision-execution-state/);
+  assert.match(cssSource, /\.appointment-review-decision-execution-confirmation/);
   assert.match(cssSource, /\.appointment-review-queue-readiness/);
   assert.match(cssSource, /\.appointment-review-queue-readiness-controls/);
   assert.match(cssSource, /\.appointment-review-queue-readiness-summary/);

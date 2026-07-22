@@ -5,8 +5,14 @@ const {
   createInMemoryAppointmentReviewRepository,
 } = require("./appointmentReviewRepository");
 const {
+  createInMemoryAppointmentReviewExecutionIdempotencyStore,
+} = require("./appointmentReviewExecutionIdempotencyStore");
+const {
   createInMemoryMockAppointmentReviewControlledActionRuntimeDependencyProvider,
 } = require("./appointmentReviewInMemoryMockControlledActionRuntimeDependencyProvider");
+const {
+  applyAppointmentReviewDecision,
+} = require("../api/secretaryAppointmentReviewDecisionExecutionService");
 
 const RUNTIME_TYPE = "appointment_review_server_runtime_v1";
 const SCHEMA_VERSION = 1;
@@ -42,6 +48,8 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
       repository,
       resolveControlledActionState: options.resolveControlledActionState,
     });
+  const executionIdempotencyStore =
+    createInMemoryAppointmentReviewExecutionIdempotencyStore();
 
   return Object.freeze({
     runtimeType: RUNTIME_TYPE,
@@ -65,6 +73,16 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
     },
     getControlledActionDependencies() {
       return controlledActionRuntimeDependencyProvider.getControlledActionDependencies();
+    },
+    applyAppointmentReviewDecision(input) {
+      return applyAppointmentReviewDecision({
+        ...input,
+        dependencies:
+          controlledActionRuntimeDependencyProvider.getControlledActionDependencies(),
+        idempotencyStore: executionIdempotencyStore,
+        applyReviewControlledActionStateTransition:
+          repository.applyReviewControlledActionStateTransition,
+      });
     },
   });
 }
