@@ -11,6 +11,9 @@ const {
   createInMemoryAppointmentReviewAppointmentRepository,
 } = require("./appointmentReviewAppointmentRepository");
 const {
+  getCalendarProvider,
+} = require("../calendar/calendarProvider");
+const {
   createInMemoryMockAppointmentReviewControlledActionRuntimeDependencyProvider,
 } = require("./appointmentReviewInMemoryMockControlledActionRuntimeDependencyProvider");
 const {
@@ -19,6 +22,9 @@ const {
 const {
   createAppointmentFromApprovedReview,
 } = require("../api/secretaryAppointmentReviewAppointmentCreationService");
+const {
+  syncAppointmentToCalendar,
+} = require("../api/secretaryAppointmentCalendarSyncService");
 
 const RUNTIME_TYPE = "appointment_review_server_runtime_v1";
 const SCHEMA_VERSION = 1;
@@ -58,8 +64,15 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
     createInMemoryAppointmentReviewExecutionIdempotencyStore();
   const appointmentCreationIdempotencyStore =
     createInMemoryAppointmentReviewExecutionIdempotencyStore();
+  const calendarSyncIdempotencyStore =
+    createInMemoryAppointmentReviewExecutionIdempotencyStore();
   const appointmentRepository =
     createInMemoryAppointmentReviewAppointmentRepository();
+  const calendarProvider =
+    options.calendarProvider ||
+    (typeof options.createCalendarProvider === "function"
+      ? options.createCalendarProvider()
+      : getCalendarProvider(options.calendarProviderName));
 
   return Object.freeze({
     runtimeType: RUNTIME_TYPE,
@@ -110,6 +123,14 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
     },
     listCreatedAppointments() {
       return appointmentRepository.listAppointments();
+    },
+    syncAppointmentToCalendar(input) {
+      return syncAppointmentToCalendar({
+        ...input,
+        appointmentRepository,
+        calendarProvider,
+        idempotencyStore: calendarSyncIdempotencyStore,
+      });
     },
   });
 }

@@ -2,6 +2,10 @@ const APPOINTMENT_REPOSITORY_TYPE =
   "appointment_review_in_memory_appointment_repository_v1";
 const STORAGE = "in_memory";
 const NOT_PERSISTED = "not_persisted";
+const CALENDAR_SYNC_STATUS = Object.freeze({
+  NOT_SYNCED: "not_synced",
+  SYNCED: "synced",
+});
 
 function createInMemoryAppointmentReviewAppointmentRepository() {
   const appointments = new Map();
@@ -30,9 +34,14 @@ function createInMemoryAppointmentReviewAppointmentRepository() {
       const appointment = {
         ...validation.appointment,
         id: `appointment_${nextVersion}`,
+        version: 1,
         storage: STORAGE,
         persistence: NOT_PERSISTED,
         durablePersistence: false,
+        calendarSyncStatus: CALENDAR_SYNC_STATUS.NOT_SYNCED,
+        calendarLinked: false,
+        calendarProvider: null,
+        calendarEventId: null,
         calendarWritten: false,
         messageSent: false,
         databasePersisted: false,
@@ -73,6 +82,66 @@ function createInMemoryAppointmentReviewAppointmentRepository() {
 
       return appointmentId ? freezeClone(appointments.get(appointmentId)) : null;
     },
+    linkAppointmentCalendarEvent(input) {
+      const validation = validateCalendarLinkInput(input);
+
+      if (!validation.ok) {
+        return reject(validation.error);
+      }
+
+      const appointment = appointments.get(validation.appointmentId);
+
+      if (!appointment) {
+        return reject({
+          code: "appointment_not_found",
+          message: "Appointment was not found.",
+        });
+      }
+
+      if (appointment.version !== validation.expectedVersion) {
+        return reject({
+          code: "appointment_version_conflict",
+          message: "Appointment version changed before calendar link.",
+        });
+      }
+
+      if (appointment.calendarLinked === true || appointment.calendarEventId) {
+        return reject({
+          code: "appointment_already_calendar_synced",
+          message: "Appointment already has a linked calendar event.",
+        });
+      }
+
+      const nextRepositoryVersion = version + 1;
+      const updatedAppointment = freezeClone({
+        ...appointment,
+        version: appointment.version + 1,
+        calendarSyncStatus: CALENDAR_SYNC_STATUS.SYNCED,
+        calendarLinked: true,
+        calendarProvider: validation.provider,
+        calendarEventId: validation.providerEventId,
+        calendarWritten: true,
+        calendarLinkRecorded: true,
+        calendarSyncMode: validation.syncMode,
+      });
+
+      version = nextRepositoryVersion;
+      appointments.set(validation.appointmentId, updatedAppointment);
+
+      return freezeClone({
+        status: "ok",
+        appointment: updatedAppointment,
+        previousAppointmentVersion: appointment.version,
+        nextAppointmentVersion: updatedAppointment.version,
+        appointmentRepositoryVersion: version,
+        appointmentCalendarLinkRecorded: true,
+        repositoryVersionChanged: true,
+        durablePersistence: false,
+        calendarWritten: true,
+        messageSent: false,
+        databasePersisted: false,
+      });
+    },
     listAppointments() {
       return Array.from(appointments.values()).map((appointment) =>
         freezeClone(appointment)
@@ -82,6 +151,60 @@ function createInMemoryAppointmentReviewAppointmentRepository() {
       return version;
     },
   });
+}
+
+function validateCalendarLinkInput(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return validationError(
+      "invalid_calendar_link_input",
+      "Calendar link input must be an object."
+    );
+  }
+
+  const appointmentId = normalizeText(input.appointmentId);
+  const provider = normalizeText(input.provider);
+  const providerEventId = normalizeText(input.providerEventId);
+  const syncMode = normalizeText(input.syncMode) || "configured_provider";
+
+  if (!appointmentId || !/^[a-z0-9_:-]+$/.test(appointmentId)) {
+    return validationError(
+      "invalid_appointment_id",
+      "Calendar link input requires a safe appointmentId."
+    );
+  }
+
+  if (
+    !Number.isSafeInteger(input.expectedVersion) ||
+    input.expectedVersion < 1
+  ) {
+    return validationError(
+      "invalid_expected_appointment_version",
+      "Calendar link input requires a positive safe expectedVersion."
+    );
+  }
+
+  if (!provider || !/^[a-z0-9_:-]+$/.test(provider)) {
+    return validationError(
+      "invalid_calendar_provider",
+      "Calendar link input requires a safe provider name."
+    );
+  }
+
+  if (!providerEventId || providerEventId.length > 256) {
+    return validationError(
+      "invalid_calendar_event_id",
+      "Calendar link input requires a safe provider event id."
+    );
+  }
+
+  return {
+    ok: true,
+    appointmentId,
+    expectedVersion: input.expectedVersion,
+    provider,
+    providerEventId,
+    syncMode,
+  };
 }
 
 function validateAppointmentInput(input) {
@@ -192,5 +315,6 @@ function deepFreeze(value) {
 
 module.exports = {
   APPOINTMENT_REPOSITORY_TYPE,
+  CALENDAR_SYNC_STATUS,
   createInMemoryAppointmentReviewAppointmentRepository,
 };

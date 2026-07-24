@@ -14,6 +14,9 @@ function createAppointmentReviewActiveRouteRuntimeCompositionRoot(options = {}) 
     initialReviews: Array.isArray(options.initialReviews)
       ? options.initialReviews
       : [createDefaultRouteReview(DEFAULT_ROUTE_REVIEW_ID)],
+    calendarProvider: options.calendarProvider,
+    calendarProviderName: options.calendarProviderName,
+    createCalendarProvider: options.createCalendarProvider,
   });
 
   return Object.freeze({

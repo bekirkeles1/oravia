@@ -358,6 +358,48 @@ test("appointment reviews workspace hardens execution against stale responses an
   assert.match(workspaceSource, /isSafeDecisionExecutionResponse/);
 });
 
+test("appointment reviews workspace exposes two-step configured calendar sync", () => {
+  assert.match(workspaceSource, /Prepare Calendar Sync/);
+  assert.match(workspaceSource, /Sync to Configured Calendar/);
+  assert.match(workspaceSource, /configured provider/);
+  assert.match(workspaceSource, /external calendar event/);
+  assert.match(workspaceSource, /stored only\s+in memory/i);
+  assert.match(workspaceSource, /no patient message is sent/i);
+  assert.match(workspaceSource, /calendarSyncStatus === "loading"/);
+  assert.match(workspaceSource, /Cancel Calendar Sync/);
+});
+
+test("appointment reviews workspace sends only safe calendar sync request fields", () => {
+  const syncSource = workspaceSource.slice(
+    workspaceSource.indexOf("async function confirmCalendarSync"),
+    workspaceSource.indexOf("function startCalendarSyncRequest")
+  );
+
+  assert.match(syncSource, /\/calendar-sync/);
+  assert.match(syncSource, /body: JSON\.stringify\(\{/);
+  assert.match(
+    syncSource,
+    /expectedAppointmentVersion:\s+confirmation\.expectedAppointmentVersion/
+  );
+  assert.match(syncSource, /idempotencyKey: confirmation\.idempotencyKey/);
+  assert.match(syncSource, /confirmation: CALENDAR_SYNC_CONFIRMATION/);
+  assert.doesNotMatch(
+    syncSource,
+    /provider|calendarEventId|doctorId|doctorName|startAt|endAt|durationMinutes|patient|selectedSlot|timezone|treatment/
+  );
+});
+
+test("appointment reviews workspace hardens calendar sync against stale responses and duplicate submit", () => {
+  assert.match(workspaceSource, /activeCalendarSyncRequestRef/);
+  assert.match(workspaceSource, /isActiveCalendarSyncRequest/);
+  assert.match(workspaceSource, /calendarSyncStatus === "loading"/);
+  assert.match(workspaceSource, /isSafeCalendarSyncResponse/);
+  assert.match(workspaceSource, /refreshCreatedAppointmentsFromTrustedServer/);
+  assert.match(workspaceSource, /isCalendarSyncEligibleAppointment/);
+  assert.match(workspaceSource, /appointment\.calendarLinked !== true/);
+  assert.match(workspaceSource, /!appointment\.calendarEventId/);
+});
+
 test("appointment reviews workspace route source rejects client trusted execution fields", () => {
   assert.match(decisionExecutionRouteSource, /BODY_ALLOWED_FIELDS/);
   assert.match(decisionExecutionRouteSource, /"action"/);
@@ -1981,7 +2023,8 @@ test("appointment reviews workspace has no approval, booking, or calendar action
   assert.doesNotMatch(workspaceSource, /Save state/i);
   assert.doesNotMatch(workspaceSource, /Apply transition/i);
   assert.doesNotMatch(workspaceSource, /create appointment/i);
-  assert.doesNotMatch(workspaceSource, /calendar sync/i);
+  assert.match(workspaceSource, /Prepare Calendar Sync/);
+  assert.match(workspaceSource, /Sync to Configured Calendar/);
   assert.doesNotMatch(workspaceSource, /Google Calendar/);
   assert.doesNotMatch(
     workspaceSource,

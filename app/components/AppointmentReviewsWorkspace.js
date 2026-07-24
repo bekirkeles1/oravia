@@ -167,6 +167,7 @@ const VALIDATION_RECEIPT_CORRELATION_FIELDS = [
 const DECISION_PREVIEW_ACTIONS = ["approve", "reject"];
 const DECISION_EXECUTION_CONFIRMATION = "apply_in_memory";
 const APPOINTMENT_CREATION_CONFIRMATION = "create_in_memory_appointment";
+const CALENDAR_SYNC_CONFIRMATION = "sync_configured_calendar";
 
 const INITIAL_DECISION_PREVIEW = {
   mock: true,
@@ -231,6 +232,22 @@ const INITIAL_APPOINTMENT_CREATION = {
   externalCallPerformed: false,
   appointmentCreated: false,
   reviewVersionChanged: false,
+  appointmentRepositoryVersionChanged: false
+};
+
+const INITIAL_CALENDAR_SYNC = {
+  calendarSync: true,
+  storage: "in_memory",
+  appointmentPersistence: "not_persisted",
+  durableAppointmentPersistence: false,
+  appointmentCalendarLinkRecorded: false,
+  calendarWritten: false,
+  externalEventCreated: false,
+  messageSent: false,
+  emailSent: false,
+  whatsappSent: false,
+  databasePersisted: false,
+  appointmentVersionChanged: false,
   appointmentRepositoryVersionChanged: false
 };
 
@@ -485,6 +502,11 @@ export default function AppointmentReviewsWorkspace() {
   const [appointmentCreationConfirmation, setAppointmentCreationConfirmation] =
     useState(null);
   const [createdAppointments, setCreatedAppointments] = useState([]);
+  const [calendarSyncStatus, setCalendarSyncStatus] = useState("idle");
+  const [calendarSyncResult, setCalendarSyncResult] = useState(null);
+  const [calendarSyncError, setCalendarSyncError] = useState("");
+  const [calendarSyncConfirmation, setCalendarSyncConfirmation] =
+    useState(null);
   const [decisionComparisonStatus, setDecisionComparisonStatus] =
     useState("idle");
   const [decisionComparisonResult, setDecisionComparisonResult] =
@@ -560,6 +582,9 @@ export default function AppointmentReviewsWorkspace() {
   const appointmentCreationRequestSequenceRef = useRef(0);
   const activeAppointmentCreationRequestRef = useRef(null);
   const activeAppointmentCreationAbortRef = useRef(null);
+  const calendarSyncRequestSequenceRef = useRef(0);
+  const activeCalendarSyncRequestRef = useRef(null);
+  const activeCalendarSyncAbortRef = useRef(null);
   const decisionComparisonRequestSequenceRef = useRef(0);
   const activeDecisionComparisonRequestRef = useRef(null);
   const activeDecisionComparisonAbortRef = useRef(null);
@@ -597,6 +622,7 @@ export default function AppointmentReviewsWorkspace() {
     decisionExecutionResult || INITIAL_DECISION_EXECUTION;
   const displayedAppointmentCreation =
     appointmentCreationResult || INITIAL_APPOINTMENT_CREATION;
+  const displayedCalendarSync = calendarSyncResult || INITIAL_CALENDAR_SYNC;
   const executableDecisionPreview = isExecutableDecisionPreviewForReview(
     decisionPreviewResult,
     selectedReview
@@ -909,6 +935,13 @@ export default function AppointmentReviewsWorkspace() {
     setAppointmentCreationResult(null);
     setAppointmentCreationError("");
     setAppointmentCreationConfirmation(null);
+  }
+
+  function resetCalendarSyncState() {
+    setCalendarSyncStatus("idle");
+    setCalendarSyncResult(null);
+    setCalendarSyncError("");
+    setCalendarSyncConfirmation(null);
   }
 
   function invalidateOldVersionDecisionStateAfterExecution() {
@@ -2106,6 +2139,149 @@ export default function AppointmentReviewsWorkspace() {
         confirmation.expectedReviewVersion &&
       activeRequest.idempotencyKey === confirmation.idempotencyKey &&
       selectedReviewIdRef.current === confirmation.reviewId
+    );
+  }
+
+  function openCalendarSyncConfirmation(appointment) {
+    if (!isCalendarSyncEligibleAppointment(appointment)) {
+      setCalendarSyncStatus("failure");
+      setCalendarSyncError(
+        "Select an unsynced in-memory appointment with complete trusted calendar fields."
+      );
+      return;
+    }
+
+    setCalendarSyncConfirmation({
+      appointmentId: appointment.id,
+      expectedAppointmentVersion: appointment.version,
+      idempotencyKey: buildCalendarSyncIdempotencyKey(appointment),
+      appointment
+    });
+    setCalendarSyncStatus("confirming");
+    setCalendarSyncResult(null);
+    setCalendarSyncError("");
+  }
+
+  function cancelCalendarSyncConfirmation() {
+    invalidateCalendarSyncRequest();
+    resetCalendarSyncState();
+  }
+
+  async function confirmCalendarSync() {
+    if (calendarSyncStatus === "loading") {
+      return;
+    }
+
+    if (!calendarSyncConfirmation) {
+      setCalendarSyncStatus("failure");
+      setCalendarSyncError(
+        "Open the explicit calendar sync confirmation before submitting."
+      );
+      return;
+    }
+
+    const confirmation = calendarSyncConfirmation;
+    const requestId = startCalendarSyncRequest(confirmation);
+    const activeAbortController = activeCalendarSyncAbortRef.current;
+
+    setCalendarSyncStatus("loading");
+    setCalendarSyncError("");
+
+    try {
+      const response = await fetch(
+        `/api/secretary/appointments/${encodeURIComponent(
+          confirmation.appointmentId
+        )}/calendar-sync`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          signal: activeAbortController?.signal,
+          body: JSON.stringify({
+            expectedAppointmentVersion:
+              confirmation.expectedAppointmentVersion,
+            idempotencyKey: confirmation.idempotencyKey,
+            confirmation: CALENDAR_SYNC_CONFIRMATION
+          })
+        }
+      );
+      const payload = await response.json();
+
+      if (!isActiveCalendarSyncRequest({ requestId, confirmation })) {
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          payload?.reason ||
+            "Calendar sync was blocked safely. Refresh trusted appointment state."
+        );
+      }
+
+      if (!isSafeCalendarSyncResponse(payload)) {
+        throw new Error("Calendar sync response was unsafe or incomplete.");
+      }
+
+      setCalendarSyncResult(payload);
+      setCalendarSyncStatus("success");
+      setCalendarSyncConfirmation(null);
+      await refreshCreatedAppointmentsFromTrustedServer();
+    } catch (error) {
+      if (isAbortError(error)) {
+        return;
+      }
+
+      if (!isActiveCalendarSyncRequest({ requestId, confirmation })) {
+        return;
+      }
+
+      setCalendarSyncStatus("failure");
+      setCalendarSyncError(
+        error instanceof Error
+          ? error.message
+          : "Calendar sync failed safely. Refresh trusted appointment state."
+      );
+    }
+  }
+
+  function startCalendarSyncRequest(confirmation) {
+    invalidateCalendarSyncRequest();
+
+    const requestId = calendarSyncRequestSequenceRef.current + 1;
+    const abortController = new AbortController();
+
+    calendarSyncRequestSequenceRef.current = requestId;
+    activeCalendarSyncAbortRef.current = abortController;
+    activeCalendarSyncRequestRef.current = {
+      requestId,
+      ...confirmation
+    };
+
+    return requestId;
+  }
+
+  function invalidateCalendarSyncRequest() {
+    calendarSyncRequestSequenceRef.current += 1;
+    activeCalendarSyncRequestRef.current = null;
+
+    if (activeCalendarSyncAbortRef.current) {
+      activeCalendarSyncAbortRef.current.abort();
+      activeCalendarSyncAbortRef.current = null;
+    }
+  }
+
+  function isActiveCalendarSyncRequest({ requestId, confirmation }) {
+    const activeRequest = activeCalendarSyncRequestRef.current;
+
+    return (
+      isMountedRef.current &&
+      activeRequest &&
+      activeRequest.requestId === requestId &&
+      activeRequest.appointmentId === confirmation.appointmentId &&
+      activeRequest.expectedAppointmentVersion ===
+        confirmation.expectedAppointmentVersion &&
+      activeRequest.idempotencyKey === confirmation.idempotencyKey
     );
   }
 
@@ -4628,13 +4804,123 @@ export default function AppointmentReviewsWorkspace() {
                       <span key={appointment.id}>
                         {appointment.id} · {appointment.doctor?.name} ·{" "}
                         {appointment.startAt} · {appointment.appointmentPurposeLabel} ·{" "}
-                        calendarWritten {String(appointment.calendarWritten)}
+                        calendarWritten {String(appointment.calendarWritten)} ·{" "}
+                        version {appointment.version}
+                        <button
+                          type="button"
+                          className="appointment-review-decision-execution-button secondary"
+                          onClick={() => openCalendarSyncConfirmation(appointment)}
+                          disabled={
+                            !isCalendarSyncEligibleAppointment(appointment) ||
+                            calendarSyncStatus === "loading"
+                          }
+                        >
+                          Prepare Calendar Sync
+                        </button>
                       </span>
                     ))
                   ) : (
                     <span>No in-memory appointment has been created from this workspace session.</span>
                   )}
                 </div>
+
+                {calendarSyncConfirmation ? (
+                  <div className="appointment-review-decision-execution-confirmation">
+                    <strong>Sync to Configured Calendar</strong>
+                    <dl>
+                      <div>
+                        <dt>appointmentId</dt>
+                        <dd>{calendarSyncConfirmation.appointmentId}</dd>
+                      </div>
+                      <div>
+                        <dt>doctor</dt>
+                        <dd>
+                          {calendarSyncConfirmation.appointment.doctor?.name}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>start</dt>
+                        <dd>{calendarSyncConfirmation.appointment.startAt}</dd>
+                      </div>
+                      <div>
+                        <dt>end</dt>
+                        <dd>{calendarSyncConfirmation.appointment.endAt}</dd>
+                      </div>
+                      <div>
+                        <dt>duration</dt>
+                        <dd>
+                          {calendarSyncConfirmation.appointment.durationMinutes}{" "}
+                          minutes
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>configured provider</dt>
+                        <dd>server controlled</dd>
+                      </div>
+                    </dl>
+                    <small>
+                      This may create an external calendar event through the
+                      configured provider. The appointment link is stored only
+                      in memory, and no patient message is sent.
+                    </small>
+                    <button
+                      type="button"
+                      className="appointment-review-decision-execution-button"
+                      onClick={confirmCalendarSync}
+                      disabled={calendarSyncStatus === "loading"}
+                    >
+                      Sync to Configured Calendar
+                    </button>
+                    <button
+                      type="button"
+                      className="appointment-review-decision-execution-button secondary"
+                      onClick={cancelCalendarSyncConfirmation}
+                      disabled={calendarSyncStatus === "loading"}
+                    >
+                      Cancel Calendar Sync
+                    </button>
+                  </div>
+                ) : null}
+
+                <dl className="appointment-review-decision-execution-grid">
+                  <div>
+                    <dt>calendarSyncStatus</dt>
+                    <dd>{calendarSyncStatus}</dd>
+                  </div>
+                  <div>
+                    <dt>syncCode</dt>
+                    <dd>{calendarSyncResult?.code || "not_run"}</dd>
+                  </div>
+                  <div>
+                    <dt>provider</dt>
+                    <dd>{calendarSyncResult?.provider || "server_controlled"}</dd>
+                  </div>
+                  <div>
+                    <dt>providerEventId</dt>
+                    <dd>{calendarSyncResult?.providerEventId || "not_run"}</dd>
+                  </div>
+                  <div>
+                    <dt>externalEventCreated</dt>
+                    <dd>{String(displayedCalendarSync.externalEventCreated)}</dd>
+                  </div>
+                  <div>
+                    <dt>appointmentCalendarLinkRecorded</dt>
+                    <dd>
+                      {String(
+                        displayedCalendarSync.appointmentCalendarLinkRecorded
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>messageSent</dt>
+                    <dd>{String(displayedCalendarSync.messageSent)}</dd>
+                  </div>
+                </dl>
+                {calendarSyncStatus === "failure" ? (
+                  <p className="appointment-review-decision-execution-state">
+                    {calendarSyncError}
+                  </p>
+                ) : null}
               </>
             ) : (
               <div className="appointment-review-decision-execution-empty">
@@ -6830,6 +7116,26 @@ function isSafeAppointmentCreationResponse(payload) {
   );
 }
 
+function isSafeCalendarSyncResponse(payload) {
+  return (
+    payload &&
+    payload.calendarSync === true &&
+    payload.storage === "in_memory" &&
+    payload.appointmentPersistence === "not_persisted" &&
+    payload.durableAppointmentPersistence === false &&
+    payload.messageSent === false &&
+    payload.emailSent === false &&
+    payload.whatsappSent === false &&
+    payload.databasePersisted === false &&
+    typeof payload.accepted === "boolean" &&
+    (payload.accepted === false ||
+      (payload.receipt &&
+        payload.receipt.receiptKind === "appointment_calendar_sync_receipt_v1" &&
+        payload.receipt.durableAppointmentPersistence === false &&
+        payload.receipt.messageSent === false))
+  );
+}
+
 function getAppointmentCreationCandidate(review) {
   if (!review || review.metadata?.controlledActionState !== "needs_clinic_review") {
     return null;
@@ -6872,6 +7178,33 @@ function getAppointmentCreationCandidate(review) {
     appointmentPurpose,
     appointmentPurposeLabel
   };
+}
+
+function isCalendarSyncEligibleAppointment(appointment) {
+  return (
+    appointment &&
+    appointment.id &&
+    Number.isSafeInteger(appointment.version) &&
+    appointment.calendarLinked !== true &&
+    !appointment.calendarEventId &&
+    appointment.doctor?.name &&
+    appointment.startAt &&
+    appointment.endAt &&
+    Number.isSafeInteger(appointment.durationMinutes)
+  );
+}
+
+function buildCalendarSyncIdempotencyKey(appointment) {
+  return [
+    "calendar_sync",
+    appointment.id,
+    appointment.version,
+    appointment.startAt,
+    appointment.endAt
+  ]
+    .map((part) => String(part || "").replace(/[^A-Za-z0-9:_-]+/g, "_"))
+    .join(":")
+    .slice(0, 128);
 }
 
 function inferReviewVersion(review) {
