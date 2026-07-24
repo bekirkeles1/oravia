@@ -29,8 +29,8 @@ function createSqlitePersistenceProvider({ databasePath, clinicId }) {
   try {
     const { DatabaseSync } = loadNodeSqlite();
     database = new DatabaseSync(safePath);
+    configureSqliteConnection(database);
     runSqliteMigrations(database);
-    database.exec("PRAGMA foreign_keys = ON");
     database
       .prepare(
         `INSERT INTO clinics (clinic_id, created_at, updated_at)
@@ -129,6 +129,13 @@ function createSqlitePersistenceProvider({ databasePath, clinicId }) {
   }
 }
 
+function configureSqliteConnection(database) {
+  database.exec("PRAGMA foreign_keys = ON");
+  database.exec("PRAGMA journal_mode = WAL");
+  database.exec("PRAGMA synchronous = NORMAL");
+  database.exec("PRAGMA busy_timeout = 5000");
+}
+
 function normalizeDatabasePath(value) {
   const databasePath = String(value || "").trim();
 
@@ -167,5 +174,6 @@ function loadNodeSqlite() {
 }
 
 module.exports = {
+  configureSqliteConnection,
   createSqlitePersistenceProvider,
 };

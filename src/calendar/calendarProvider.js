@@ -22,6 +22,44 @@ function getCalendarProvider(
   );
 }
 
+function resolveCalendarProviderConfig(env = process.env) {
+  const provider = String(
+    env.CALENDAR_PROVIDER || env.ORAVIA_CALENDAR_PROVIDER || "mock"
+  )
+    .trim()
+    .toLowerCase();
+
+  if (provider === "mock") {
+    return Object.freeze({
+      accepted: true,
+      provider: "mock",
+      configurationComplete: true,
+    });
+  }
+
+  if (provider === "google_service_account") {
+    const keyConfigured = Boolean(
+      String(env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH || "").trim()
+    );
+    const calendarConfigured = Boolean(String(env.GOOGLE_CALENDAR_ID || "").trim());
+
+    return Object.freeze({
+      accepted: keyConfigured && calendarConfigured,
+      provider: "google_service_account",
+      configurationComplete: keyConfigured && calendarConfigured,
+      keyPathConfigured: keyConfigured,
+      calendarIdConfigured: calendarConfigured,
+    });
+  }
+
+  return Object.freeze({
+    accepted: false,
+    provider: "invalid",
+    configurationComplete: false,
+  });
+}
+
 module.exports = {
-  getCalendarProvider
+  getCalendarProvider,
+  resolveCalendarProviderConfig
 };

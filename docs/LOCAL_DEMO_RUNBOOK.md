@@ -98,6 +98,21 @@ and configured app secret. Local smoke must use a temporary SQLite database and
 synthetic identities only. Do not run a real Meta send unless explicit test
 credentials and `WHATSAPP_REAL_SMOKE=1` are configured.
 
+## Pilot Container Smoke
+
+For Milestone 19 local validation, build the production container with synthetic
+environment values and a temporary data volume. Verify:
+
+- `GET /api/health/live`
+- `GET /api/health/ready`
+- login and protected dashboard load
+- WhatsApp webhook verification and one signed synthetic text webhook
+- restart with the same volume keeps auth, review, appointment, inbound dedupe,
+  and outbound lifecycle state
+
+Remove the temporary container, image test volume, SQLite, WAL/SHM, backup, and
+log artifacts after the smoke.
+
 ## Automated Tests
 
 Run:

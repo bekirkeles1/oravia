@@ -48,7 +48,7 @@ async function POST(request) {
     response.headers.set(
       "set-cookie",
       authCookies.serializeSessionCookie(result.token, {
-        secure: process.env.NODE_ENV === "production",
+        secure: authCookies.shouldUseSecureSessionCookie(),
       })
     );
     return response;

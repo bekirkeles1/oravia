@@ -20,7 +20,7 @@ async function POST(request) {
   response.headers.set(
     "set-cookie",
     authCookies.serializeClearSessionCookie({
-      secure: process.env.NODE_ENV === "production",
+      secure: authCookies.shouldUseSecureSessionCookie(),
     })
   );
   return response;

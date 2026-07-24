@@ -15,7 +15,10 @@
     "test": "node --test",
     "demo:messaging-inbound": "node scripts/demo-messaging-inbound.js",
     "demo:messaging-review-queue": "node scripts/demo-messaging-review-queue.js",
-    "auth:bootstrap-user": "node scripts/bootstrap-auth-user.js"
+    "auth:bootstrap-user": "node scripts/bootstrap-auth-user.js",
+    "db:backup": "node scripts/db-backup.js",
+    "db:restore": "node scripts/db-restore.js",
+    "start": "node scripts/start-production.js"
   },
   "engines": {
     "node": ">=20.9"

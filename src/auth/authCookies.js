@@ -52,10 +52,23 @@ function parseSessionCookie(cookieHeader) {
   return decodeURIComponent(sessionPart.slice(SESSION_COOKIE_NAME.length + 1));
 }
 
+function shouldUseSecureSessionCookie() {
+  if (process.env.NODE_ENV === "production") {
+    return true;
+  }
+
+  return ["1", "true", "yes", "on"].includes(
+    String(process.env.ORAVIA_SESSION_COOKIE_SECURE || "")
+      .trim()
+      .toLowerCase()
+  );
+}
+
 module.exports = {
   DEFAULT_SESSION_MAX_AGE_SECONDS,
   SESSION_COOKIE_NAME,
   parseSessionCookie,
+  shouldUseSecureSessionCookie,
   serializeClearSessionCookie,
   serializeSessionCookie,
 };

@@ -6,6 +6,9 @@ const {
   WHATSAPP_PROVIDER_MODES,
   resolveWhatsAppConfig,
 } = require("../src/messaging/whatsappConfig");
+const {
+  validateProductionRuntimeConfig,
+} = require("../src/ops/productionConfig");
 
 const SUPPORTED_CALENDAR_PROVIDERS = new Set([
   "mock",
@@ -43,6 +46,7 @@ function main() {
   }
 
   validateWhatsAppEnv();
+  validateProductionEnv();
 
   if (errors.length > 0) {
     console.error("\nEnvironment check failed:");
@@ -54,6 +58,22 @@ function main() {
   }
 
   console.log("\nEnvironment check passed.");
+}
+
+function validateProductionEnv() {
+  const config = validateProductionRuntimeConfig(process.env, {
+    createDataDirectory: false,
+  });
+
+  if (config.production && !config.accepted) {
+    throw new Error(
+      `Production runtime configuration is incomplete. Missing or invalid: ${config.errors.join(", ")}.`
+    );
+  }
+
+  if (config.production) {
+    console.log("OK: production runtime configuration is complete.");
+  }
 }
 
 function validateWhatsAppEnv() {
