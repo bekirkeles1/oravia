@@ -10,6 +10,7 @@ import DemoApiSimulator from "./components/DemoApiSimulator";
 import DoctorAvailabilityWorkspace from "./components/DoctorAvailabilityWorkspace";
 import RoleBasedDashboard from "./components/RoleBasedDashboard";
 import SessionStatus from "./components/SessionStatus";
+import WhatsAppIntegrationStatusPanel from "./components/WhatsAppIntegrationStatusPanel";
 
 export default async function DashboardPage() {
   const session = await resolveDashboardSession();
@@ -143,6 +144,8 @@ export default async function DashboardPage() {
             ))}
           </div>
         </section>
+
+        <WhatsAppIntegrationStatusPanel />
 
         <section className="technical-section">
           <DemoApiSimulator initialSimulator={simulator} />

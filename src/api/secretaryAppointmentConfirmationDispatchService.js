@@ -218,6 +218,7 @@ async function dispatchAppointmentConfirmation(input) {
   const providerCommand = freezeClone({
     commandKind: "appointment_confirmation_dispatch_command_v1",
     appointmentId,
+    appointment,
     operationReference,
     destination: destinationResult.destination,
     message: {
@@ -267,6 +268,7 @@ async function dispatchAppointmentConfirmation(input) {
       expectedVersion: expectedAppointmentVersion,
       provider: safeProviderResult.provider,
       providerMessageId: safeProviderResult.providerMessageId,
+      initialStatus: safeProviderResult.providerLifecycleStatus,
     });
   } catch {
     return ambiguousProviderSucceeded({
@@ -336,7 +338,8 @@ async function dispatchAppointmentConfirmation(input) {
     providerCalled: true,
     providerDispatchAccepted: true,
     realPatientDelivery: false,
-    messageSent: true,
+    messageSent:
+      safeProviderResult.providerLifecycleStatus === "accepted" ? false : true,
     receipt,
     ...createSafetyFields(),
   });
@@ -373,8 +376,15 @@ function resolveTrustedDestination(appointment) {
   const channel = normalizeText(destination?.channel);
   const reference = normalizeText(destination?.reference);
   const maskedLabel = normalizeText(destination?.maskedLabel);
+  const lookupHash = normalizeText(destination?.lookupHash);
+  const encryptedIdentity =
+    destination?.encryptedIdentity &&
+    typeof destination.encryptedIdentity === "object" &&
+    !Array.isArray(destination.encryptedIdentity)
+      ? destination.encryptedIdentity
+      : null;
 
-  if (!channel || !reference || !maskedLabel) {
+  if (!channel || !maskedLabel || (!reference && !lookupHash)) {
     return rejectCommand(
       "missing_trusted_outbound_destination",
       "Trusted appointment does not contain a safe outbound destination."
@@ -387,6 +397,8 @@ function resolveTrustedDestination(appointment) {
       channel,
       reference,
       maskedLabel,
+      lookupHash,
+      encryptedIdentity,
     },
   });
 }
@@ -535,6 +547,9 @@ function normalizeProviderResult({ providerResult, providerName }) {
     accepted: true,
     provider,
     providerMessageId,
+    providerLifecycleStatus: normalizeText(
+      providerResult.providerLifecycleStatus
+    ),
   });
 }
 

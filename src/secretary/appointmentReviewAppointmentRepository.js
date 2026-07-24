@@ -8,6 +8,7 @@ const CALENDAR_SYNC_STATUS = Object.freeze({
 });
 const CONFIRMATION_MESSAGE_STATUS = Object.freeze({
   NOT_SENT: "not_sent",
+  ACCEPTED: "accepted",
   SENT: "sent",
 });
 
@@ -189,13 +190,13 @@ function createInMemoryAppointmentReviewAppointmentRepository() {
       const updatedAppointment = freezeClone({
         ...appointment,
         version: appointment.version + 1,
-        confirmationMessageStatus: CONFIRMATION_MESSAGE_STATUS.SENT,
+        confirmationMessageStatus: validation.initialStatus,
         confirmationMessageLinked: true,
         confirmationMessagingProvider: validation.provider,
         confirmationProviderMessageId: validation.providerMessageId,
         confirmationDispatchAccepted: true,
         realPatientDelivery: false,
-        messageSent: true,
+        messageSent: validation.initialStatus === CONFIRMATION_MESSAGE_STATUS.SENT,
         confirmationMessageLinkRecorded: true,
       });
 
@@ -211,7 +212,7 @@ function createInMemoryAppointmentReviewAppointmentRepository() {
         confirmationMessageLinkRecorded: true,
         repositoryVersionChanged: true,
         durablePersistence: false,
-        messageSent: true,
+        messageSent: validation.initialStatus === CONFIRMATION_MESSAGE_STATUS.SENT,
         whatsappSent: false,
         emailSent: false,
         smsSent: false,
@@ -241,6 +242,7 @@ function validateConfirmationLinkInput(input) {
   const appointmentId = normalizeText(input.appointmentId);
   const provider = normalizeText(input.provider);
   const providerMessageId = normalizeText(input.providerMessageId);
+  const initialStatus = normalizeConfirmationStatus(input.initialStatus);
 
   if (!appointmentId || !/^[a-z0-9_:-]+$/.test(appointmentId)) {
     return validationError(
@@ -279,6 +281,7 @@ function validateConfirmationLinkInput(input) {
     expectedVersion: input.expectedVersion,
     provider,
     providerMessageId,
+    initialStatus,
   };
 }
 
@@ -402,8 +405,15 @@ function cloneSafeOutboundDestination(destination) {
   const channel = normalizeText(destination.channel);
   const reference = normalizeText(destination.reference);
   const maskedLabel = normalizeText(destination.maskedLabel);
+  const lookupHash = normalizeText(destination.lookupHash);
+  const encryptedIdentity =
+    destination.encryptedIdentity &&
+    typeof destination.encryptedIdentity === "object" &&
+    !Array.isArray(destination.encryptedIdentity)
+      ? destination.encryptedIdentity
+      : null;
 
-  if (!channel || !reference || !maskedLabel) {
+  if (!channel || !maskedLabel || (!reference && !lookupHash)) {
     return null;
   }
 
@@ -411,7 +421,16 @@ function cloneSafeOutboundDestination(destination) {
     channel,
     reference,
     maskedLabel,
+    lookupHash,
+    encryptedIdentity,
   };
+}
+
+function normalizeConfirmationStatus(value) {
+  const status = normalizeText(value);
+  return Object.values(CONFIRMATION_MESSAGE_STATUS).includes(status)
+    ? status
+    : CONFIRMATION_MESSAGE_STATUS.SENT;
 }
 
 function reject(error) {

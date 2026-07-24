@@ -140,6 +140,89 @@ roles without permission. Doctor accounts are read-only. The public inbound
 messaging route remains unauthenticated so external messaging intake can be
 connected at its own provider boundary later.
 
+## WhatsApp Business Cloud API pilot integration
+
+Provider mode is server-controlled:
+
+```bash
+ORAVIA_WHATSAPP_PROVIDER_MODE=mock
+```
+
+`mock` remains the default local/test mode. Real Meta Cloud mode requires all of
+the following server-only variables; do not put values in source files, browser
+code, screenshots, or logs:
+
+```bash
+ORAVIA_WHATSAPP_PROVIDER_MODE=meta_cloud
+ORAVIA_WHATSAPP_GRAPH_API_VERSION=
+ORAVIA_WHATSAPP_PHONE_NUMBER_ID=
+ORAVIA_WHATSAPP_WABA_ID=
+ORAVIA_WHATSAPP_ACCESS_TOKEN=
+ORAVIA_WHATSAPP_APP_SECRET=
+ORAVIA_WHATSAPP_WEBHOOK_VERIFY_TOKEN=
+ORAVIA_WHATSAPP_APPOINTMENT_TEMPLATE_NAME=
+ORAVIA_WHATSAPP_TEMPLATE_LANGUAGE=
+ORAVIA_WHATSAPP_CHANNEL_IDENTITY_KEY=
+ORAVIA_WHATSAPP_AUTO_REPLY_MODE=disabled
+```
+
+Use a configured Graph API version from the Meta app setup; the application does
+not assume a latest version. The webhook callback path is:
+
+```text
+/api/webhooks/whatsapp
+```
+
+Configure the Meta webhook verify token to match
+`ORAVIA_WHATSAPP_WEBHOOK_VERIFY_TOKEN`. Signed POST payloads are verified with
+the raw request body and `X-Hub-Signature-256` using the configured app secret
+before JSON parsing. Unsigned or malformed signatures are rejected.
+
+Supported inbound type for this pilot is text only. Unsupported WhatsApp message
+types are acknowledged safely without media downloads. Auto reply is disabled by
+default; when `ORAVIA_WHATSAPP_AUTO_REPLY_MODE=safe_reply`, only the existing
+server-generated Oravia reply draft may be sent, once per inbound provider
+message.
+
+Appointment confirmations in Meta mode use a configured approved template. Body
+parameters are supplied in this deterministic order:
+
+1. clinic display name
+2. doctor display name
+3. appointment date
+4. appointment time
+5. appointment purpose
+
+Template parameters are built from trusted appointment state. Raw inbound
+messages, diagnosis, clinical notes, internal review state, repository versions,
+and patient medical information are not included.
+
+Real WhatsApp channel identities are encrypted before durable storage with
+AES-256-GCM. Equality lookup uses a clinic-scoped keyed hash. The raw destination
+is not stored plaintext and is not returned in receipts, UI, or status APIs; the
+UI displays only a masked identity.
+
+Outbound lifecycle records start at `accepted` after the Graph API accepts a
+message. `sent`, `delivered`, `read`, and `failed` are advanced only from signed
+status webhooks. Repeated statuses are idempotent and out-of-order lower statuses
+do not regress a later lifecycle state.
+
+Current operational limits:
+
+- no automatic retry
+- no background worker
+- no queue/outbox framework
+- no media messages
+- no marketing broadcasts
+- no WhatsApp Flows
+- no real smoke unless explicit real test credentials and an explicit smoke flag
+  are configured
+
+Real Meta smoke is optional. Run it only with a Meta test WABA, test phone number
+ID, test access token, app secret, verify token, approved template, safe test
+recipient, and an explicit `WHATSAPP_REAL_SMOKE=1` flag. Send at most one test
+message and never use a real patient number.
+
 ## Safety rules
 
 Never commit:

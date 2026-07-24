@@ -2,6 +2,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const { loadEnvFile } = require("../src/config/env");
+const {
+  WHATSAPP_PROVIDER_MODES,
+  resolveWhatsAppConfig,
+} = require("../src/messaging/whatsappConfig");
 
 const SUPPORTED_CALENDAR_PROVIDERS = new Set([
   "mock",
@@ -38,6 +42,8 @@ function main() {
     console.log("OK: Google Calendar credentials are not required for mock.");
   }
 
+  validateWhatsAppEnv();
+
   if (errors.length > 0) {
     console.error("\nEnvironment check failed:");
     for (const error of errors) {
@@ -48,6 +54,25 @@ function main() {
   }
 
   console.log("\nEnvironment check passed.");
+}
+
+function validateWhatsAppEnv() {
+  const config = resolveWhatsAppConfig();
+
+  if (config.providerMode === WHATSAPP_PROVIDER_MODES.MOCK) {
+    console.log("OK: ORAVIA_WHATSAPP_PROVIDER_MODE=mock");
+    return;
+  }
+
+  if (!config.configurationComplete) {
+    addError(
+      `Meta WhatsApp configuration is incomplete. Missing: ${config.missing.join(", ")}.`
+    );
+    return;
+  }
+
+  console.log("OK: ORAVIA_WHATSAPP_PROVIDER_MODE=meta_cloud");
+  console.log("OK: Meta WhatsApp secrets are configured without printing values.");
 }
 
 function validateGoogleServiceAccountEnv() {

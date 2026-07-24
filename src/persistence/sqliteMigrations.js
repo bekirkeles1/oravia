@@ -104,6 +104,75 @@ const MIGRATIONS = Object.freeze([
         ON auth_sessions (expires_at)`,
     ]),
   }),
+  Object.freeze({
+    version: 3,
+    name: "whatsapp_cloud_lifecycle_foundation",
+    statements: Object.freeze([
+      `CREATE TABLE IF NOT EXISTS messaging_channel_identities (
+        clinic_id TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        business_phone_number_id TEXT NOT NULL,
+        lookup_hash TEXT NOT NULL,
+        encrypted_identity_json TEXT NOT NULL,
+        masked_label TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (clinic_id, provider, business_phone_number_id, lookup_hash),
+        FOREIGN KEY (clinic_id) REFERENCES clinics(clinic_id)
+      )`,
+      `CREATE TABLE IF NOT EXISTS messaging_inbound_events (
+        clinic_id TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        provider_event_id TEXT NOT NULL,
+        business_phone_number_id TEXT NOT NULL,
+        sender_lookup_hash TEXT,
+        message_type TEXT NOT NULL,
+        processing_status TEXT NOT NULL,
+        conversation_reference TEXT,
+        safe_result_json TEXT,
+        event_fingerprint TEXT NOT NULL,
+        received_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (clinic_id, provider, provider_event_id),
+        FOREIGN KEY (clinic_id) REFERENCES clinics(clinic_id)
+      )`,
+      `CREATE TABLE IF NOT EXISTS messaging_outbound_messages (
+        clinic_id TEXT NOT NULL,
+        internal_message_id TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        provider_message_id TEXT,
+        direction TEXT NOT NULL,
+        operation_kind TEXT NOT NULL,
+        appointment_id TEXT,
+        conversation_reference TEXT,
+        content_fingerprint TEXT NOT NULL,
+        destination_lookup_hash TEXT,
+        provider_status TEXT NOT NULL,
+        status_rank INTEGER NOT NULL,
+        safe_failure_json TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (clinic_id, internal_message_id),
+        UNIQUE (clinic_id, provider, provider_message_id),
+        FOREIGN KEY (clinic_id) REFERENCES clinics(clinic_id)
+      )`,
+      `CREATE TABLE IF NOT EXISTS messaging_status_events (
+        clinic_id TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        provider_message_id TEXT NOT NULL,
+        provider_status TEXT NOT NULL,
+        event_fingerprint TEXT NOT NULL,
+        safe_failure_json TEXT,
+        received_at TEXT NOT NULL,
+        PRIMARY KEY (clinic_id, provider, provider_message_id, event_fingerprint),
+        FOREIGN KEY (clinic_id) REFERENCES clinics(clinic_id)
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_messaging_outbound_provider_status
+        ON messaging_outbound_messages (clinic_id, provider, provider_status)`,
+      `CREATE INDEX IF NOT EXISTS idx_messaging_inbound_sender
+        ON messaging_inbound_events (clinic_id, provider, sender_lookup_hash)`,
+    ]),
+  }),
 ]);
 
 function runSqliteMigrations(database) {

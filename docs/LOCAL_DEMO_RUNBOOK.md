@@ -82,6 +82,22 @@ Cookie-auth state-changing internal routes perform minimal same-origin
 validation when an `Origin` header is present. Public inbound messaging remains
 public at `POST /api/messaging/inbound`.
 
+## WhatsApp Cloud Local Smoke
+
+Meta Cloud mode can be tested locally with synthetic configuration and a fake
+Graph transport in automated tests. The public webhook route remains signature
+protected:
+
+```text
+GET /api/webhooks/whatsapp
+POST /api/webhooks/whatsapp
+```
+
+`POST` requests must include `X-Hub-Signature-256` generated from the raw body
+and configured app secret. Local smoke must use a temporary SQLite database and
+synthetic identities only. Do not run a real Meta send unless explicit test
+credentials and `WHATSAPP_REAL_SMOKE=1` are configured.
+
 ## Automated Tests
 
 Run:

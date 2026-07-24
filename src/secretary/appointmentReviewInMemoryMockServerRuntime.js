@@ -23,6 +23,22 @@ const {
   createMockOutboundAppointmentConfirmationProvider,
 } = require("../messaging/mockOutboundAppointmentConfirmationProvider");
 const {
+  createChannelIdentityCrypto,
+} = require("../messaging/whatsappChannelIdentityCrypto");
+const {
+  resolveWhatsAppConfig,
+  WHATSAPP_PROVIDER_MODES,
+} = require("../messaging/whatsappConfig");
+const {
+  createFetchWhatsAppGraphTransport,
+} = require("../messaging/whatsappGraphTransport");
+const {
+  createMetaWhatsAppOutboundProvider,
+} = require("../messaging/metaWhatsAppOutboundProvider");
+const {
+  createSqliteMessagingLifecycleRepository,
+} = require("../persistence/sqliteMessagingLifecycleRepository");
+const {
   createInMemoryMockAppointmentReviewControlledActionRuntimeDependencyProvider,
 } = require("./appointmentReviewInMemoryMockControlledActionRuntimeDependencyProvider");
 const {
@@ -146,11 +162,20 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
     (typeof options.createCalendarProvider === "function"
       ? options.createCalendarProvider()
       : getCalendarProvider(options.calendarProviderName));
+  const lifecycleRepository = sqlitePersistenceProvider
+    ? createSqliteMessagingLifecycleRepository({
+        persistenceProvider: sqlitePersistenceProvider,
+      })
+    : null;
   const outboundMessagingProvider =
     options.outboundMessagingProvider ||
     (typeof options.createOutboundMessagingProvider === "function"
       ? options.createOutboundMessagingProvider()
-      : createMockOutboundAppointmentConfirmationProvider());
+      : createDefaultOutboundMessagingProvider({
+          sqlitePersistenceProvider,
+          lifecycleRepository,
+          transport: options.whatsappTransport,
+        }));
 
   const runtime = {
     runtimeType: RUNTIME_TYPE,
@@ -271,6 +296,47 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
   });
 
   return Object.freeze(runtime);
+}
+
+function createDefaultOutboundMessagingProvider({
+  sqlitePersistenceProvider,
+  lifecycleRepository,
+  transport,
+}) {
+  const config = resolveWhatsAppConfig();
+
+  if (config.providerMode !== WHATSAPP_PROVIDER_MODES.META_CLOUD) {
+    return createMockOutboundAppointmentConfirmationProvider();
+  }
+
+  if (!config.configurationComplete || !sqlitePersistenceProvider) {
+    return Object.freeze({
+      name: "meta_cloud",
+      sendAppointmentConfirmation() {
+        return {
+          accepted: false,
+          code: config.code || "meta_whatsapp_provider_unavailable",
+          reason: "Meta WhatsApp provider configuration is incomplete.",
+          provider: "meta_cloud",
+          providerDispatchAccepted: false,
+          realPatientDelivery: false,
+        };
+      },
+    });
+  }
+
+  return createMetaWhatsAppOutboundProvider({
+    config,
+    transport:
+      transport ||
+      createFetchWhatsAppGraphTransport({
+        timeoutMs: config.transportTimeoutMs,
+      }),
+    identityCrypto: createChannelIdentityCrypto({
+      masterKey: config.channelIdentityKey,
+    }),
+    lifecycleRepository,
+  });
 }
 
 function createIdempotencyStore({ sqlitePersistenceProvider, operationKind }) {

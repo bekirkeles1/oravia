@@ -202,13 +202,13 @@ function createSqliteAppointmentReviewAppointmentRepository({
       const updatedAppointment = {
         ...appointment,
         version: appointment.version + 1,
-        confirmationMessageStatus: CONFIRMATION_MESSAGE_STATUS.SENT,
+        confirmationMessageStatus: validation.initialStatus,
         confirmationMessageLinked: true,
         confirmationMessagingProvider: validation.provider,
         confirmationProviderMessageId: validation.providerMessageId,
         confirmationDispatchAccepted: true,
         realPatientDelivery: false,
-        messageSent: true,
+        messageSent: validation.initialStatus === CONFIRMATION_MESSAGE_STATUS.SENT,
         confirmationMessageLinkRecorded: true,
       };
 
@@ -224,7 +224,7 @@ function createSqliteAppointmentReviewAppointmentRepository({
         confirmationMessageLinkRecorded: true,
         repositoryVersionChanged: true,
         durablePersistence: true,
-        messageSent: true,
+        messageSent: validation.initialStatus === CONFIRMATION_MESSAGE_STATUS.SENT,
         whatsappSent: false,
         emailSent: false,
         smsSent: false,
@@ -412,12 +412,20 @@ function validateConfirmationLinkInput(input) {
   }
 
   const providerMessageId = normalizeText(input.providerMessageId);
+  const initialStatus = normalizeConfirmationStatus(input.initialStatus);
 
   if (!providerMessageId || providerMessageId.length > 256) {
     return validationError("invalid_provider_message_id", "Confirmation link input requires a safe provider message id.");
   }
 
-  return { ...base, providerMessageId };
+  return { ...base, providerMessageId, initialStatus };
+}
+
+function normalizeConfirmationStatus(value) {
+  const status = normalizeText(value);
+  return Object.values(CONFIRMATION_MESSAGE_STATUS).includes(status)
+    ? status
+    : CONFIRMATION_MESSAGE_STATUS.SENT;
 }
 
 function validateLinkBaseInput(input) {
