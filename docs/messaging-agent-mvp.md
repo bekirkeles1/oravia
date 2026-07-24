@@ -23,6 +23,9 @@ Implemented:
 - Local intent classifier reuse
 - Payload validation
 - Unknown intent handoff response
+- Controlled appointment confirmation dispatch for trusted in-memory
+  appointments only
+- Safe mock outbound appointment confirmation provider
 
 Current valid sample payload:
 
@@ -57,6 +60,16 @@ The current messaging inbound flow does not:
 - Sync appointments to calendar providers
 - Touch secretary manual appointment flow
 - Use real patient data
+
+Milestone 15 adds a controlled outbound confirmation path for appointments that
+already exist in trusted server-side in-memory state. The client may request the
+dispatch only with `expectedAppointmentVersion`, `idempotencyKey`, and the
+explicit `send_mock_appointment_confirmation` confirmation string. Recipient,
+destination, provider, appointment fields, and message body are constructed on
+the server from trusted appointment state. The default provider is a safe mock
+provider: it records an immutable local dispatch receipt and never claims real
+patient delivery, WhatsApp delivery, email delivery, SMS delivery, durable
+persistence, database persistence, or calendar writes.
 
 This is deliberate. The current goal is only to prove that an inbound messaging payload can enter the system, be validated, classified, and return a safe reply draft.
 
