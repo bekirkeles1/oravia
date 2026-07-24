@@ -6,6 +6,10 @@ const CALENDAR_SYNC_STATUS = Object.freeze({
   NOT_SYNCED: "not_synced",
   SYNCED: "synced",
 });
+const CONFIRMATION_MESSAGE_STATUS = Object.freeze({
+  NOT_SENT: "not_sent",
+  SENT: "sent",
+});
 
 function createInMemoryAppointmentReviewAppointmentRepository() {
   const appointments = new Map();
@@ -43,6 +47,12 @@ function createInMemoryAppointmentReviewAppointmentRepository() {
         calendarProvider: null,
         calendarEventId: null,
         calendarWritten: false,
+        confirmationMessageStatus: CONFIRMATION_MESSAGE_STATUS.NOT_SENT,
+        confirmationMessageLinked: false,
+        confirmationMessagingProvider: null,
+        confirmationProviderMessageId: null,
+        confirmationDispatchAccepted: false,
+        realPatientDelivery: false,
         messageSent: false,
         databasePersisted: false,
       };
@@ -142,6 +152,73 @@ function createInMemoryAppointmentReviewAppointmentRepository() {
         databasePersisted: false,
       });
     },
+    linkAppointmentConfirmationMessage(input) {
+      const validation = validateConfirmationLinkInput(input);
+
+      if (!validation.ok) {
+        return reject(validation.error);
+      }
+
+      const appointment = appointments.get(validation.appointmentId);
+
+      if (!appointment) {
+        return reject({
+          code: "appointment_not_found",
+          message: "Appointment was not found.",
+        });
+      }
+
+      if (appointment.version !== validation.expectedVersion) {
+        return reject({
+          code: "appointment_version_conflict",
+          message: "Appointment version changed before confirmation link.",
+        });
+      }
+
+      if (
+        appointment.confirmationMessageLinked === true ||
+        appointment.confirmationProviderMessageId
+      ) {
+        return reject({
+          code: "appointment_already_confirmation_dispatched",
+          message: "Appointment already has a linked confirmation message.",
+        });
+      }
+
+      const nextRepositoryVersion = version + 1;
+      const updatedAppointment = freezeClone({
+        ...appointment,
+        version: appointment.version + 1,
+        confirmationMessageStatus: CONFIRMATION_MESSAGE_STATUS.SENT,
+        confirmationMessageLinked: true,
+        confirmationMessagingProvider: validation.provider,
+        confirmationProviderMessageId: validation.providerMessageId,
+        confirmationDispatchAccepted: true,
+        realPatientDelivery: false,
+        messageSent: true,
+        confirmationMessageLinkRecorded: true,
+      });
+
+      version = nextRepositoryVersion;
+      appointments.set(validation.appointmentId, updatedAppointment);
+
+      return freezeClone({
+        status: "ok",
+        appointment: updatedAppointment,
+        previousAppointmentVersion: appointment.version,
+        nextAppointmentVersion: updatedAppointment.version,
+        appointmentRepositoryVersion: version,
+        confirmationMessageLinkRecorded: true,
+        repositoryVersionChanged: true,
+        durablePersistence: false,
+        messageSent: true,
+        whatsappSent: false,
+        emailSent: false,
+        smsSent: false,
+        calendarWritten: false,
+        databasePersisted: false,
+      });
+    },
     listAppointments() {
       return Array.from(appointments.values()).map((appointment) =>
         freezeClone(appointment)
@@ -151,6 +228,58 @@ function createInMemoryAppointmentReviewAppointmentRepository() {
       return version;
     },
   });
+}
+
+function validateConfirmationLinkInput(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return validationError(
+      "invalid_confirmation_link_input",
+      "Confirmation link input must be an object."
+    );
+  }
+
+  const appointmentId = normalizeText(input.appointmentId);
+  const provider = normalizeText(input.provider);
+  const providerMessageId = normalizeText(input.providerMessageId);
+
+  if (!appointmentId || !/^[a-z0-9_:-]+$/.test(appointmentId)) {
+    return validationError(
+      "invalid_appointment_id",
+      "Confirmation link input requires a safe appointmentId."
+    );
+  }
+
+  if (
+    !Number.isSafeInteger(input.expectedVersion) ||
+    input.expectedVersion < 1
+  ) {
+    return validationError(
+      "invalid_expected_appointment_version",
+      "Confirmation link input requires a positive safe expectedVersion."
+    );
+  }
+
+  if (!provider || !/^[a-z0-9_:-]+$/.test(provider)) {
+    return validationError(
+      "invalid_messaging_provider",
+      "Confirmation link input requires a safe provider name."
+    );
+  }
+
+  if (!providerMessageId || providerMessageId.length > 256) {
+    return validationError(
+      "invalid_provider_message_id",
+      "Confirmation link input requires a safe provider message id."
+    );
+  }
+
+  return {
+    ok: true,
+    appointmentId,
+    expectedVersion: input.expectedVersion,
+    provider,
+    providerMessageId,
+  };
 }
 
 function validateCalendarLinkInput(input) {
@@ -260,8 +389,28 @@ function validateAppointmentInput(input) {
       startAt,
       endAt,
       durationMinutes: input.durationMinutes,
+      outboundDestination:
+        input.outboundDestination && typeof input.outboundDestination === "object"
+          ? cloneSafeOutboundDestination(input.outboundDestination)
+          : null,
       status: "created_in_memory",
     },
+  };
+}
+
+function cloneSafeOutboundDestination(destination) {
+  const channel = normalizeText(destination.channel);
+  const reference = normalizeText(destination.reference);
+  const maskedLabel = normalizeText(destination.maskedLabel);
+
+  if (!channel || !reference || !maskedLabel) {
+    return null;
+  }
+
+  return {
+    channel,
+    reference,
+    maskedLabel,
   };
 }
 
@@ -316,5 +465,6 @@ function deepFreeze(value) {
 module.exports = {
   APPOINTMENT_REPOSITORY_TYPE,
   CALENDAR_SYNC_STATUS,
+  CONFIRMATION_MESSAGE_STATUS,
   createInMemoryAppointmentReviewAppointmentRepository,
 };

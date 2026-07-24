@@ -411,6 +411,9 @@ function buildTrustedAppointmentCandidate(review) {
   const startAt = normalizeText(selectedSlot.startAt || selectedSlot.start_at);
   const endAt = normalizeText(selectedSlot.endAt || selectedSlot.end_at);
   const durationMinutes = selectedSlot.durationMinutes;
+  const outboundDestination = buildTrustedOutboundDestination(
+    review.metadata?.conversationKey
+  );
 
   if (
     !sourceReviewId ||
@@ -444,8 +447,42 @@ function buildTrustedAppointmentCandidate(review) {
       startAt,
       endAt,
       durationMinutes,
+      outboundDestination,
     },
   });
+}
+
+function buildTrustedOutboundDestination(conversationKey) {
+  const normalized = normalizeText(conversationKey);
+  const separatorIndex = normalized.indexOf(":");
+
+  if (separatorIndex <= 0 || separatorIndex === normalized.length - 1) {
+    return null;
+  }
+
+  const channel = normalizeText(normalized.slice(0, separatorIndex)).toLowerCase();
+  const destination = normalizeText(normalized.slice(separatorIndex + 1));
+
+  if (channel !== "whatsapp" || !destination) {
+    return null;
+  }
+
+  return freezeClone({
+    channel,
+    reference: "trusted_conversation_reference",
+    maskedLabel: maskDestinationLabel({ channel, destination }),
+  });
+}
+
+function maskDestinationLabel({ channel, destination }) {
+  const digits = destination.replace(/\D/g, "");
+  const suffix = digits.slice(-2);
+
+  if (!suffix) {
+    return `${channel}:masked`;
+  }
+
+  return `${channel}:***${suffix}`;
 }
 
 function validateCreationInput(input) {

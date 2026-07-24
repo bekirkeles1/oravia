@@ -14,6 +14,9 @@ const {
   getCalendarProvider,
 } = require("../calendar/calendarProvider");
 const {
+  createMockOutboundAppointmentConfirmationProvider,
+} = require("../messaging/mockOutboundAppointmentConfirmationProvider");
+const {
   createInMemoryMockAppointmentReviewControlledActionRuntimeDependencyProvider,
 } = require("./appointmentReviewInMemoryMockControlledActionRuntimeDependencyProvider");
 const {
@@ -25,6 +28,9 @@ const {
 const {
   syncAppointmentToCalendar,
 } = require("../api/secretaryAppointmentCalendarSyncService");
+const {
+  dispatchAppointmentConfirmation,
+} = require("../api/secretaryAppointmentConfirmationDispatchService");
 
 const RUNTIME_TYPE = "appointment_review_server_runtime_v1";
 const SCHEMA_VERSION = 1;
@@ -66,6 +72,8 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
     createInMemoryAppointmentReviewExecutionIdempotencyStore();
   const calendarSyncIdempotencyStore =
     createInMemoryAppointmentReviewExecutionIdempotencyStore();
+  const confirmationDispatchIdempotencyStore =
+    createInMemoryAppointmentReviewExecutionIdempotencyStore();
   const appointmentRepository =
     createInMemoryAppointmentReviewAppointmentRepository();
   const calendarProvider =
@@ -73,6 +81,11 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
     (typeof options.createCalendarProvider === "function"
       ? options.createCalendarProvider()
       : getCalendarProvider(options.calendarProviderName));
+  const outboundMessagingProvider =
+    options.outboundMessagingProvider ||
+    (typeof options.createOutboundMessagingProvider === "function"
+      ? options.createOutboundMessagingProvider()
+      : createMockOutboundAppointmentConfirmationProvider());
 
   return Object.freeze({
     runtimeType: RUNTIME_TYPE,
@@ -130,6 +143,14 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
         appointmentRepository,
         calendarProvider,
         idempotencyStore: calendarSyncIdempotencyStore,
+      });
+    },
+    dispatchAppointmentConfirmation(input) {
+      return dispatchAppointmentConfirmation({
+        ...input,
+        appointmentRepository,
+        outboundMessagingProvider,
+        idempotencyStore: confirmationDispatchIdempotencyStore,
       });
     },
   });

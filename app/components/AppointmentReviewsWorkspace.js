@@ -168,6 +168,8 @@ const DECISION_PREVIEW_ACTIONS = ["approve", "reject"];
 const DECISION_EXECUTION_CONFIRMATION = "apply_in_memory";
 const APPOINTMENT_CREATION_CONFIRMATION = "create_in_memory_appointment";
 const CALENDAR_SYNC_CONFIRMATION = "sync_configured_calendar";
+const APPOINTMENT_CONFIRMATION_DISPATCH_CONFIRMATION =
+  "send_mock_appointment_confirmation";
 
 const INITIAL_DECISION_PREVIEW = {
   mock: true,
@@ -246,6 +248,25 @@ const INITIAL_CALENDAR_SYNC = {
   messageSent: false,
   emailSent: false,
   whatsappSent: false,
+  databasePersisted: false,
+  appointmentVersionChanged: false,
+  appointmentRepositoryVersionChanged: false
+};
+
+const INITIAL_CONFIRMATION_DISPATCH = {
+  confirmationDispatch: true,
+  storage: "in_memory",
+  appointmentPersistence: "not_persisted",
+  durableAppointmentPersistence: false,
+  confirmationMessageLinkRecorded: false,
+  providerDispatchAccepted: false,
+  realPatientDelivery: false,
+  messageSent: false,
+  whatsappSent: false,
+  emailSent: false,
+  smsSent: false,
+  calendarWritten: false,
+  calendarEventCreated: false,
   databasePersisted: false,
   appointmentVersionChanged: false,
   appointmentRepositoryVersionChanged: false
@@ -507,6 +528,16 @@ export default function AppointmentReviewsWorkspace() {
   const [calendarSyncError, setCalendarSyncError] = useState("");
   const [calendarSyncConfirmation, setCalendarSyncConfirmation] =
     useState(null);
+  const [confirmationDispatchStatus, setConfirmationDispatchStatus] =
+    useState("idle");
+  const [confirmationDispatchResult, setConfirmationDispatchResult] =
+    useState(null);
+  const [confirmationDispatchError, setConfirmationDispatchError] =
+    useState("");
+  const [
+    confirmationDispatchConfirmation,
+    setConfirmationDispatchConfirmation
+  ] = useState(null);
   const [decisionComparisonStatus, setDecisionComparisonStatus] =
     useState("idle");
   const [decisionComparisonResult, setDecisionComparisonResult] =
@@ -585,6 +616,9 @@ export default function AppointmentReviewsWorkspace() {
   const calendarSyncRequestSequenceRef = useRef(0);
   const activeCalendarSyncRequestRef = useRef(null);
   const activeCalendarSyncAbortRef = useRef(null);
+  const confirmationDispatchRequestSequenceRef = useRef(0);
+  const activeConfirmationDispatchRequestRef = useRef(null);
+  const activeConfirmationDispatchAbortRef = useRef(null);
   const decisionComparisonRequestSequenceRef = useRef(0);
   const activeDecisionComparisonRequestRef = useRef(null);
   const activeDecisionComparisonAbortRef = useRef(null);
@@ -623,6 +657,8 @@ export default function AppointmentReviewsWorkspace() {
   const displayedAppointmentCreation =
     appointmentCreationResult || INITIAL_APPOINTMENT_CREATION;
   const displayedCalendarSync = calendarSyncResult || INITIAL_CALENDAR_SYNC;
+  const displayedConfirmationDispatch =
+    confirmationDispatchResult || INITIAL_CONFIRMATION_DISPATCH;
   const executableDecisionPreview = isExecutableDecisionPreviewForReview(
     decisionPreviewResult,
     selectedReview
@@ -793,6 +829,8 @@ export default function AppointmentReviewsWorkspace() {
       invalidateDecisionPreviewRequest();
       invalidateDecisionExecutionRequest();
       invalidateAppointmentCreationRequest();
+      invalidateCalendarSyncRequest();
+      invalidateConfirmationDispatchRequest();
       invalidateDecisionComparisonRequest();
       invalidateResolutionGuidanceRequest();
       invalidateQueueReadinessRequest();
@@ -809,6 +847,8 @@ export default function AppointmentReviewsWorkspace() {
     invalidateDecisionPreviewRequest();
     invalidateDecisionExecutionRequest();
     invalidateAppointmentCreationRequest();
+    invalidateCalendarSyncRequest();
+    invalidateConfirmationDispatchRequest();
     invalidateDecisionComparisonRequest();
     invalidateResolutionGuidanceRequest();
     setActionIntentDryRunStatus("idle");
@@ -858,6 +898,8 @@ export default function AppointmentReviewsWorkspace() {
     setDecisionPreviewError("");
     resetDecisionExecutionState();
     resetAppointmentCreationState();
+    resetCalendarSyncState();
+    resetConfirmationDispatchState();
     setDecisionComparisonStatus("idle");
     setDecisionComparisonResult(null);
     setDecisionComparisonError("");
@@ -942,6 +984,13 @@ export default function AppointmentReviewsWorkspace() {
     setCalendarSyncResult(null);
     setCalendarSyncError("");
     setCalendarSyncConfirmation(null);
+  }
+
+  function resetConfirmationDispatchState() {
+    setConfirmationDispatchStatus("idle");
+    setConfirmationDispatchResult(null);
+    setConfirmationDispatchError("");
+    setConfirmationDispatchConfirmation(null);
   }
 
   function invalidateOldVersionDecisionStateAfterExecution() {
@@ -2273,6 +2322,155 @@ export default function AppointmentReviewsWorkspace() {
 
   function isActiveCalendarSyncRequest({ requestId, confirmation }) {
     const activeRequest = activeCalendarSyncRequestRef.current;
+
+    return (
+      isMountedRef.current &&
+      activeRequest &&
+      activeRequest.requestId === requestId &&
+      activeRequest.appointmentId === confirmation.appointmentId &&
+      activeRequest.expectedAppointmentVersion ===
+        confirmation.expectedAppointmentVersion &&
+      activeRequest.idempotencyKey === confirmation.idempotencyKey
+    );
+  }
+
+  function openConfirmationDispatchConfirmation(appointment) {
+    if (!isConfirmationDispatchEligibleAppointment(appointment)) {
+      setConfirmationDispatchStatus("failure");
+      setConfirmationDispatchError(
+        "Select an unsent in-memory appointment with a trusted masked destination."
+      );
+      return;
+    }
+
+    setConfirmationDispatchConfirmation({
+      appointmentId: appointment.id,
+      expectedAppointmentVersion: appointment.version,
+      idempotencyKey: buildConfirmationDispatchIdempotencyKey(appointment),
+      appointment
+    });
+    setConfirmationDispatchStatus("confirming");
+    setConfirmationDispatchResult(null);
+    setConfirmationDispatchError("");
+  }
+
+  function cancelConfirmationDispatchConfirmation() {
+    invalidateConfirmationDispatchRequest();
+    resetConfirmationDispatchState();
+  }
+
+  async function confirmAppointmentConfirmationDispatch() {
+    if (confirmationDispatchStatus === "loading") {
+      return;
+    }
+
+    if (!confirmationDispatchConfirmation) {
+      setConfirmationDispatchStatus("failure");
+      setConfirmationDispatchError(
+        "Open the explicit appointment confirmation before submitting."
+      );
+      return;
+    }
+
+    const confirmation = confirmationDispatchConfirmation;
+    const requestId = startConfirmationDispatchRequest(confirmation);
+    const activeAbortController = activeConfirmationDispatchAbortRef.current;
+
+    setConfirmationDispatchStatus("loading");
+    setConfirmationDispatchError("");
+
+    try {
+      const response = await fetch(
+        `/api/secretary/appointments/${encodeURIComponent(
+          confirmation.appointmentId
+        )}/confirmation-message`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          signal: activeAbortController?.signal,
+          body: JSON.stringify({
+            expectedAppointmentVersion:
+              confirmation.expectedAppointmentVersion,
+            idempotencyKey: confirmation.idempotencyKey,
+            confirmation: APPOINTMENT_CONFIRMATION_DISPATCH_CONFIRMATION
+          })
+        }
+      );
+      const payload = await response.json();
+
+      if (!isActiveConfirmationDispatchRequest({ requestId, confirmation })) {
+        return;
+      }
+
+      if (!response.ok) {
+        if (isSafeConfirmationDispatchResponse(payload)) {
+          setConfirmationDispatchResult(payload);
+        }
+
+        throw new Error(
+          payload?.reason ||
+            "Appointment confirmation dispatch was blocked safely. Refresh trusted appointment state."
+        );
+      }
+
+      if (!isSafeConfirmationDispatchResponse(payload)) {
+        throw new Error(
+          "Appointment confirmation dispatch response was unsafe or incomplete."
+        );
+      }
+
+      setConfirmationDispatchResult(payload);
+      setConfirmationDispatchStatus("success");
+      setConfirmationDispatchConfirmation(null);
+      await refreshCreatedAppointmentsFromTrustedServer();
+    } catch (error) {
+      if (isAbortError(error)) {
+        return;
+      }
+
+      if (!isActiveConfirmationDispatchRequest({ requestId, confirmation })) {
+        return;
+      }
+
+      setConfirmationDispatchStatus("failure");
+      setConfirmationDispatchError(
+        error instanceof Error
+          ? error.message
+          : "Appointment confirmation dispatch failed safely."
+      );
+    }
+  }
+
+  function startConfirmationDispatchRequest(confirmation) {
+    invalidateConfirmationDispatchRequest();
+
+    const requestId = confirmationDispatchRequestSequenceRef.current + 1;
+    const abortController = new AbortController();
+
+    confirmationDispatchRequestSequenceRef.current = requestId;
+    activeConfirmationDispatchAbortRef.current = abortController;
+    activeConfirmationDispatchRequestRef.current = {
+      requestId,
+      ...confirmation
+    };
+
+    return requestId;
+  }
+
+  function invalidateConfirmationDispatchRequest() {
+    confirmationDispatchRequestSequenceRef.current += 1;
+    activeConfirmationDispatchRequestRef.current = null;
+
+    if (activeConfirmationDispatchAbortRef.current) {
+      activeConfirmationDispatchAbortRef.current.abort();
+      activeConfirmationDispatchAbortRef.current = null;
+    }
+  }
+
+  function isActiveConfirmationDispatchRequest({ requestId, confirmation }) {
+    const activeRequest = activeConfirmationDispatchRequestRef.current;
 
     return (
       isMountedRef.current &&
@@ -4817,6 +5015,20 @@ export default function AppointmentReviewsWorkspace() {
                         >
                           Prepare Calendar Sync
                         </button>
+                        <button
+                          type="button"
+                          className="appointment-review-decision-execution-button secondary"
+                          onClick={() =>
+                            openConfirmationDispatchConfirmation(appointment)
+                          }
+                          disabled={
+                            !isConfirmationDispatchEligibleAppointment(
+                              appointment
+                            ) || confirmationDispatchStatus === "loading"
+                          }
+                        >
+                          Prepare Appointment Confirmation
+                        </button>
                       </span>
                     ))
                   ) : (
@@ -4919,6 +5131,145 @@ export default function AppointmentReviewsWorkspace() {
                 {calendarSyncStatus === "failure" ? (
                   <p className="appointment-review-decision-execution-state">
                     {calendarSyncError}
+                  </p>
+                ) : null}
+
+                {confirmationDispatchConfirmation ? (
+                  <div className="appointment-review-decision-execution-confirmation">
+                    <strong>Send Appointment Confirmation — Mock Provider</strong>
+                    <dl>
+                      <div>
+                        <dt>appointmentId</dt>
+                        <dd>
+                          {confirmationDispatchConfirmation.appointmentId}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>masked destination</dt>
+                        <dd>
+                          {
+                            confirmationDispatchConfirmation.appointment
+                              .outboundDestination?.maskedLabel
+                          }
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>doctor</dt>
+                        <dd>
+                          {
+                            confirmationDispatchConfirmation.appointment.doctor
+                              ?.name
+                          }
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>start</dt>
+                        <dd>
+                          {confirmationDispatchConfirmation.appointment.startAt}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>end</dt>
+                        <dd>
+                          {confirmationDispatchConfirmation.appointment.endAt}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>purpose</dt>
+                        <dd>
+                          {
+                            confirmationDispatchConfirmation.appointment
+                              .appointmentPurposeLabel
+                          }
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>configured provider</dt>
+                        <dd>mock outbound provider</dd>
+                      </div>
+                    </dl>
+                    <small>
+                      Mock provider can accept this confirmation, but no real
+                      patient message reaches a patient. The confirmation link
+                      exists only in the current in-memory runtime and has no
+                      durable persistence.
+                    </small>
+                    <button
+                      type="button"
+                      className="appointment-review-decision-execution-button"
+                      onClick={confirmAppointmentConfirmationDispatch}
+                      disabled={confirmationDispatchStatus === "loading"}
+                    >
+                      Send Appointment Confirmation — Mock Provider
+                    </button>
+                    <button
+                      type="button"
+                      className="appointment-review-decision-execution-button secondary"
+                      onClick={cancelConfirmationDispatchConfirmation}
+                      disabled={confirmationDispatchStatus === "loading"}
+                    >
+                      Cancel Appointment Confirmation
+                    </button>
+                  </div>
+                ) : null}
+
+                <dl className="appointment-review-decision-execution-grid">
+                  <div>
+                    <dt>confirmationDispatchStatus</dt>
+                    <dd>{confirmationDispatchStatus}</dd>
+                  </div>
+                  <div>
+                    <dt>dispatchCode</dt>
+                    <dd>{confirmationDispatchResult?.code || "not_run"}</dd>
+                  </div>
+                  <div>
+                    <dt>provider</dt>
+                    <dd>
+                      {confirmationDispatchResult?.provider ||
+                        "mock_outbound"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>providerMessageId</dt>
+                    <dd>
+                      {confirmationDispatchResult?.providerMessageId ||
+                        "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>maskedDestination</dt>
+                    <dd>
+                      {confirmationDispatchResult?.maskedDestinationLabel ||
+                        "not_run"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>providerDispatchAccepted</dt>
+                    <dd>
+                      {String(
+                        displayedConfirmationDispatch.providerDispatchAccepted
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>realPatientDelivery</dt>
+                    <dd>
+                      {String(displayedConfirmationDispatch.realPatientDelivery)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>confirmationMessageLinkRecorded</dt>
+                    <dd>
+                      {String(
+                        displayedConfirmationDispatch
+                          .confirmationMessageLinkRecorded
+                      )}
+                    </dd>
+                  </div>
+                </dl>
+                {confirmationDispatchStatus === "failure" ? (
+                  <p className="appointment-review-decision-execution-state">
+                    {confirmationDispatchError}
                   </p>
                 ) : null}
               </>
@@ -7136,6 +7487,33 @@ function isSafeCalendarSyncResponse(payload) {
   );
 }
 
+function isSafeConfirmationDispatchResponse(payload) {
+  return (
+    payload &&
+    payload.confirmationDispatch === true &&
+    payload.storage === "in_memory" &&
+    payload.appointmentPersistence === "not_persisted" &&
+    payload.durableAppointmentPersistence === false &&
+    payload.realPatientDelivery === false &&
+    payload.whatsappSent === false &&
+    payload.emailSent === false &&
+    payload.smsSent === false &&
+    payload.calendarWritten === false &&
+    payload.calendarEventCreated === false &&
+    payload.databasePersisted === false &&
+    typeof payload.accepted === "boolean" &&
+    !String(payload.maskedDestinationLabel || "").includes("+") &&
+    (payload.accepted === false ||
+      (payload.receipt &&
+        payload.receipt.receiptKind ===
+          "appointment_confirmation_dispatch_receipt_v1" &&
+        payload.receipt.realPatientDelivery === false &&
+        payload.receipt.durableAppointmentPersistence === false &&
+        payload.receipt.calendarWritten === false &&
+        !String(payload.receipt.maskedDestinationLabel || "").includes("+")))
+  );
+}
+
 function getAppointmentCreationCandidate(review) {
   if (!review || review.metadata?.controlledActionState !== "needs_clinic_review") {
     return null;
@@ -7178,6 +7556,29 @@ function getAppointmentCreationCandidate(review) {
     appointmentPurpose,
     appointmentPurposeLabel
   };
+}
+
+function isConfirmationDispatchEligibleAppointment(appointment) {
+  return (
+    appointment &&
+    appointment.id &&
+    Number.isSafeInteger(appointment.version) &&
+    appointment.confirmationMessageLinked !== true &&
+    !appointment.confirmationProviderMessageId &&
+    appointment.outboundDestination?.maskedLabel &&
+    !String(appointment.outboundDestination.maskedLabel).includes("+") &&
+    appointment.doctor?.name &&
+    appointment.startAt &&
+    appointment.endAt &&
+    appointment.appointmentPurposeLabel
+  );
+}
+
+function buildConfirmationDispatchIdempotencyKey(appointment) {
+  return ["confirmation_dispatch", appointment.id, appointment.version]
+    .map((part) => String(part || "").replace(/[^A-Za-z0-9:_-]+/g, "_"))
+    .join(":")
+    .slice(0, 128);
 }
 
 function isCalendarSyncEligibleAppointment(appointment) {

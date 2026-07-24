@@ -331,6 +331,7 @@ test("route runtime adapter keeps a narrow immutable public contract", () => {
     "adapterType",
     "applyAppointmentReviewDecision",
     "createAppointmentFromApprovedReview",
+    "dispatchAppointmentConfirmation",
     "getAppointmentReviewById",
     "getAppointmentReviewQueue",
     "getControlledActionDependencies",

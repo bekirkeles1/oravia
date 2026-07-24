@@ -59,6 +59,9 @@ function createAppointmentReviewRouteRuntimeAdapter(options) {
     syncAppointmentToCalendar(input) {
       return runtime.syncAppointmentToCalendar(input);
     },
+    dispatchAppointmentConfirmation(input) {
+      return runtime.dispatchAppointmentConfirmation(input);
+    },
   });
 }
 

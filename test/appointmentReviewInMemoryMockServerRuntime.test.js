@@ -49,7 +49,7 @@ function createSafeAppointmentSelectionReview() {
 
 function createSampleReviewRecord(overrides = {}) {
   const item = createAppointmentReviewItem(createSampleAppointmentSelectionReview(), {
-    conversationKey: overrides.conversationKey || "whatsapp:+905322223333",
+    conversationKey: overrides.conversationKey || "whatsapp:synthetic-a",
   });
 
   return {
@@ -185,6 +185,7 @@ test("server runtime factory validates state projection and exposes fixed immuta
     "createAppointmentFromApprovedReview",
     "listCreatedAppointments",
     "syncAppointmentToCalendar",
+    "dispatchAppointmentConfirmation",
   ]);
   assert.equal(Object.isFrozen(runtime), true);
   assert.equal(Object.isFrozen(queue), true);
@@ -597,11 +598,11 @@ test("server runtime instances remain isolated", async () => {
   const secondQueue = secondRuntime.getAppointmentReviewQueue();
   const firstAdd = firstQueue.addAppointmentReview(
     createSampleAppointmentSelectionReview(),
-    { conversationKey: "whatsapp:+905322223333" }
+    { conversationKey: "whatsapp:synthetic-a" }
   );
   const secondAdd = secondQueue.addAppointmentReview(
     createSampleAppointmentSelectionReview(),
-    { conversationKey: "whatsapp:+905551112233" }
+    { conversationKey: "whatsapp:synthetic-b" }
   );
   const firstProvider =
     firstRuntime.getControlledActionRuntimeDependencyProvider();

@@ -17,6 +17,8 @@ function createAppointmentReviewActiveRouteRuntimeCompositionRoot(options = {}) 
     calendarProvider: options.calendarProvider,
     calendarProviderName: options.calendarProviderName,
     createCalendarProvider: options.createCalendarProvider,
+    outboundMessagingProvider: options.outboundMessagingProvider,
+    createOutboundMessagingProvider: options.createOutboundMessagingProvider,
   });
 
   return Object.freeze({
@@ -59,6 +61,7 @@ function createDefaultRouteReview(reviewId) {
     calendarChecked: false,
     metadata: {
       controlledActionState: "validation_only_intent_checked",
+      conversationKey: "whatsapp:synthetic-contact",
     },
   };
 }
