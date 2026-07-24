@@ -148,3 +148,18 @@ service-account.json
 **/service-account.json
 oravia-secrets/
 **/oravia-secrets/
+
+# Oravia local SQLite persistence
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
+var/

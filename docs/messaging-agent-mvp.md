@@ -73,6 +73,46 @@ persistence, database persistence, or calendar writes.
 
 This is deliberate. The current goal is only to prove that an inbound messaging payload can enter the system, be validated, classified, and return a safe reply draft.
 
+## Durable single-clinic storage
+
+Oravia supports two server-controlled local storage modes:
+
+- `in_memory`: the default isolated mock mode used by focused tests and safe
+  demos.
+- `sqlite`: a durable local single-clinic mode backed by Node's built-in
+  `node:sqlite` module.
+
+SQLite mode is selected only on the server with environment/configuration:
+
+```bash
+ORAVIA_STORAGE_MODE=sqlite
+ORAVIA_SQLITE_DATABASE_PATH=./var/oravia-local.sqlite
+ORAVIA_CLINIC_ID=oravia_demo_clinic
+npm run dev
+```
+
+Clients cannot select storage mode, database path, or clinic id through route
+bodies, headers, or workspace controls. If SQLite is configured but the
+database path or schema initialization fails, the runtime fails safely; it does
+not silently fall back to in-memory success.
+
+The current durable scope is intentionally single-clinic. Durable records are
+scoped by the configured `clinic_id`, which prepares the repository layer for a
+future multi-clinic adapter without adding clinic switching, signup, billing,
+auth, tenant administration, or multi-tenant UI behavior.
+
+Startup migrations are explicit SQL migrations recorded in
+`schema_migrations`. They are idempotent and run only when the server runtime
+initializes SQLite; importing modules or building the app does not create or
+mutate a database. There is no destructive automatic reset and no migration
+framework dependency.
+
+SQLite database artifacts are local runtime files and are ignored by Git:
+`*.sqlite`, `*.sqlite3`, `*.db`, journal, WAL, SHM files, and `var/`. Do not use
+SQLite mode as a production-scale database or backup strategy yet. A future
+PostgreSQL adapter should reuse the same repository/runtime boundaries rather
+than changing route or client contracts.
+
 ## Safety rules
 
 Never commit:

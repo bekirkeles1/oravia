@@ -19,6 +19,9 @@ function createAppointmentReviewActiveRouteRuntimeCompositionRoot(options = {}) 
     createCalendarProvider: options.createCalendarProvider,
     outboundMessagingProvider: options.outboundMessagingProvider,
     createOutboundMessagingProvider: options.createOutboundMessagingProvider,
+    storageMode: options.storageMode,
+    databasePath: options.databasePath,
+    clinicId: options.clinicId,
   });
 
   return Object.freeze({
@@ -26,13 +29,22 @@ function createAppointmentReviewActiveRouteRuntimeCompositionRoot(options = {}) 
     getRouteRuntimeAdapter() {
       return adapter;
     },
+    close() {
+      if (typeof adapter.close === "function") {
+        adapter.close();
+      }
+    },
   });
 }
 
-const activeRouteRuntimeCompositionRoot =
-  createAppointmentReviewActiveRouteRuntimeCompositionRoot();
+let activeRouteRuntimeCompositionRoot = null;
 
 function getActiveAppointmentReviewRouteRuntimeAdapter() {
+  if (!activeRouteRuntimeCompositionRoot) {
+    activeRouteRuntimeCompositionRoot =
+      createAppointmentReviewActiveRouteRuntimeCompositionRoot();
+  }
+
   return activeRouteRuntimeCompositionRoot.getRouteRuntimeAdapter();
 }
 

@@ -20,13 +20,15 @@ function createAppointmentReviewRouteRuntimeAdapter(options) {
     validationOnly: runtime.validationOnly,
     controlledHandlingOnly: runtime.controlledHandlingOnly,
     persistence: runtime.persistence,
+    storageMode: runtime.storageMode,
+    durablePersistence: runtime.durablePersistence,
     databasePersisted: runtime.databasePersisted,
     executionEnabled: runtime.executionEnabled,
     executorAvailable: runtime.executorAvailable,
     executionAvailable: runtime.executionAvailable,
   });
 
-  return Object.freeze({
+  const adapter = {
     adapterType: ADAPTER_TYPE,
     schemaVersion: SCHEMA_VERSION,
     adapterSource: ADAPTER_SOURCE,
@@ -62,7 +64,24 @@ function createAppointmentReviewRouteRuntimeAdapter(options) {
     dispatchAppointmentConfirmation(input) {
       return runtime.dispatchAppointmentConfirmation(input);
     },
+  };
+
+  Object.defineProperties(adapter, {
+    handleMessagingInbound: {
+      enumerable: false,
+      value(input) {
+        return runtime.handleMessagingInbound(input);
+      },
+    },
+    close: {
+      enumerable: false,
+      value() {
+        return runtime.close();
+      },
+    },
   });
+
+  return Object.freeze(adapter);
 }
 
 module.exports = {

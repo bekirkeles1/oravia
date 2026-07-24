@@ -11,6 +11,12 @@ const {
   createInMemoryAppointmentReviewAppointmentRepository,
 } = require("./appointmentReviewAppointmentRepository");
 const {
+  handleMessagingInbound,
+} = require("../api/messagingInboundHandler");
+const {
+  createInMemoryConversationStateStore,
+} = require("../messaging/conversationStateStore");
+const {
   getCalendarProvider,
 } = require("../calendar/calendarProvider");
 const {
@@ -31,6 +37,25 @@ const {
 const {
   dispatchAppointmentConfirmation,
 } = require("../api/secretaryAppointmentConfirmationDispatchService");
+const {
+  STORAGE_MODES,
+  resolveServerStorageConfig,
+} = require("../persistence/storageConfig");
+const {
+  createSqlitePersistenceProvider,
+} = require("../persistence/sqliteProvider");
+const {
+  createSqliteConversationStateStore,
+} = require("../persistence/sqliteConversationStateStore");
+const {
+  createSqliteOperationIdempotencyStore,
+} = require("../persistence/sqliteIdempotencyStore");
+const {
+  createSqliteAppointmentReviewRepository,
+} = require("../persistence/sqliteAppointmentReviewRepository");
+const {
+  createSqliteAppointmentReviewAppointmentRepository,
+} = require("../persistence/sqliteAppointmentRepository");
 
 const RUNTIME_TYPE = "appointment_review_server_runtime_v1";
 const SCHEMA_VERSION = 1;
@@ -53,11 +78,35 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
     );
   }
 
-  const repository = createInMemoryAppointmentReviewRepository({
-    initialReviews: Array.isArray(options.initialReviews)
-      ? options.initialReviews
-      : [],
-  });
+  const storageConfig = resolveServerStorageConfig(options);
+
+  if (!storageConfig.accepted) {
+    throw createRuntimeError(storageConfig.code, storageConfig.reason);
+  }
+
+  const sqlitePersistenceProvider =
+    storageConfig.storageMode === STORAGE_MODES.SQLITE
+      ? createSqlitePersistenceProvider({
+          databasePath: storageConfig.databasePath,
+          clinicId: storageConfig.clinicId,
+        })
+      : null;
+  const repository = sqlitePersistenceProvider
+    ? createSqliteAppointmentReviewRepository({
+        persistenceProvider: sqlitePersistenceProvider,
+      })
+    : createInMemoryAppointmentReviewRepository({
+        initialReviews: Array.isArray(options.initialReviews)
+          ? options.initialReviews
+          : [],
+      });
+
+  if (sqlitePersistenceProvider && Array.isArray(options.initialReviews)) {
+    for (const review of options.initialReviews) {
+      repository.add(review);
+    }
+  }
+
   const appointmentReviewQueue = createPublicAppointmentReviewQueue(
     createInMemoryAppointmentReviewQueue({ repository })
   );
@@ -66,16 +115,32 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
       repository,
       resolveControlledActionState: options.resolveControlledActionState,
     });
-  const executionIdempotencyStore =
-    createInMemoryAppointmentReviewExecutionIdempotencyStore();
-  const appointmentCreationIdempotencyStore =
-    createInMemoryAppointmentReviewExecutionIdempotencyStore();
-  const calendarSyncIdempotencyStore =
-    createInMemoryAppointmentReviewExecutionIdempotencyStore();
-  const confirmationDispatchIdempotencyStore =
-    createInMemoryAppointmentReviewExecutionIdempotencyStore();
-  const appointmentRepository =
-    createInMemoryAppointmentReviewAppointmentRepository();
+  const executionIdempotencyStore = createIdempotencyStore({
+    sqlitePersistenceProvider,
+    operationKind: "review_decision_execution",
+  });
+  const appointmentCreationIdempotencyStore = createIdempotencyStore({
+    sqlitePersistenceProvider,
+    operationKind: "appointment_creation",
+  });
+  const calendarSyncIdempotencyStore = createIdempotencyStore({
+    sqlitePersistenceProvider,
+    operationKind: "calendar_sync",
+  });
+  const confirmationDispatchIdempotencyStore = createIdempotencyStore({
+    sqlitePersistenceProvider,
+    operationKind: "confirmation_dispatch",
+  });
+  const conversationStateStore = sqlitePersistenceProvider
+    ? createSqliteConversationStateStore({
+        persistenceProvider: sqlitePersistenceProvider,
+      })
+    : createInMemoryConversationStateStore();
+  const appointmentRepository = sqlitePersistenceProvider
+    ? createSqliteAppointmentReviewAppointmentRepository({
+        persistenceProvider: sqlitePersistenceProvider,
+      })
+    : createInMemoryAppointmentReviewAppointmentRepository();
   const calendarProvider =
     options.calendarProvider ||
     (typeof options.createCalendarProvider === "function"
@@ -87,7 +152,7 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
       ? options.createOutboundMessagingProvider()
       : createMockOutboundAppointmentConfirmationProvider());
 
-  return Object.freeze({
+  const runtime = {
     runtimeType: RUNTIME_TYPE,
     schemaVersion: SCHEMA_VERSION,
     runtimeMode: RUNTIME_MODE,
@@ -97,7 +162,7 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
     validationOnly: true,
     controlledHandlingOnly: true,
     persistence: NOT_PERSISTED,
-    databasePersisted: false,
+    databasePersisted: sqlitePersistenceProvider ? true : false,
     executionEnabled: false,
     executorAvailable: false,
     executionAvailable: false,
@@ -111,49 +176,118 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
       return controlledActionRuntimeDependencyProvider.getControlledActionDependencies();
     },
     applyAppointmentReviewDecision(input) {
-      return applyAppointmentReviewDecision({
-        ...input,
-        dependencies:
-          controlledActionRuntimeDependencyProvider.getControlledActionDependencies(),
-        idempotencyStore: executionIdempotencyStore,
-        applyReviewControlledActionStateTransition:
-          repository.applyReviewControlledActionStateTransition,
-      });
+      return runMaybeTransaction(sqlitePersistenceProvider, () =>
+        applyAppointmentReviewDecision({
+          ...input,
+          dependencies:
+            controlledActionRuntimeDependencyProvider.getControlledActionDependencies(),
+          idempotencyStore: executionIdempotencyStore,
+          applyReviewControlledActionStateTransition:
+            repository.applyReviewControlledActionStateTransition,
+        })
+      );
     },
     createAppointmentFromApprovedReview(input) {
-      return createAppointmentFromApprovedReview({
-        ...input,
-        resolveReviewSnapshot(reviewId) {
-          return repository.getVersionedSnapshotById(reviewId);
-        },
-        appointmentRepository,
-        idempotencyStore: appointmentCreationIdempotencyStore,
-        previewReviewAppointmentCreationLink:
-          repository.previewReviewAppointmentCreationLink,
-        applyReviewAppointmentCreationLink:
-          repository.applyReviewAppointmentCreationLink,
-      });
+      return runMaybeTransaction(sqlitePersistenceProvider, () =>
+        createAppointmentFromApprovedReview({
+          ...input,
+          resolveReviewSnapshot(reviewId) {
+            return repository.getVersionedSnapshotById(reviewId);
+          },
+          appointmentRepository,
+          idempotencyStore: appointmentCreationIdempotencyStore,
+          previewReviewAppointmentCreationLink:
+            repository.previewReviewAppointmentCreationLink,
+          applyReviewAppointmentCreationLink:
+            repository.applyReviewAppointmentCreationLink,
+        })
+      );
     },
     listCreatedAppointments() {
       return appointmentRepository.listAppointments();
     },
     syncAppointmentToCalendar(input) {
-      return syncAppointmentToCalendar({
-        ...input,
-        appointmentRepository,
-        calendarProvider,
-        idempotencyStore: calendarSyncIdempotencyStore,
-      });
+      return runMaybeTransaction(sqlitePersistenceProvider, () =>
+        syncAppointmentToCalendar({
+          ...input,
+          appointmentRepository,
+          calendarProvider,
+          idempotencyStore: calendarSyncIdempotencyStore,
+        })
+      );
     },
     dispatchAppointmentConfirmation(input) {
-      return dispatchAppointmentConfirmation({
-        ...input,
-        appointmentRepository,
-        outboundMessagingProvider,
-        idempotencyStore: confirmationDispatchIdempotencyStore,
-      });
+      return runMaybeTransaction(sqlitePersistenceProvider, () =>
+        dispatchAppointmentConfirmation({
+          ...input,
+          appointmentRepository,
+          outboundMessagingProvider,
+          idempotencyStore: confirmationDispatchIdempotencyStore,
+        })
+      );
+    },
+  };
+
+  Object.defineProperties(runtime, {
+    storageMode: {
+      enumerable: false,
+      value: storageConfig.storageMode,
+    },
+    clinicId: {
+      enumerable: false,
+      value: storageConfig.clinicId,
+    },
+    durablePersistence: {
+      enumerable: false,
+      value: sqlitePersistenceProvider ? true : false,
+    },
+    handleMessagingInbound: {
+      enumerable: false,
+      value(payload) {
+        const result = handleMessagingInbound(payload, {
+          conversationStateStore,
+        });
+
+        if (result?.body?.appointmentSelectionReview) {
+          appointmentReviewQueue.addAppointmentReview(
+            result.body.appointmentSelectionReview,
+            {
+              conversationKey: `${result.body.channel}:${result.body.from}`,
+            }
+          );
+        }
+
+        return result;
+      },
+    },
+    close: {
+      enumerable: false,
+      value() {
+        if (sqlitePersistenceProvider) {
+          sqlitePersistenceProvider.close();
+        }
+      },
     },
   });
+
+  return Object.freeze(runtime);
+}
+
+function createIdempotencyStore({ sqlitePersistenceProvider, operationKind }) {
+  return sqlitePersistenceProvider
+    ? createSqliteOperationIdempotencyStore({
+        persistenceProvider: sqlitePersistenceProvider,
+        operationKind,
+      })
+    : createInMemoryAppointmentReviewExecutionIdempotencyStore();
+}
+
+async function runMaybeTransaction(sqlitePersistenceProvider, work) {
+  if (!sqlitePersistenceProvider) {
+    return work();
+  }
+
+  return sqlitePersistenceProvider.withTransactionAsync(work);
 }
 
 function createPublicAppointmentReviewQueue(queue) {

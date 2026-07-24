@@ -494,7 +494,7 @@ test("repository context resolver source has no forbidden side effects", () => {
 
   assert.doesNotMatch(
     source,
-    /createAppointment\(|createCalendarEvent\(|getCalendarProvider\(|manualAppointmentCalendarSync|googleapis|prisma|supabase|redis|sqlite|postgres|fetch|node:fs|require\("fs"\)|filesystem|dotenv|process\.env|audit|logger|logging|commandBus|eventBus|jobQueue|executor\(|new Executor|dispatcher|app\/api|app\/components|Date\.now|Math\.random|randomUUID|crypto|console/
+    /createAppointment\(|createCalendarEvent\(|getCalendarProvider\(|manualAppointmentCalendarSync|googleapis|prisma|supabase|redis|postgres|fetch|node:fs|require\("fs"\)|filesystem|dotenv|process\.env|audit|logger|logging|commandBus|eventBus|jobQueue|executor\(|new Executor|dispatcher|app\/api|app\/components|Date\.now|Math\.random|randomUUID|crypto|console/
   );
   assert.doesNotMatch(
     source,

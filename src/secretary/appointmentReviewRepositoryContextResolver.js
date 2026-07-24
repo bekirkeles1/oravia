@@ -7,7 +7,9 @@ const {
 const REVIEW_CONTEXT_TYPE = "appointment_review_snapshot_context_v1";
 const REVIEW_CONTEXT_SOURCE = "server_review_boundary";
 const REPOSITORY_TYPE = "in_memory";
+const SQLITE_REPOSITORY_TYPE = "sqlite";
 const NOT_PERSISTED = "not_persisted";
+const SQLITE_PERSISTENCE = "sqlite";
 
 const ALLOWED_INPUT_FIELDS = Object.freeze(["reviewId"]);
 const UNSAFE_SNAPSHOT_FIELDS = Object.freeze([
@@ -23,7 +25,6 @@ const UNSAFE_SNAPSHOT_FIELDS = Object.freeze([
   "calendarChecked",
   "appointmentCreated",
   "calendarEventCreated",
-  "databasePersisted",
   "reviewFound",
   "persisted",
 ]);
@@ -196,7 +197,7 @@ function validateRepositorySnapshot(snapshot, requestedReviewId) {
     snapshot.snapshotType !== APPOINTMENT_REVIEW_REPOSITORY_SNAPSHOT_TYPE ||
     snapshot.schemaVersion !==
       APPOINTMENT_REVIEW_REPOSITORY_SNAPSHOT_SCHEMA_VERSION ||
-    snapshot.repositoryType !== REPOSITORY_TYPE
+    ![REPOSITORY_TYPE, SQLITE_REPOSITORY_TYPE].includes(snapshot.repositoryType)
   ) {
     throw createResolverError(
       RESOLVER_CODES.INVALID_REPOSITORY_SNAPSHOT,
@@ -228,13 +229,20 @@ function validateRepositorySnapshot(snapshot, requestedReviewId) {
     );
   }
 
-  if (
-    snapshot.persistence !== NOT_PERSISTED ||
-    snapshot.databasePersisted !== false
-  ) {
+  const isInMemorySnapshot =
+    snapshot.repositoryType === REPOSITORY_TYPE &&
+    snapshot.persistence === NOT_PERSISTED &&
+    snapshot.databasePersisted === false;
+  const isSqliteSnapshot =
+    snapshot.repositoryType === SQLITE_REPOSITORY_TYPE &&
+    snapshot.persistence === SQLITE_PERSISTENCE &&
+    snapshot.databasePersisted === true &&
+    snapshot.durablePersistence === true;
+
+  if (!isInMemorySnapshot && !isSqliteSnapshot) {
     throw createResolverError(
       RESOLVER_CODES.UNSAFE_REPOSITORY_SNAPSHOT,
-      "Repository snapshot must remain not_persisted."
+      "Repository snapshot persistence metadata is unsafe."
     );
   }
 

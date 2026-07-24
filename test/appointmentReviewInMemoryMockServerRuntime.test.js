@@ -684,7 +684,7 @@ test("server runtime source has no forbidden side effects or unsafe values", () 
 
   assert.doesNotMatch(
     source,
-    /createAppointment\(|createCalendarEvent\(|manualAppointmentCalendarSync|googleapis|prisma|supabase|redis|sqlite|postgres|fetch|node:fs|require\("fs"\)|require\("node:fs"\)|filesystem|dotenv|process\.env|authProvider|authorizationProvider|audit|logger|logging|commandBus|eventBus|jobQueue|executor\(|new Executor|dispatcher|app\/api|app\/components|Date\.now|Math\.random|randomUUID|crypto|console|global|singleton|registry/
+    /createAppointment\(|createCalendarEvent\(|manualAppointmentCalendarSync|googleapis|prisma|supabase|redis|postgres|fetch|node:fs|require\("fs"\)|require\("node:fs"\)|filesystem|dotenv|process\.env|authProvider|authorizationProvider|audit|logger|logging|commandBus|eventBus|jobQueue|executor\(|new Executor|dispatcher|app\/api|app\/components|Date\.now|Math\.random|randomUUID|crypto|console|global|singleton|registry/
   );
   assert.doesNotMatch(
     source,
