@@ -4,6 +4,13 @@ const {
 const {
   getActiveAppointmentReviewRouteRuntimeAdapter,
 } = require("../../../../../../src/secretary/appointmentReviewRouteRuntimeCompositionRoot");
+const {
+  AUTH_PERMISSIONS,
+} = require("../../../../../../src/auth/authRoles");
+const {
+  resolveRouteActor,
+  validateMutationOrigin,
+} = require("../../../../../../src/auth/routeAuth");
 
 const ROUTE_SAFETY_FIELDS = Object.freeze({
   calendarSync: true,
@@ -44,6 +51,17 @@ const BODY_TRUSTED_FIELDS = Object.freeze([
   "timezone",
   "appointmentPurpose",
   "treatment",
+  "actor",
+  "actorId",
+  "actorRole",
+  "user",
+  "userId",
+  "username",
+  "role",
+  "clinicId",
+  "session",
+  "auth",
+  "authorizationResult",
 ]);
 
 async function POST(request, context = {}) {
@@ -55,6 +73,20 @@ async function handleAppointmentCalendarSyncRouteRequest(
   context = {},
   options = {}
 ) {
+  const authResult = resolveRouteActor(request, {
+    permission: AUTH_PERMISSIONS.MUTATE_CALENDAR_SYNC,
+  });
+
+  if (!authResult.accepted) {
+    return routeJson(authResult.body, authResult.status);
+  }
+
+  const originResult = validateMutationOrigin(request);
+
+  if (!originResult.accepted) {
+    return routeJson(originResult.body, originResult.status);
+  }
+
   const params = await Promise.resolve(context.params || {});
   const appointmentId = normalizeText(params.appointmentId);
 

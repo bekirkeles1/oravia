@@ -99,7 +99,7 @@ not silently fall back to in-memory success.
 The current durable scope is intentionally single-clinic. Durable records are
 scoped by the configured `clinic_id`, which prepares the repository layer for a
 future multi-clinic adapter without adding clinic switching, signup, billing,
-auth, tenant administration, or multi-tenant UI behavior.
+tenant administration, or multi-tenant UI behavior.
 
 Startup migrations are explicit SQL migrations recorded in
 `schema_migrations`. They are idempotent and run only when the server runtime
@@ -112,6 +112,33 @@ SQLite database artifacts are local runtime files and are ignored by Git:
 SQLite mode as a production-scale database or backup strategy yet. A future
 PostgreSQL adapter should reuse the same repository/runtime boundaries rather
 than changing route or client contracts.
+
+## Local internal authentication
+
+Internal workspace authentication is controlled by the server with:
+
+```bash
+ORAVIA_AUTH_REQUIRED=true
+ORAVIA_STORAGE_MODE=sqlite
+ORAVIA_SQLITE_DATABASE_PATH=./var/oravia-local.sqlite
+ORAVIA_CLINIC_ID=oravia_demo_clinic
+```
+
+Auth users and sessions live in the local SQLite schema. Passwords are hashed
+with per-user salts, and sessions are resolved from an opaque `HttpOnly` cookie
+whose raw token is never stored in the database. Bootstrap the first local
+manager with:
+
+```bash
+npm run auth:bootstrap-user -- --username manager --role manager
+```
+
+Client payloads cannot select clinic, role, user, provider, appointment trusted
+fields, message body, or recipient. Internal API routes resolve those values
+from server state and return `401` for unauthenticated requests or `403` for
+roles without permission. Doctor accounts are read-only. The public inbound
+messaging route remains unauthenticated so external messaging intake can be
+connected at its own provider boundary later.
 
 ## Safety rules
 

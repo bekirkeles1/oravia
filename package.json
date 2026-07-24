@@ -14,7 +14,8 @@
     "google:calendar:service-test": "node scripts/google-calendar-service-check.js",
     "test": "node --test",
     "demo:messaging-inbound": "node scripts/demo-messaging-inbound.js",
-    "demo:messaging-review-queue": "node scripts/demo-messaging-review-queue.js"
+    "demo:messaging-review-queue": "node scripts/demo-messaging-review-queue.js",
+    "auth:bootstrap-user": "node scripts/bootstrap-auth-user.js"
   },
   "engines": {
     "node": ">=20.9"

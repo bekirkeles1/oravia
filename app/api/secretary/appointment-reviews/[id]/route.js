@@ -5,6 +5,10 @@ const {
 const {
   getActiveAppointmentReviewRouteRuntimeAdapter,
 } = require("../../../../../src/secretary/appointmentReviewRouteRuntimeCompositionRoot");
+const {
+  AUTH_PERMISSIONS,
+} = require("../../../../../src/auth/authRoles");
+const { resolveRouteActor } = require("../../../../../src/auth/routeAuth");
 
 async function GET(request, context = {}) {
   return handleAppointmentReviewDetailRouteRequest(request, context);
@@ -15,6 +19,14 @@ async function handleAppointmentReviewDetailRouteRequest(
   context = {},
   options = {}
 ) {
+  const authResult = resolveRouteActor(request, {
+    permission: AUTH_PERMISSIONS.READ_INTERNAL,
+  });
+
+  if (!authResult.accepted) {
+    return Response.json(authResult.body, { status: authResult.status });
+  }
+
   const params = await Promise.resolve(context.params || {});
   const reviewId = normalizeRouteReviewId(params.id || readQueryId(request));
 

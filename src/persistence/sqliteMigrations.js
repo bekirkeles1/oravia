@@ -67,6 +67,43 @@ const MIGRATIONS = Object.freeze([
       )`,
     ]),
   }),
+  Object.freeze({
+    version: 2,
+    name: "internal_authentication_foundation",
+    statements: Object.freeze([
+      `CREATE TABLE IF NOT EXISTS auth_users (
+        clinic_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        username TEXT NOT NULL,
+        display_name TEXT NOT NULL,
+        role TEXT NOT NULL,
+        password_hash TEXT NOT NULL,
+        password_salt TEXT NOT NULL,
+        active INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (clinic_id, user_id),
+        UNIQUE (clinic_id, username),
+        FOREIGN KEY (clinic_id) REFERENCES clinics(clinic_id)
+      )`,
+      `CREATE TABLE IF NOT EXISTS auth_sessions (
+        clinic_id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        expires_at TEXT NOT NULL,
+        revoked_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (clinic_id, session_id),
+        FOREIGN KEY (clinic_id, user_id) REFERENCES auth_users(clinic_id, user_id)
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_auth_sessions_user
+        ON auth_sessions (clinic_id, user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires
+        ON auth_sessions (expires_at)`,
+    ]),
+  }),
 ]);
 
 function runSqliteMigrations(database) {

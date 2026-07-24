@@ -5,6 +5,10 @@ const {
 const {
   getActiveAppointmentReviewRouteRuntimeAdapter,
 } = require("../../../../src/secretary/appointmentReviewRouteRuntimeCompositionRoot");
+const {
+  AUTH_PERMISSIONS,
+} = require("../../../../src/auth/authRoles");
+const { resolveRouteActor } = require("../../../../src/auth/routeAuth");
 
 async function GET(request) {
   return handleAppointmentReviewQueueCollectionRouteRequest(request);
@@ -14,6 +18,14 @@ async function handleAppointmentReviewQueueCollectionRouteRequest(
   request,
   options = {}
 ) {
+  const authResult = resolveRouteActor(request, {
+    permission: AUTH_PERMISSIONS.READ_INTERNAL,
+  });
+
+  if (!authResult.accepted) {
+    return Response.json(authResult.body, { status: authResult.status });
+  }
+
   const listResult = resolveAppointmentReviewListForRoute(options);
 
   if (!listResult.accepted) {

@@ -913,6 +913,89 @@ blockquote {
   font-weight: 700;
 }
 
+.session-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 12px;
+  border-left: 1px solid var(--line);
+  color: var(--text);
+}
+
+.session-status span,
+.session-status strong {
+  font-size: 0.78rem;
+}
+
+.session-status strong {
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.session-logout-button {
+  min-height: 30px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.oravia-login-shell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+  background: var(--page);
+}
+
+.oravia-login-form {
+  display: grid;
+  width: min(100%, 380px);
+  gap: 14px;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 18px 48px rgba(21, 37, 36, 0.1);
+}
+
+.oravia-login-form h1 {
+  margin: 0 0 4px;
+  font-size: 1.35rem;
+}
+
+.oravia-login-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.oravia-login-form input {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  font: inherit;
+}
+
+.oravia-login-form button {
+  justify-content: center;
+  border-radius: 8px;
+}
+
+.oravia-login-error {
+  margin: 0;
+  color: #a72c2c;
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
 .clinic-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 280px;

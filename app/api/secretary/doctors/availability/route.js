@@ -2,8 +2,23 @@ const {
   handleGetSecretaryDoctorAvailability,
   handleUpdateSecretaryDoctorAvailability,
 } = require("../../../../../src/api/secretaryDoctorsHandler");
+const {
+  AUTH_PERMISSIONS,
+} = require("../../../../../src/auth/authRoles");
+const {
+  resolveRouteActor,
+  validateMutationOrigin,
+} = require("../../../../../src/auth/routeAuth");
 
-async function GET() {
+async function GET(request) {
+  const authResult = resolveRouteActor(request, {
+    permission: AUTH_PERMISSIONS.READ_OPERATIONAL,
+  });
+
+  if (!authResult.accepted) {
+    return Response.json(authResult.body, { status: authResult.status });
+  }
+
   const result = handleGetSecretaryDoctorAvailability();
 
   return Response.json(result.body, {
@@ -12,6 +27,20 @@ async function GET() {
 }
 
 async function PATCH(request) {
+  const authResult = resolveRouteActor(request, {
+    permission: AUTH_PERMISSIONS.MUTATE_DOCTOR_AVAILABILITY,
+  });
+
+  if (!authResult.accepted) {
+    return Response.json(authResult.body, { status: authResult.status });
+  }
+
+  const originResult = validateMutationOrigin(request);
+
+  if (!originResult.accepted) {
+    return Response.json(originResult.body, { status: originResult.status });
+  }
+
   let payload;
 
   try {

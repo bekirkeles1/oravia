@@ -172,12 +172,15 @@ test("sqlite migrations are repeatable and reject newer schema safely", () => {
     database = new DatabaseSync(temp.databasePath);
     const first = runSqliteMigrations(database);
     const second = runSqliteMigrations(database);
-    const rows = database.prepare("SELECT version FROM schema_migrations").all();
+    const rows = database
+      .prepare("SELECT version FROM schema_migrations ORDER BY version")
+      .all();
 
     assert.equal(first.accepted, true);
     assert.equal(second.accepted, true);
-    assert.equal(rows.length, 1);
+    assert.equal(rows.length, 2);
     assert.equal(rows[0].version, 1);
+    assert.equal(rows[1].version, 2);
 
     database
       .prepare(

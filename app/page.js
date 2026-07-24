@@ -1,10 +1,18 @@
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { getDemoDashboardData } from "../src/dashboard/demoDashboardData";
+import authCookies from "../src/auth/authCookies";
+import authRepositoryFactory from "../src/auth/authRepositoryFactory";
+import authService from "../src/auth/authService";
+import routeAuth from "../src/auth/routeAuth";
 import AppointmentReviewsWorkspace from "./components/AppointmentReviewsWorkspace";
 import DemoApiSimulator from "./components/DemoApiSimulator";
 import DoctorAvailabilityWorkspace from "./components/DoctorAvailabilityWorkspace";
 import RoleBasedDashboard from "./components/RoleBasedDashboard";
+import SessionStatus from "./components/SessionStatus";
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const session = await resolveDashboardSession();
   const dashboard = getDemoDashboardData();
   const appointment = dashboard.appointments[0];
   const rolePrototype = dashboard.rolePrototype;
@@ -62,6 +70,7 @@ export default function DashboardPage() {
           <div className="topbar-meta">
             <span>Salı, 7 Temmuz 2026</span>
             <span className="status-pill">Demo veri</span>
+            <SessionStatus user={session?.user || null} />
           </div>
         </header>
 
@@ -141,4 +150,38 @@ export default function DashboardPage() {
       </section>
     </main>
   );
+}
+
+async function resolveDashboardSession() {
+  if (!routeAuth.isAuthEnforced()) {
+    return null;
+  }
+
+  const cookieStore = await cookies();
+  const rawToken = cookieStore.get(authCookies.SESSION_COOKIE_NAME)?.value;
+
+  if (!rawToken) {
+    redirect("/login");
+  }
+
+  let runtime;
+
+  try {
+    runtime = authRepositoryFactory.createAuthRuntime({});
+    const result = authService.resolveCurrentSession({
+      repository: runtime.repository,
+      token: rawToken,
+    });
+
+    if (!result.accepted) {
+      redirect("/login");
+    }
+
+    return {
+      user: result.actor,
+      session: result.session,
+    };
+  } finally {
+    runtime?.close();
+  }
 }

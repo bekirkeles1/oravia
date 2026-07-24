@@ -1,10 +1,10 @@
 # Local Demo Runbook
 
-This runbook covers local admin dashboard demo tools and appointment agent demos only. It does not include WhatsApp, database, authentication, CRM, or production setup.
+This runbook covers local admin dashboard demo tools and appointment agent demos only. It does not include WhatsApp, CRM, or production setup.
 
 Oravia is a Dental AI Receptionist Agent + Role-Based Clinic Operations Dashboard. The patient-facing experience belongs in a messaging channel such as WhatsApp or future chat channels. The dashboard is only for clinic staff operations, monitoring, configuration, handoff visibility, and admin demo tools.
 
-The current dashboard includes a local role switcher prototype for Doctor, Secretary, and Admin / Owner views. The Secretary screen includes manual phone appointment entry for internal clinic operations.
+The current dashboard includes a local role switcher prototype for Doctor, Secretary, and Admin / Owner views. The Secretary screen includes manual phone appointment entry for internal clinic operations. When `ORAVIA_AUTH_REQUIRED=true` is set, internal workspace and operational API routes require the server-side auth session described below.
 
 ## Safety Rules
 
@@ -45,6 +45,42 @@ npm run check:env
 ```
 
 The check confirms `.env` was loaded, `CALENDAR_PROVIDER` is set, and Google Calendar settings are present when `CALENDAR_PROVIDER=google_service_account`. It does not print service account JSON contents or secret values.
+
+## Local Authentication
+
+Local auth is intentionally server controlled. It uses local credentials only,
+stores password hashes with unique salts, stores opaque session token hashes in
+SQLite, and places the raw session token only in an `HttpOnly` cookie.
+
+Enable auth with SQLite-backed local storage:
+
+```bash
+ORAVIA_AUTH_REQUIRED=true
+ORAVIA_STORAGE_MODE=sqlite
+ORAVIA_SQLITE_DATABASE_PATH=./var/oravia-local.sqlite
+ORAVIA_CLINIC_ID=oravia_demo_clinic
+```
+
+Bootstrap the first manager account locally:
+
+```bash
+npm run auth:bootstrap-user -- --username manager --role manager --displayName "Clinic Manager"
+```
+
+The CLI prompts for a password and never prints or writes the plaintext password
+to the repository. Do not use real clinic staff passwords in local demos.
+
+Roles:
+
+- `manager`: internal reads, operational mutations, auth management.
+- `secretary`: internal reads and operational mutations for review decisions,
+  appointment creation, calendar sync, appointment confirmation dispatch, and
+  doctor availability.
+- `doctor`: internal reads only.
+
+Cookie-auth state-changing internal routes perform minimal same-origin
+validation when an `Origin` header is present. Public inbound messaging remains
+public at `POST /api/messaging/inbound`.
 
 ## Automated Tests
 
@@ -90,7 +126,9 @@ Use it to switch between local demo views:
 
 The compact top summary shows bugünkü randevular, bekleyen devirler / handoff, takvim senkron durumu, and demo modu.
 
-The role switcher is a local prototype. It does not add real authentication, permissions, database records, or real patient data. Real authentication and permissions will be added later.
+The role switcher is still a local view prototype and does not override the
+server-side authenticated user or role. Real permissions are enforced on
+server-side internal API routes only when `ORAVIA_AUTH_REQUIRED=true`.
 
 ### Secretary Manual Phone Appointment Sync
 
