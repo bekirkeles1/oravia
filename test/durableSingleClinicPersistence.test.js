@@ -178,10 +178,11 @@ test("sqlite migrations are repeatable and reject newer schema safely", () => {
 
     assert.equal(first.accepted, true);
     assert.equal(second.accepted, true);
-    assert.equal(rows.length, 3);
+    assert.equal(rows.length, 4);
     assert.equal(rows[0].version, 1);
     assert.equal(rows[1].version, 2);
     assert.equal(rows[2].version, 3);
+    assert.equal(rows[3].version, 4);
 
     database
       .prepare(

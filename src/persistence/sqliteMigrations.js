@@ -173,6 +173,29 @@ const MIGRATIONS = Object.freeze([
         ON messaging_inbound_events (clinic_id, provider, sender_lookup_hash)`,
     ]),
   }),
+  Object.freeze({
+    version: 4,
+    name: "appointment_change_lifecycle_history",
+    statements: Object.freeze([
+      `CREATE TABLE IF NOT EXISTS appointment_lifecycle_events (
+        clinic_id TEXT NOT NULL,
+        event_id TEXT NOT NULL,
+        appointment_id TEXT NOT NULL,
+        event_type TEXT NOT NULL,
+        previous_appointment_version INTEGER NOT NULL,
+        resulting_appointment_version INTEGER NOT NULL,
+        event_json TEXT NOT NULL,
+        created_sequence INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (clinic_id, event_id),
+        UNIQUE (clinic_id, appointment_id, created_sequence),
+        FOREIGN KEY (clinic_id) REFERENCES clinics(clinic_id),
+        FOREIGN KEY (clinic_id, appointment_id) REFERENCES appointments(clinic_id, appointment_id)
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_appointment_lifecycle_events_appointment
+        ON appointment_lifecycle_events (clinic_id, appointment_id, created_sequence)`,
+    ]),
+  }),
 ]);
 
 function runSqliteMigrations(database) {

@@ -49,8 +49,26 @@ function resolveWhatsAppConfig(env = process.env) {
     appointmentTemplateName: normalizeTemplateName(
       env.ORAVIA_WHATSAPP_APPOINTMENT_TEMPLATE_NAME
     ),
+    rescheduleTemplateName: normalizeTemplateName(
+      env.ORAVIA_WHATSAPP_RESCHEDULE_TEMPLATE_NAME ||
+        env.ORAVIA_WHATSAPP_APPOINTMENT_RESCHEDULE_TEMPLATE_NAME
+    ),
+    cancellationTemplateName: normalizeTemplateName(
+      env.ORAVIA_WHATSAPP_CANCELLATION_TEMPLATE_NAME ||
+        env.ORAVIA_WHATSAPP_APPOINTMENT_CANCELLATION_TEMPLATE_NAME
+    ),
     templateLanguage: normalizeTemplateLanguage(
       env.ORAVIA_WHATSAPP_TEMPLATE_LANGUAGE || "tr"
+    ),
+    rescheduleTemplateLanguage: normalizeTemplateLanguage(
+      env.ORAVIA_WHATSAPP_RESCHEDULE_TEMPLATE_LANGUAGE ||
+        env.ORAVIA_WHATSAPP_TEMPLATE_LANGUAGE ||
+        "tr"
+    ),
+    cancellationTemplateLanguage: normalizeTemplateLanguage(
+      env.ORAVIA_WHATSAPP_CANCELLATION_TEMPLATE_LANGUAGE ||
+        env.ORAVIA_WHATSAPP_TEMPLATE_LANGUAGE ||
+        "tr"
     ),
     channelIdentityKey: normalizeSecret(
       env.ORAVIA_WHATSAPP_CHANNEL_IDENTITY_KEY
@@ -118,6 +136,8 @@ function projectSafeConfig(config, complete, missing = []) {
     phoneNumberIdMasked: maskIdentifier(config.phoneNumberId),
     wabaIdMasked: maskIdentifier(config.wabaId),
     appointmentTemplateConfigured: Boolean(config.appointmentTemplateName),
+    rescheduleTemplateConfigured: Boolean(config.rescheduleTemplateName),
+    cancellationTemplateConfigured: Boolean(config.cancellationTemplateName),
     templateLanguage: config.templateLanguage || null,
     configurationComplete: complete,
     webhookVerificationReady:

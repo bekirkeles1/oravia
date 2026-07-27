@@ -8,12 +8,53 @@ function createMockOutboundAppointmentConfirmationProvider() {
       calls.push(freezeClone(command));
       return result;
     },
+    sendAppointmentRescheduleNotification(command) {
+      const result = createMockAppointmentChangeNotificationResult(
+        command,
+        "reschedule"
+      );
+      calls.push(freezeClone(command));
+      return result;
+    },
+    sendAppointmentCancellationNotification(command) {
+      const result = createMockAppointmentChangeNotificationResult(
+        command,
+        "cancellation"
+      );
+      calls.push(freezeClone(command));
+      return result;
+    },
     getCallCount() {
       return calls.length;
     },
     getCalls() {
       return calls.map((call) => freezeClone(call));
     },
+  });
+}
+
+function createMockAppointmentChangeNotificationResult(command, kind) {
+  const operationReference = normalizeText(command?.operationReference);
+  const appointmentId = normalizeText(command?.appointment?.id);
+
+  if (!operationReference || !appointmentId) {
+    return freezeClone({
+      accepted: false,
+      code: "invalid_mock_change_notification_command",
+      reason: "Mock appointment change notification command is incomplete.",
+      provider: "mock_outbound",
+      providerDispatchAccepted: false,
+      realPatientDelivery: false,
+    });
+  }
+
+  return freezeClone({
+    accepted: true,
+    provider: "mock_outbound",
+    providerMessageId: `mock_${kind}_notification_${operationReference}`,
+    providerDispatchAccepted: true,
+    realPatientDelivery: false,
+    providerLifecycleStatus: "accepted",
   });
 }
 

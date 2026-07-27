@@ -93,8 +93,69 @@ function createGoogleServiceAccountCalendarProvider(options = {}) {
       } catch (error) {
         throw normalizeGoogleCalendarError(error);
       }
+    },
+    async updateCalendarEvent(command) {
+      const providerEventId = normalizeProviderEventId(command?.providerEventId);
+      const selectedSlot = command?.selectedSlot;
+
+      if (!providerEventId || !selectedSlot) {
+        throw new Error("Trusted providerEventId and selectedSlot are required.");
+      }
+
+      try {
+        await calendar.events.patch({
+          calendarId,
+          eventId: providerEventId,
+          requestBody: {
+            start: {
+              dateTime: selectedSlot.start_at,
+              timeZone: selectedSlot.timezone || demoClinic.timezone,
+            },
+            end: {
+              dateTime: selectedSlot.end_at,
+              timeZone: selectedSlot.timezone || demoClinic.timezone,
+            },
+          },
+        });
+
+        return {
+          calendar_provider: "google_service_account",
+          calendar_event_id: providerEventId,
+          start_time: selectedSlot.start_at,
+          end_time: selectedSlot.end_at,
+        };
+      } catch (error) {
+        throw normalizeGoogleCalendarError(error);
+      }
+    },
+    async cancelCalendarEvent(command) {
+      const providerEventId = normalizeProviderEventId(command?.providerEventId);
+
+      if (!providerEventId) {
+        throw new Error("Trusted providerEventId is required.");
+      }
+
+      try {
+        await calendar.events.delete({
+          calendarId,
+          eventId: providerEventId,
+        });
+
+        return {
+          calendar_provider: "google_service_account",
+          calendar_event_id: providerEventId,
+          cancelled: true,
+        };
+      } catch (error) {
+        throw normalizeGoogleCalendarError(error);
+      }
     }
   };
+}
+
+function normalizeProviderEventId(value) {
+  const id = String(value || "").trim();
+  return id && id.length <= 256 ? id : "";
 }
 
 function resolveServiceAccountKeyFile(keyFilePath) {

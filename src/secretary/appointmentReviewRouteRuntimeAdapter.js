@@ -64,6 +64,27 @@ function createAppointmentReviewRouteRuntimeAdapter(options) {
     dispatchAppointmentConfirmation(input) {
       return runtime.dispatchAppointmentConfirmation(input);
     },
+    createAppointmentReschedulePreview(input) {
+      return runtime.createAppointmentReschedulePreview(input);
+    },
+    applyAppointmentReschedule(input) {
+      return runtime.applyAppointmentReschedule(input);
+    },
+    createAppointmentCancellationPreview(input) {
+      return runtime.createAppointmentCancellationPreview(input);
+    },
+    applyAppointmentCancellation(input) {
+      return runtime.applyAppointmentCancellation(input);
+    },
+    listAppointmentLifecycleEvents(input) {
+      return runtime.listAppointmentLifecycleEvents(input);
+    },
+    syncAppointmentChangeToCalendar(input) {
+      return runtime.syncAppointmentChangeToCalendar(input);
+    },
+    dispatchAppointmentChangeNotification(input) {
+      return runtime.dispatchAppointmentChangeNotification(input);
+    },
   };
 
   Object.defineProperties(adapter, {

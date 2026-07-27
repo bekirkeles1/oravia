@@ -54,6 +54,14 @@ const {
   dispatchAppointmentConfirmation,
 } = require("../api/secretaryAppointmentConfirmationDispatchService");
 const {
+  applyAppointmentCancellation,
+  applyAppointmentReschedule,
+  createAppointmentCancellationPreview,
+  createAppointmentReschedulePreview,
+  dispatchAppointmentChangeNotification,
+  syncAppointmentChangeToCalendar,
+} = require("../api/secretaryAppointmentChangeLifecycleService");
+const {
   STORAGE_MODES,
   resolveServerStorageConfig,
 } = require("../persistence/storageConfig");
@@ -146,6 +154,30 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
   const confirmationDispatchIdempotencyStore = createIdempotencyStore({
     sqlitePersistenceProvider,
     operationKind: "confirmation_dispatch",
+  });
+  const appointmentRescheduleIdempotencyStore = createIdempotencyStore({
+    sqlitePersistenceProvider,
+    operationKind: "appointment_reschedule",
+  });
+  const appointmentCancellationIdempotencyStore = createIdempotencyStore({
+    sqlitePersistenceProvider,
+    operationKind: "appointment_cancellation",
+  });
+  const calendarRescheduleIdempotencyStore = createIdempotencyStore({
+    sqlitePersistenceProvider,
+    operationKind: "calendar_reschedule_sync",
+  });
+  const calendarCancellationIdempotencyStore = createIdempotencyStore({
+    sqlitePersistenceProvider,
+    operationKind: "calendar_cancellation_sync",
+  });
+  const rescheduleNotificationIdempotencyStore = createIdempotencyStore({
+    sqlitePersistenceProvider,
+    operationKind: "reschedule_notification_dispatch",
+  });
+  const cancellationNotificationIdempotencyStore = createIdempotencyStore({
+    sqlitePersistenceProvider,
+    operationKind: "cancellation_notification_dispatch",
   });
   const conversationStateStore = sqlitePersistenceProvider
     ? createSqliteConversationStateStore({
@@ -251,6 +283,67 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
         })
       );
     },
+    createAppointmentReschedulePreview(input) {
+      return createAppointmentReschedulePreview({
+        ...input,
+        appointmentRepository,
+      });
+    },
+    applyAppointmentReschedule(input) {
+      return runMaybeTransaction(sqlitePersistenceProvider, () =>
+        applyAppointmentReschedule({
+          ...input,
+          appointmentRepository,
+          idempotencyStore: appointmentRescheduleIdempotencyStore,
+        })
+      );
+    },
+    createAppointmentCancellationPreview(input) {
+      return createAppointmentCancellationPreview({
+        ...input,
+        appointmentRepository,
+      });
+    },
+    applyAppointmentCancellation(input) {
+      return runMaybeTransaction(sqlitePersistenceProvider, () =>
+        applyAppointmentCancellation({
+          ...input,
+          appointmentRepository,
+          idempotencyStore: appointmentCancellationIdempotencyStore,
+        })
+      );
+    },
+    listAppointmentLifecycleEvents(input) {
+      return appointmentRepository.listLifecycleEvents(input?.appointmentId);
+    },
+    syncAppointmentChangeToCalendar(input) {
+      const operationName = String(input?.operationName || "").trim();
+      return runMaybeTransaction(sqlitePersistenceProvider, () =>
+        syncAppointmentChangeToCalendar({
+          ...input,
+          appointmentRepository,
+          provider: calendarProvider,
+          idempotencyStore:
+            operationName === "cancellation"
+              ? calendarCancellationIdempotencyStore
+              : calendarRescheduleIdempotencyStore,
+        })
+      );
+    },
+    dispatchAppointmentChangeNotification(input) {
+      const operationName = String(input?.operationName || "").trim();
+      return runMaybeTransaction(sqlitePersistenceProvider, () =>
+        dispatchAppointmentChangeNotification({
+          ...input,
+          appointmentRepository,
+          provider: outboundMessagingProvider,
+          idempotencyStore:
+            operationName === "cancellation"
+              ? cancellationNotificationIdempotencyStore
+              : rescheduleNotificationIdempotencyStore,
+        })
+      );
+    },
   };
 
   Object.defineProperties(runtime, {
@@ -312,7 +405,27 @@ function createDefaultOutboundMessagingProvider({
   if (!config.configurationComplete || !sqlitePersistenceProvider) {
     return Object.freeze({
       name: "meta_cloud",
-      sendAppointmentConfirmation() {
+    sendAppointmentConfirmation() {
+      return {
+          accepted: false,
+          code: config.code || "meta_whatsapp_provider_unavailable",
+          reason: "Meta WhatsApp provider configuration is incomplete.",
+          provider: "meta_cloud",
+          providerDispatchAccepted: false,
+          realPatientDelivery: false,
+        };
+      },
+      sendAppointmentRescheduleNotification() {
+        return {
+          accepted: false,
+          code: config.code || "meta_whatsapp_provider_unavailable",
+          reason: "Meta WhatsApp provider configuration is incomplete.",
+          provider: "meta_cloud",
+          providerDispatchAccepted: false,
+          realPatientDelivery: false,
+        };
+      },
+      sendAppointmentCancellationNotification() {
         return {
           accepted: false,
           code: config.code || "meta_whatsapp_provider_unavailable",

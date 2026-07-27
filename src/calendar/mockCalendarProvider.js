@@ -9,6 +9,21 @@ function createMockCalendarProvider() {
     },
     createCalendarEvent(eventInput) {
       return createMockCalendarEvent(eventInput);
+    },
+    updateCalendarEvent(command) {
+      return {
+        calendar_provider: "mock",
+        calendar_event_id: command.providerEventId,
+        start_time: command.selectedSlot.start_at,
+        end_time: command.selectedSlot.end_at,
+      };
+    },
+    cancelCalendarEvent(command) {
+      return {
+        calendar_provider: "mock",
+        calendar_event_id: command.providerEventId,
+        cancelled: true,
+      };
     }
   };
 }

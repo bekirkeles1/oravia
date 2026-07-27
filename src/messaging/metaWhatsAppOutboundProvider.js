@@ -98,7 +98,77 @@ function createMetaWhatsAppOutboundProvider({
         contentFingerprint: sha256(JSON.stringify(mapped.parameters)),
       });
     },
+    async sendAppointmentRescheduleNotification(command) {
+      return sendAppointmentChangeTemplate({
+        command,
+        operationKind: "appointment_reschedule_notification",
+        templateName: config.rescheduleTemplateName,
+        language: config.rescheduleTemplateLanguage || config.templateLanguage,
+      });
+    },
+    async sendAppointmentCancellationNotification(command) {
+      return sendAppointmentChangeTemplate({
+        command,
+        operationKind: "appointment_cancellation_notification",
+        templateName: config.cancellationTemplateName,
+        language: config.cancellationTemplateLanguage || config.templateLanguage,
+      });
+    },
   });
+
+  async function sendAppointmentChangeTemplate({
+    command,
+    operationKind,
+    templateName,
+    language,
+  }) {
+    const validation = validateAppointmentCommand({
+      ...command,
+      appointmentId: command?.appointment?.id,
+    });
+    if (!validation.accepted) {
+      return validation;
+    }
+
+    if (!templateName || !language) {
+      return safeReject("incomplete_meta_whatsapp_change_template_config");
+    }
+
+    const decrypted = decryptDestination(validation.destination);
+    if (!decrypted.accepted) {
+      return decrypted;
+    }
+
+    const parameters = buildChangeTemplateParameters(command.appointment);
+
+    return sendGraphMessage({
+      operationKind,
+      appointmentId: validation.appointmentId,
+      destination: validation.destination,
+      graphBody: {
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: decrypted.rawIdentity,
+        type: "template",
+        template: {
+          name: templateName,
+          language: {
+            code: language,
+          },
+          components: [
+            {
+              type: "body",
+              parameters: parameters.map((text) => ({
+                type: "text",
+                text,
+              })),
+            },
+          ],
+        },
+      },
+      contentFingerprint: sha256(JSON.stringify(parameters)),
+    });
+  }
 
   function decryptDestination(destination) {
     if (
@@ -199,7 +269,23 @@ function createUnavailableProvider(code) {
     sendAppointmentConfirmation() {
       return safeReject(code || "meta_whatsapp_provider_unavailable");
     },
+    sendAppointmentRescheduleNotification() {
+      return safeReject(code || "meta_whatsapp_provider_unavailable");
+    },
+    sendAppointmentCancellationNotification() {
+      return safeReject(code || "meta_whatsapp_provider_unavailable");
+    },
   });
+}
+
+function buildChangeTemplateParameters(appointment) {
+  return [
+    "Oravia",
+    normalizeText(appointment?.doctor?.name),
+    normalizeText(appointment?.startAt).slice(0, 10),
+    normalizeText(appointment?.startAt).slice(11, 16),
+    normalizeText(appointment?.appointmentPurposeLabel),
+  ].filter(Boolean);
 }
 
 function validateReplyCommand(command) {

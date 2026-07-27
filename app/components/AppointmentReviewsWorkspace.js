@@ -170,6 +170,13 @@ const APPOINTMENT_CREATION_CONFIRMATION = "create_in_memory_appointment";
 const CALENDAR_SYNC_CONFIRMATION = "sync_configured_calendar";
 const APPOINTMENT_CONFIRMATION_DISPATCH_CONFIRMATION =
   "send_mock_appointment_confirmation";
+const RESCHEDULE_CONFIRMATION = "apply_appointment_reschedule";
+const CANCELLATION_CONFIRMATION = "cancel_local_appointment";
+const CALENDAR_RESCHEDULE_CONFIRMATION = "sync_rescheduled_calendar";
+const CALENDAR_CANCELLATION_CONFIRMATION = "sync_cancelled_calendar";
+const RESCHEDULE_NOTIFICATION_CONFIRMATION = "send_reschedule_notification";
+const CANCELLATION_NOTIFICATION_CONFIRMATION =
+  "send_cancellation_notification";
 
 const INITIAL_DECISION_PREVIEW = {
   mock: true,
@@ -538,6 +545,16 @@ export default function AppointmentReviewsWorkspace() {
     confirmationDispatchConfirmation,
     setConfirmationDispatchConfirmation
   ] = useState(null);
+  const [appointmentLifecycleStatus, setAppointmentLifecycleStatus] =
+    useState("idle");
+  const [appointmentLifecycleResult, setAppointmentLifecycleResult] =
+    useState(null);
+  const [appointmentLifecycleError, setAppointmentLifecycleError] =
+    useState("");
+  const [appointmentLifecycleConfirmation, setAppointmentLifecycleConfirmation] =
+    useState(null);
+  const [appointmentLifecycleEventsById, setAppointmentLifecycleEventsById] =
+    useState({});
   const [decisionComparisonStatus, setDecisionComparisonStatus] =
     useState("idle");
   const [decisionComparisonResult, setDecisionComparisonResult] =
@@ -2481,6 +2498,168 @@ export default function AppointmentReviewsWorkspace() {
         confirmation.expectedAppointmentVersion &&
       activeRequest.idempotencyKey === confirmation.idempotencyKey
     );
+  }
+
+  async function openAppointmentLifecycleConfirmation(appointment, operation) {
+    setAppointmentLifecycleStatus("loading");
+    setAppointmentLifecycleError("");
+    setAppointmentLifecycleResult(null);
+    setAppointmentLifecycleConfirmation(null);
+
+    try {
+      const preview = await prepareLifecyclePreview(
+        appointment,
+        operation
+      );
+
+      if (!preview.accepted) {
+        throw new Error(
+          preview.reason || "Appointment lifecycle preview was blocked safely."
+        );
+      }
+
+      const selectedSlot =
+        operation === "reschedule"
+          ? preview.proposedSlot || preview.proposedSlots?.[0] || null
+          : null;
+
+      if (operation === "reschedule" && !selectedSlot?.id) {
+        throw new Error("No trusted replacement slot is currently available.");
+      }
+
+      setAppointmentLifecycleConfirmation({
+        appointment,
+        operation,
+        preview,
+        selectedSlotId: selectedSlot?.id || "",
+        expectedAppointmentVersion: appointment.version,
+        idempotencyKey: buildAppointmentLifecycleIdempotencyKey(
+          appointment,
+          operation,
+          selectedSlot?.id
+        )
+      });
+      setAppointmentLifecycleStatus("confirming");
+    } catch (error) {
+      setAppointmentLifecycleStatus("failure");
+      setAppointmentLifecycleError(
+        error instanceof Error
+          ? error.message
+          : "Appointment lifecycle preview failed safely."
+      );
+    }
+  }
+
+  async function prepareLifecyclePreview(appointment, operation) {
+    if (operation === "calendar_reschedule" || operation === "calendar_cancellation") {
+      return { accepted: true, preview: true };
+    }
+    if (
+      operation === "reschedule_notification" ||
+      operation === "cancellation_notification"
+    ) {
+      return { accepted: true, preview: true };
+    }
+
+    const endpoint =
+      operation === "reschedule"
+        ? "reschedule-preview"
+        : "cancellation-preview";
+    const response = await fetch(
+      `/api/secretary/appointments/${encodeURIComponent(
+        appointment.id
+      )}/${endpoint}`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          expectedAppointmentVersion: appointment.version
+        })
+      }
+    );
+    return response.json();
+  }
+
+  function cancelAppointmentLifecycleConfirmation() {
+    setAppointmentLifecycleStatus("idle");
+    setAppointmentLifecycleError("");
+    setAppointmentLifecycleResult(null);
+    setAppointmentLifecycleConfirmation(null);
+  }
+
+  async function confirmAppointmentLifecycleOperation() {
+    if (!appointmentLifecycleConfirmation) {
+      setAppointmentLifecycleStatus("failure");
+      setAppointmentLifecycleError(
+        "Open an explicit appointment lifecycle confirmation before submitting."
+      );
+      return;
+    }
+
+    const confirmation = appointmentLifecycleConfirmation;
+    setAppointmentLifecycleStatus("loading");
+    setAppointmentLifecycleError("");
+
+    try {
+      const response = await fetch(
+        `/api/secretary/appointments/${encodeURIComponent(
+          confirmation.appointment.id
+        )}/${getAppointmentLifecycleEndpoint(confirmation.operation)}`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          body: JSON.stringify({
+            expectedAppointmentVersion:
+              confirmation.expectedAppointmentVersion,
+            selectedSlotId: confirmation.selectedSlotId || undefined,
+            idempotencyKey: confirmation.idempotencyKey,
+            confirmation: getAppointmentLifecycleConfirmation(
+              confirmation.operation
+            )
+          })
+        }
+      );
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          payload?.reason || "Appointment lifecycle operation was blocked safely."
+        );
+      }
+
+      setAppointmentLifecycleResult(payload);
+      setAppointmentLifecycleStatus("success");
+      setAppointmentLifecycleConfirmation(null);
+      await refreshCreatedAppointmentsFromTrustedServer();
+      await refreshAppointmentLifecycleEvents(confirmation.appointment.id);
+    } catch (error) {
+      setAppointmentLifecycleStatus("failure");
+      setAppointmentLifecycleError(
+        error instanceof Error
+          ? error.message
+          : "Appointment lifecycle operation failed safely."
+      );
+    }
+  }
+
+  async function refreshAppointmentLifecycleEvents(appointmentId) {
+    const response = await fetch(
+      `/api/secretary/appointments/${encodeURIComponent(appointmentId)}/lifecycle`
+    );
+    const payload = await response.json();
+
+    if (!response.ok || !Array.isArray(payload.lifecycleEvents)) {
+      throw new Error("Appointment lifecycle timeline refresh failed safely.");
+    }
+
+    setAppointmentLifecycleEventsById((current) => ({
+      ...current,
+      [appointmentId]: payload.lifecycleEvents
+    }));
   }
 
   function createDecisionPreviewRequest({ reviewId, action }) {
@@ -4997,17 +5176,20 @@ export default function AppointmentReviewsWorkspace() {
 
                 <div className="appointment-review-decision-list">
                   <strong>Created in-memory appointments</strong>
-                  {createdAppointments.length ? (
-                    createdAppointments.map((appointment) => (
-                      <span key={appointment.id}>
-                        {appointment.id} · {appointment.doctor?.name} ·{" "}
-                        {appointment.startAt} · {appointment.appointmentPurposeLabel} ·{" "}
-                        calendarWritten {String(appointment.calendarWritten)} ·{" "}
-                        version {appointment.version}
-                        <button
-                          type="button"
-                          className="appointment-review-decision-execution-button secondary"
-                          onClick={() => openCalendarSyncConfirmation(appointment)}
+	                  {createdAppointments.length ? (
+	                    createdAppointments.map((appointment) => (
+	                      <span key={appointment.id}>
+	                        {appointment.id} · {appointment.doctor?.name} ·{" "}
+	                        {appointment.startAt} · {appointment.appointmentPurposeLabel} ·{" "}
+	                        calendarWritten {String(appointment.calendarWritten)} ·{" "}
+	                        version {appointment.version} · status{" "}
+	                        {appointment.appointmentStatus || "scheduled"} · calendar{" "}
+	                        {appointment.calendarFollowUpStatus || "not_required"} · notification{" "}
+	                        {appointment.notificationFollowUpStatus || "not_required"}
+	                        <button
+	                          type="button"
+	                          className="appointment-review-decision-execution-button secondary"
+	                          onClick={() => openCalendarSyncConfirmation(appointment)}
                           disabled={
                             !isCalendarSyncEligibleAppointment(appointment) ||
                             calendarSyncStatus === "loading"
@@ -5026,17 +5208,226 @@ export default function AppointmentReviewsWorkspace() {
                               appointment
                             ) || confirmationDispatchStatus === "loading"
                           }
-                        >
-                          Prepare Appointment Confirmation
-                        </button>
-                      </span>
-                    ))
-                  ) : (
-                    <span>No in-memory appointment has been created from this workspace session.</span>
-                  )}
-                </div>
+	                        >
+	                          Prepare Appointment Confirmation
+	                        </button>
+	                        <button
+	                          type="button"
+	                          className="appointment-review-decision-execution-button secondary"
+	                          onClick={() =>
+	                            openAppointmentLifecycleConfirmation(
+	                              appointment,
+	                              "reschedule"
+	                            )
+	                          }
+	                          disabled={
+	                            !isScheduledAppointment(appointment) ||
+	                            appointmentLifecycleStatus === "loading"
+	                          }
+	                        >
+	                          Preview Reschedule
+	                        </button>
+	                        <button
+	                          type="button"
+	                          className="appointment-review-decision-execution-button secondary"
+	                          onClick={() =>
+	                            openAppointmentLifecycleConfirmation(
+	                              appointment,
+	                              "cancellation"
+	                            )
+	                          }
+	                          disabled={
+	                            !isScheduledAppointment(appointment) ||
+	                            appointmentLifecycleStatus === "loading"
+	                          }
+	                        >
+	                          Preview Cancellation
+	                        </button>
+	                        <button
+	                          type="button"
+	                          className="appointment-review-decision-execution-button secondary"
+	                          onClick={() =>
+	                            openAppointmentLifecycleConfirmation(
+	                              appointment,
+	                              "calendar_reschedule"
+	                            )
+	                          }
+	                          disabled={
+	                            !isCalendarChangeFollowUpEligible(
+	                              appointment,
+	                              "calendar_reschedule"
+	                            ) || appointmentLifecycleStatus === "loading"
+	                          }
+	                        >
+	                          Confirm Calendar Update
+	                        </button>
+	                        <button
+	                          type="button"
+	                          className="appointment-review-decision-execution-button secondary"
+	                          onClick={() =>
+	                            openAppointmentLifecycleConfirmation(
+	                              appointment,
+	                              "calendar_cancellation"
+	                            )
+	                          }
+	                          disabled={
+	                            !isCalendarChangeFollowUpEligible(
+	                              appointment,
+	                              "calendar_cancellation"
+	                            ) || appointmentLifecycleStatus === "loading"
+	                          }
+	                        >
+	                          Confirm Calendar Cancellation
+	                        </button>
+	                        <button
+	                          type="button"
+	                          className="appointment-review-decision-execution-button secondary"
+	                          onClick={() =>
+	                            openAppointmentLifecycleConfirmation(
+	                              appointment,
+	                              "reschedule_notification"
+	                            )
+	                          }
+	                          disabled={
+	                            !isNotificationFollowUpEligible(
+	                              appointment,
+	                              "reschedule_notification"
+	                            ) || appointmentLifecycleStatus === "loading"
+	                          }
+	                        >
+	                          Confirm Reschedule Notice
+	                        </button>
+	                        <button
+	                          type="button"
+	                          className="appointment-review-decision-execution-button secondary"
+	                          onClick={() =>
+	                            openAppointmentLifecycleConfirmation(
+	                              appointment,
+	                              "cancellation_notification"
+	                            )
+	                          }
+	                          disabled={
+	                            !isNotificationFollowUpEligible(
+	                              appointment,
+	                              "cancellation_notification"
+	                            ) || appointmentLifecycleStatus === "loading"
+	                          }
+	                        >
+	                          Confirm Cancellation Notice
+	                        </button>
+	                        <button
+	                          type="button"
+	                          className="appointment-review-decision-execution-button secondary"
+	                          onClick={() =>
+	                            refreshAppointmentLifecycleEvents(appointment.id)
+	                          }
+	                          disabled={appointmentLifecycleStatus === "loading"}
+	                        >
+	                          Refresh Timeline
+	                        </button>
+	                        {appointmentLifecycleEventsById[appointment.id]?.length ? (
+	                          <small>
+	                            {appointmentLifecycleEventsById[appointment.id]
+	                              .map(
+	                                (event) =>
+	                                  `${event.createdSequence || "?"}:${event.eventType}`
+	                              )
+	                              .join(" | ")}
+	                          </small>
+	                        ) : null}
+	                      </span>
+	                    ))
+	                  ) : (
+	                    <span>No in-memory appointment has been created from this workspace session.</span>
+	                  )}
+	                </div>
 
-                {calendarSyncConfirmation ? (
+	                {appointmentLifecycleConfirmation ? (
+	                  <div className="appointment-review-decision-execution-confirmation">
+	                    <strong>Lifecycle Operation Review</strong>
+	                    <dl>
+	                      <div>
+	                        <dt>operation</dt>
+	                        <dd>{appointmentLifecycleConfirmation.operation}</dd>
+	                      </div>
+	                      <div>
+	                        <dt>appointmentId</dt>
+	                        <dd>
+	                          {appointmentLifecycleConfirmation.appointment.id}
+	                        </dd>
+	                      </div>
+	                      <div>
+	                        <dt>expectedVersion</dt>
+	                        <dd>
+	                          {
+	                            appointmentLifecycleConfirmation.expectedAppointmentVersion
+	                          }
+	                        </dd>
+	                      </div>
+	                      <div>
+	                        <dt>selectedSlotId</dt>
+	                        <dd>
+	                          {appointmentLifecycleConfirmation.selectedSlotId ||
+	                            "not_required"}
+	                        </dd>
+	                      </div>
+	                    </dl>
+	                    <small>
+	                      Calendar and patient notification follow-ups remain separate
+	                      explicit operations after local reschedule or cancellation.
+	                    </small>
+	                    <button
+	                      type="button"
+	                      className="appointment-review-decision-execution-button"
+	                      onClick={confirmAppointmentLifecycleOperation}
+	                      disabled={appointmentLifecycleStatus === "loading"}
+	                    >
+	                      Run Lifecycle Operation
+	                    </button>
+	                    <button
+	                      type="button"
+	                      className="appointment-review-decision-execution-button secondary"
+	                      onClick={cancelAppointmentLifecycleConfirmation}
+	                      disabled={appointmentLifecycleStatus === "loading"}
+	                    >
+	                      Cancel Lifecycle Operation
+	                    </button>
+	                  </div>
+	                ) : null}
+
+	                <dl className="appointment-review-decision-execution-grid">
+	                  <div>
+	                    <dt>appointmentLifecycleStatus</dt>
+	                    <dd>{appointmentLifecycleStatus}</dd>
+	                  </div>
+	                  <div>
+	                    <dt>lifecycleCode</dt>
+	                    <dd>{appointmentLifecycleResult?.code || "not_run"}</dd>
+	                  </div>
+	                  <div>
+	                    <dt>providerCalled</dt>
+	                    <dd>
+	                      {appointmentLifecycleResult
+	                        ? String(appointmentLifecycleResult.providerCalled)
+	                        : "not_run"}
+	                    </dd>
+	                  </div>
+	                  <div>
+	                    <dt>messageSent</dt>
+	                    <dd>
+	                      {appointmentLifecycleResult
+	                        ? String(appointmentLifecycleResult.messageSent)
+	                        : "not_run"}
+	                    </dd>
+	                  </div>
+	                </dl>
+	                {appointmentLifecycleError ? (
+	                  <p className="appointment-review-error">
+	                    {appointmentLifecycleError}
+	                  </p>
+	                ) : null}
+
+	                {calendarSyncConfirmation ? (
                   <div className="appointment-review-decision-execution-confirmation">
                     <strong>Sync to Configured Calendar</strong>
                     <dl>
@@ -7606,6 +7997,65 @@ function buildCalendarSyncIdempotencyKey(appointment) {
     .map((part) => String(part || "").replace(/[^A-Za-z0-9:_-]+/g, "_"))
     .join(":")
     .slice(0, 128);
+}
+
+function getAppointmentLifecycleEndpoint(operation) {
+  return {
+    reschedule: "reschedule",
+    cancellation: "cancel",
+    calendar_reschedule: "calendar-reschedule-sync",
+    calendar_cancellation: "calendar-cancellation-sync",
+    reschedule_notification: "reschedule-notification",
+    cancellation_notification: "cancellation-notification"
+  }[operation];
+}
+
+function getAppointmentLifecycleConfirmation(operation) {
+  return {
+    reschedule: RESCHEDULE_CONFIRMATION,
+    cancellation: CANCELLATION_CONFIRMATION,
+    calendar_reschedule: CALENDAR_RESCHEDULE_CONFIRMATION,
+    calendar_cancellation: CALENDAR_CANCELLATION_CONFIRMATION,
+    reschedule_notification: RESCHEDULE_NOTIFICATION_CONFIRMATION,
+    cancellation_notification: CANCELLATION_NOTIFICATION_CONFIRMATION
+  }[operation];
+}
+
+function buildAppointmentLifecycleIdempotencyKey(appointment, operation, slotId) {
+  return [
+    "appointment_lifecycle",
+    operation,
+    appointment.id,
+    appointment.version,
+    slotId || ""
+  ]
+    .map((part) => String(part || "").replace(/[^A-Za-z0-9:_-]+/g, "_"))
+    .join(":")
+    .slice(0, 128);
+}
+
+function isScheduledAppointment(appointment) {
+  return (appointment?.appointmentStatus || "scheduled") === "scheduled";
+}
+
+function isCalendarChangeFollowUpEligible(appointment, operation) {
+  const expected =
+    operation === "calendar_reschedule"
+      ? "update_required"
+      : "cancellation_required";
+  return (
+    appointment &&
+    appointment.calendarFollowUpStatus === expected &&
+    appointment.calendarEventId
+  );
+}
+
+function isNotificationFollowUpEligible(appointment, operation) {
+  const expected =
+    operation === "reschedule_notification"
+      ? "reschedule_required"
+      : "cancellation_required";
+  return appointment && appointment.notificationFollowUpStatus === expected;
 }
 
 function inferReviewVersion(review) {

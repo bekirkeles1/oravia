@@ -1,4 +1,8 @@
 const {
+  APPOINTMENT_CALENDAR_FOLLOW_UP_STATUS,
+  APPOINTMENT_LIFECYCLE_EVENT_TYPES,
+  APPOINTMENT_NOTIFICATION_STATUS,
+  APPOINTMENT_STATUS,
   CALENDAR_SYNC_STATUS,
   CONFIRMATION_MESSAGE_STATUS,
 } = require("../secretary/appointmentReviewAppointmentRepository");
@@ -56,6 +60,12 @@ function createSqliteAppointmentReviewAppointmentRepository({
         confirmationMessagingProvider: null,
         confirmationProviderMessageId: null,
         confirmationDispatchAccepted: false,
+        appointmentStatus: APPOINTMENT_STATUS.SCHEDULED,
+        calendarFollowUpStatus: APPOINTMENT_CALENDAR_FOLLOW_UP_STATUS.CREATE_REQUIRED,
+        notificationFollowUpStatus:
+          APPOINTMENT_NOTIFICATION_STATUS.CONFIRMATION_REQUIRED,
+        calendarChangeProviderEventId: null,
+        changeNotificationProviderMessageId: null,
         realPatientDelivery: false,
         messageSent: false,
         databasePersisted: true,
@@ -87,6 +97,21 @@ function createSqliteAppointmentReviewAppointmentRepository({
           now
         );
       setRepositoryVersion(database, clinicId, nextRepositoryVersion);
+      appendLifecycleEvent(database, clinicId, {
+        appointmentId: appointment.id,
+        eventType: APPOINTMENT_LIFECYCLE_EVENT_TYPES.CREATED,
+        previousAppointmentVersion: 0,
+        resultingAppointmentVersion: appointment.version,
+        event: {
+          appointmentId: appointment.id,
+          eventType: APPOINTMENT_LIFECYCLE_EVENT_TYPES.CREATED,
+          previousAppointmentVersion: 0,
+          resultingAppointmentVersion: appointment.version,
+          resultingStartAt: appointment.startAt,
+          resultingEndAt: appointment.endAt,
+          actor: { actorId: "system", actorRole: "system" },
+        },
+      });
 
       return freezeClone({
         status: "ok",
@@ -146,6 +171,7 @@ function createSqliteAppointmentReviewAppointmentRepository({
         calendarWritten: true,
         calendarLinkRecorded: true,
         calendarSyncMode: validation.syncMode,
+        calendarFollowUpStatus: APPOINTMENT_CALENDAR_FOLLOW_UP_STATUS.SYNCHRONIZED,
       };
 
       updateAppointment(database, clinicId, validation.appointmentId, updatedAppointment);
@@ -210,6 +236,8 @@ function createSqliteAppointmentReviewAppointmentRepository({
         realPatientDelivery: false,
         messageSent: validation.initialStatus === CONFIRMATION_MESSAGE_STATUS.SENT,
         confirmationMessageLinkRecorded: true,
+        notificationFollowUpStatus:
+          APPOINTMENT_NOTIFICATION_STATUS.DISPATCHED,
       };
 
       updateAppointment(database, clinicId, validation.appointmentId, updatedAppointment);
@@ -248,6 +276,195 @@ function createSqliteAppointmentReviewAppointmentRepository({
     },
     getVersion() {
       return getRepositoryVersion(database, clinicId);
+    },
+    rescheduleAppointment(input) {
+      const validation = validateRescheduleInput(input);
+
+      if (!validation.ok) {
+        return reject(validation.error);
+      }
+
+      const appointment = getAppointmentById(database, clinicId, validation.appointmentId);
+      const conflict = validateMutableAppointment({
+        appointment,
+        expectedVersion: validation.expectedVersion,
+      });
+
+      if (conflict) {
+        return reject(conflict);
+      }
+
+      const nextRepositoryVersion = getRepositoryVersion(database, clinicId) + 1;
+      const updatedAppointment = {
+        ...appointment,
+        version: appointment.version + 1,
+        selectedSlotId: validation.slot.id,
+        startAt: validation.slot.startAt,
+        endAt: validation.slot.endAt,
+        durationMinutes: validation.slot.durationMinutes,
+        appointmentStatus: APPOINTMENT_STATUS.SCHEDULED,
+        calendarFollowUpStatus: appointment.calendarLinked
+          ? APPOINTMENT_CALENDAR_FOLLOW_UP_STATUS.UPDATE_REQUIRED
+          : appointment.calendarFollowUpStatus,
+        notificationFollowUpStatus:
+          APPOINTMENT_NOTIFICATION_STATUS.RESCHEDULE_REQUIRED,
+        rescheduleRequired: false,
+        cancellationRequired: false,
+      };
+
+      updateAppointment(database, clinicId, validation.appointmentId, updatedAppointment);
+      setRepositoryVersion(database, clinicId, nextRepositoryVersion);
+      const lifecycleEvent = appendLifecycleEvent(database, clinicId, {
+        appointmentId: validation.appointmentId,
+        eventType: APPOINTMENT_LIFECYCLE_EVENT_TYPES.RESCHEDULED,
+        previousAppointmentVersion: appointment.version,
+        resultingAppointmentVersion: updatedAppointment.version,
+        event: {
+          appointmentId: validation.appointmentId,
+          eventType: APPOINTMENT_LIFECYCLE_EVENT_TYPES.RESCHEDULED,
+          previousAppointmentVersion: appointment.version,
+          resultingAppointmentVersion: updatedAppointment.version,
+          previousStartAt: appointment.startAt,
+          previousEndAt: appointment.endAt,
+          resultingStartAt: updatedAppointment.startAt,
+          resultingEndAt: updatedAppointment.endAt,
+          actor: validation.actor,
+          idempotencyKey: validation.idempotencyKey,
+        },
+      });
+
+      return freezeClone({
+        status: "ok",
+        appointment: updatedAppointment,
+        lifecycleEvent,
+        previousAppointmentVersion: appointment.version,
+        nextAppointmentVersion: updatedAppointment.version,
+        appointmentRepositoryVersion: nextRepositoryVersion,
+        appointmentVersionChanged: true,
+        appointmentRepositoryVersionChanged: true,
+        databasePersisted: true,
+        calendarWritten: false,
+        messageSent: false,
+      });
+    },
+    cancelAppointment(input) {
+      const validation = validateCancellationInput(input);
+
+      if (!validation.ok) {
+        return reject(validation.error);
+      }
+
+      const appointment = getAppointmentById(database, clinicId, validation.appointmentId);
+      const conflict = validateMutableAppointment({
+        appointment,
+        expectedVersion: validation.expectedVersion,
+      });
+
+      if (conflict) {
+        return reject(conflict);
+      }
+
+      const nextRepositoryVersion = getRepositoryVersion(database, clinicId) + 1;
+      const updatedAppointment = {
+        ...appointment,
+        version: appointment.version + 1,
+        appointmentStatus: APPOINTMENT_STATUS.CANCELLED,
+        status: APPOINTMENT_STATUS.CANCELLED,
+        calendarFollowUpStatus: appointment.calendarLinked
+          ? APPOINTMENT_CALENDAR_FOLLOW_UP_STATUS.CANCELLATION_REQUIRED
+          : APPOINTMENT_CALENDAR_FOLLOW_UP_STATUS.NOT_REQUIRED,
+        notificationFollowUpStatus:
+          APPOINTMENT_NOTIFICATION_STATUS.CANCELLATION_REQUIRED,
+      };
+
+      updateAppointment(database, clinicId, validation.appointmentId, updatedAppointment);
+      setRepositoryVersion(database, clinicId, nextRepositoryVersion);
+      const lifecycleEvent = appendLifecycleEvent(database, clinicId, {
+        appointmentId: validation.appointmentId,
+        eventType: APPOINTMENT_LIFECYCLE_EVENT_TYPES.CANCELLED,
+        previousAppointmentVersion: appointment.version,
+        resultingAppointmentVersion: updatedAppointment.version,
+        event: {
+          appointmentId: validation.appointmentId,
+          eventType: APPOINTMENT_LIFECYCLE_EVENT_TYPES.CANCELLED,
+          previousAppointmentVersion: appointment.version,
+          resultingAppointmentVersion: updatedAppointment.version,
+          previousStartAt: appointment.startAt,
+          previousEndAt: appointment.endAt,
+          actor: validation.actor,
+          idempotencyKey: validation.idempotencyKey,
+        },
+      });
+
+      return freezeClone({
+        status: "ok",
+        appointment: updatedAppointment,
+        lifecycleEvent,
+        previousAppointmentVersion: appointment.version,
+        nextAppointmentVersion: updatedAppointment.version,
+        appointmentRepositoryVersion: nextRepositoryVersion,
+        appointmentVersionChanged: true,
+        appointmentRepositoryVersionChanged: true,
+        databasePersisted: true,
+        calendarWritten: false,
+        messageSent: false,
+      });
+    },
+    markCalendarRescheduleSynchronized(input) {
+      return markFollowUp(database, clinicId, {
+        input,
+        expectedStatus: APPOINTMENT_CALENDAR_FOLLOW_UP_STATUS.UPDATE_REQUIRED,
+        nextFields: {
+          calendarFollowUpStatus:
+            APPOINTMENT_CALENDAR_FOLLOW_UP_STATUS.SYNCHRONIZED,
+          calendarChangeProviderEventId: normalizeText(input?.providerEventId),
+        },
+        eventType:
+          APPOINTMENT_LIFECYCLE_EVENT_TYPES.CALENDAR_RESCHEDULE_SYNCHRONIZED,
+      });
+    },
+    markCalendarCancellationSynchronized(input) {
+      return markFollowUp(database, clinicId, {
+        input,
+        expectedStatus:
+          APPOINTMENT_CALENDAR_FOLLOW_UP_STATUS.CANCELLATION_REQUIRED,
+        nextFields: {
+          calendarFollowUpStatus:
+            APPOINTMENT_CALENDAR_FOLLOW_UP_STATUS.SYNCHRONIZED,
+          calendarChangeProviderEventId: normalizeText(input?.providerEventId),
+        },
+        eventType:
+          APPOINTMENT_LIFECYCLE_EVENT_TYPES.CALENDAR_CANCELLATION_SYNCHRONIZED,
+      });
+    },
+    markRescheduleNotificationDispatched(input) {
+      return markFollowUp(database, clinicId, {
+        input,
+        expectedStatus: APPOINTMENT_NOTIFICATION_STATUS.RESCHEDULE_REQUIRED,
+        nextFields: {
+          notificationFollowUpStatus:
+            APPOINTMENT_NOTIFICATION_STATUS.DISPATCHED,
+          changeNotificationProviderMessageId: normalizeText(input?.providerMessageId),
+        },
+        eventType:
+          APPOINTMENT_LIFECYCLE_EVENT_TYPES.RESCHEDULE_NOTIFICATION_DISPATCHED,
+      });
+    },
+    markCancellationNotificationDispatched(input) {
+      return markFollowUp(database, clinicId, {
+        input,
+        expectedStatus: APPOINTMENT_NOTIFICATION_STATUS.CANCELLATION_REQUIRED,
+        nextFields: {
+          notificationFollowUpStatus:
+            APPOINTMENT_NOTIFICATION_STATUS.DISPATCHED,
+          changeNotificationProviderMessageId: normalizeText(input?.providerMessageId),
+        },
+        eventType:
+          APPOINTMENT_LIFECYCLE_EVENT_TYPES.CANCELLATION_NOTIFICATION_DISPATCHED,
+      });
+    },
+    listLifecycleEvents(appointmentId) {
+      return listLifecycleEvents(database, clinicId, normalizeText(appointmentId));
     },
   });
 }
@@ -334,6 +551,151 @@ function setRepositoryVersion(database, clinicId, version) {
     .run(version, new Date().toISOString(), clinicId, REPOSITORY_NAME);
 }
 
+function markFollowUp(database, clinicId, { input, expectedStatus, nextFields, eventType }) {
+  const validation = validateFollowUpInput(input);
+
+  if (!validation.ok) {
+    return reject(validation.error);
+  }
+
+  const appointment = getAppointmentById(database, clinicId, validation.appointmentId);
+
+  if (!appointment) {
+    return reject({
+      code: "appointment_not_found",
+      message: "Appointment was not found.",
+    });
+  }
+
+  if (appointment.version !== validation.expectedVersion) {
+    return reject({
+      code: "appointment_version_conflict",
+      message: "Appointment version changed before follow-up link.",
+    });
+  }
+
+  const currentStatus = expectedStatus.includes("notification")
+    ? appointment.notificationFollowUpStatus
+    : appointment.calendarFollowUpStatus;
+
+  if (currentStatus !== expectedStatus) {
+    return reject({
+      code: "appointment_follow_up_not_required",
+      message: "Appointment follow-up is not currently required.",
+    });
+  }
+
+  const nextRepositoryVersion = getRepositoryVersion(database, clinicId) + 1;
+  const updatedAppointment = {
+    ...appointment,
+    ...nextFields,
+    version: appointment.version + 1,
+  };
+  updateAppointment(database, clinicId, validation.appointmentId, updatedAppointment);
+  setRepositoryVersion(database, clinicId, nextRepositoryVersion);
+  const lifecycleEvent = appendLifecycleEvent(database, clinicId, {
+    appointmentId: validation.appointmentId,
+    eventType,
+    previousAppointmentVersion: appointment.version,
+    resultingAppointmentVersion: updatedAppointment.version,
+    event: {
+      appointmentId: validation.appointmentId,
+      eventType,
+      previousAppointmentVersion: appointment.version,
+      resultingAppointmentVersion: updatedAppointment.version,
+      actor: validation.actor,
+      idempotencyKey: validation.idempotencyKey,
+    },
+  });
+
+  return freezeClone({
+    status: "ok",
+    appointment: updatedAppointment,
+    lifecycleEvent,
+    previousAppointmentVersion: appointment.version,
+    nextAppointmentVersion: updatedAppointment.version,
+    appointmentRepositoryVersion: nextRepositoryVersion,
+    appointmentVersionChanged: true,
+    appointmentRepositoryVersionChanged: true,
+    databasePersisted: true,
+  });
+}
+
+function appendLifecycleEvent(
+  database,
+  clinicId,
+  {
+    appointmentId,
+    eventType,
+    previousAppointmentVersion,
+    resultingAppointmentVersion,
+    event,
+  }
+) {
+  const sequenceRow = database
+    .prepare(
+      `SELECT COALESCE(MAX(created_sequence), 0) AS sequence
+       FROM appointment_lifecycle_events
+       WHERE clinic_id = ? AND appointment_id = ?`
+    )
+    .get(clinicId, appointmentId);
+  const createdSequence = Number(sequenceRow?.sequence || 0) + 1;
+  const createdAt = new Date().toISOString();
+  const eventId = `${appointmentId}_${eventType}_${createdSequence}`;
+  const storedEvent = {
+    eventId,
+    appointmentId,
+    eventType,
+    previousAppointmentVersion,
+    resultingAppointmentVersion,
+    createdSequence,
+    createdAt,
+    ...event,
+  };
+
+  database
+    .prepare(
+      `INSERT INTO appointment_lifecycle_events (
+        clinic_id, event_id, appointment_id, event_type,
+        previous_appointment_version, resulting_appointment_version,
+        event_json, created_sequence, created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    .run(
+      clinicId,
+      eventId,
+      appointmentId,
+      eventType,
+      previousAppointmentVersion,
+      resultingAppointmentVersion,
+      stringifyJson(storedEvent),
+      createdSequence,
+      createdAt
+    );
+
+  return freezeClone(storedEvent);
+}
+
+function listLifecycleEvents(database, clinicId, appointmentId) {
+  if (!appointmentId) {
+    return [];
+  }
+
+  return database
+    .prepare(
+      `SELECT event_json
+       FROM appointment_lifecycle_events
+       WHERE clinic_id = ? AND appointment_id = ?
+       ORDER BY created_sequence`
+    )
+    .all(clinicId, appointmentId)
+    .flatMap((row) => {
+      const event = parseJsonObject(row.event_json);
+      return event ? [freezeClone(event)] : [];
+    });
+}
+
 function validateAppointmentInput(input) {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     return validationError("invalid_appointment_input", "Appointment input must be an object.");
@@ -385,6 +747,159 @@ function validateAppointmentInput(input) {
       status: "created_sqlite",
     },
   };
+}
+
+function validateRescheduleInput(input) {
+  const base = validateChangeBaseInput(input);
+
+  if (!base.ok) {
+    return base;
+  }
+
+  const slot = normalizeTrustedSlot(input.selectedSlot);
+
+  if (!slot) {
+    return validationError(
+      "invalid_selected_reschedule_slot",
+      "Reschedule requires a trusted selected slot."
+    );
+  }
+
+  return { ...base, slot };
+}
+
+function validateCancellationInput(input) {
+  return validateChangeBaseInput(input);
+}
+
+function validateFollowUpInput(input) {
+  return validateChangeBaseInput(input);
+}
+
+function validateChangeBaseInput(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return validationError(
+      "invalid_appointment_change_input",
+      "Appointment change input must be an object."
+    );
+  }
+
+  const appointmentId = normalizeText(input.appointmentId);
+  const idempotencyKey = normalizeText(input.idempotencyKey);
+  const actor = normalizeActor(input.actor);
+
+  if (!appointmentId || !/^[a-z0-9_:-]+$/.test(appointmentId)) {
+    return validationError(
+      "invalid_appointment_id",
+      "Appointment change input requires a safe appointmentId."
+    );
+  }
+
+  if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 1) {
+    return validationError(
+      "invalid_expected_appointment_version",
+      "Appointment change input requires a positive expectedVersion."
+    );
+  }
+
+  if (!idempotencyKey || idempotencyKey.length > 128) {
+    return validationError(
+      idempotencyKey ? "invalid_idempotency_key" : "missing_idempotency_key",
+      "Appointment change input requires a safe idempotencyKey."
+    );
+  }
+
+  if (!actor) {
+    return validationError(
+      "invalid_appointment_change_actor",
+      "Appointment change input requires a safe actor."
+    );
+  }
+
+  return {
+    ok: true,
+    appointmentId,
+    expectedVersion: input.expectedVersion,
+    idempotencyKey,
+    actor,
+  };
+}
+
+function validateMutableAppointment({ appointment, expectedVersion }) {
+  if (!appointment) {
+    return {
+      code: "appointment_not_found",
+      message: "Appointment was not found.",
+    };
+  }
+
+  if (appointment.version !== expectedVersion) {
+    return {
+      code: "appointment_version_conflict",
+      message: "Appointment version changed before mutation.",
+    };
+  }
+
+  if (normalizeAppointmentStatus(appointment) === APPOINTMENT_STATUS.CANCELLED) {
+    return {
+      code: "appointment_already_cancelled",
+      message: "Cancelled appointments cannot be changed.",
+    };
+  }
+
+  return null;
+}
+
+function normalizeTrustedSlot(slot) {
+  if (!slot || typeof slot !== "object" || Array.isArray(slot)) {
+    return null;
+  }
+
+  const id = normalizeText(slot.id);
+  const startAt = normalizeText(slot.startAt);
+  const endAt = normalizeText(slot.endAt);
+
+  if (
+    !id ||
+    !startAt ||
+    !endAt ||
+    !Number.isSafeInteger(slot.durationMinutes) ||
+    slot.durationMinutes < 1
+  ) {
+    return null;
+  }
+
+  return {
+    id,
+    startAt,
+    endAt,
+    durationMinutes: slot.durationMinutes,
+  };
+}
+
+function normalizeActor(actor) {
+  if (!actor || typeof actor !== "object" || Array.isArray(actor)) {
+    return null;
+  }
+
+  const actorId = normalizeText(actor.actorId || actor.userId || actor.username);
+  const actorRole = normalizeText(actor.actorRole || actor.role);
+
+  if (!actorId || !actorRole || actorId.length > 128 || actorRole.length > 64) {
+    return null;
+  }
+
+  return {
+    actorId,
+    actorRole,
+  };
+}
+
+function normalizeAppointmentStatus(appointment) {
+  const status = normalizeText(appointment?.appointmentStatus || appointment?.status);
+  return status === APPOINTMENT_STATUS.CANCELLED
+    ? APPOINTMENT_STATUS.CANCELLED
+    : APPOINTMENT_STATUS.SCHEDULED;
 }
 
 function validateCalendarLinkInput(input) {
