@@ -53,6 +53,12 @@ export default function OperationsStatusPanel() {
     ["Reminder Pending", String(status.reminders?.pendingCount ?? 0)],
     ["Reminder Failed", String(status.reminders?.failedCount ?? 0)],
     ["Reminder Ambiguous", String(status.reminders?.ambiguousCount ?? 0)],
+    [
+      "Empty Slot Engine",
+      status.emptySlots?.config?.engineEnabled ? "enabled" : "disabled",
+    ],
+    ["Empty Slot Open", String(status.emptySlots?.openCount ?? 0)],
+    ["Empty Slot Filled", String(status.emptySlots?.filledCount ?? 0)],
   ];
 
   return (

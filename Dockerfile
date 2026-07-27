@@ -25,9 +25,11 @@ RUN useradd --system --uid 1001 --create-home oravia \
 COPY --from=builder --chown=oravia:oravia /app/.next/standalone ./
 COPY --from=builder --chown=oravia:oravia /app/.next/static ./.next/static
 COPY --from=builder --chown=oravia:oravia /app/package.json ./package.json
+COPY --from=deps --chown=oravia:oravia /app/node_modules ./node_modules
 COPY --from=builder --chown=oravia:oravia /app/scripts/start-production.js ./scripts/start-production.js
 COPY --from=builder --chown=oravia:oravia /app/scripts/db-backup.js ./scripts/db-backup.js
 COPY --from=builder --chown=oravia:oravia /app/scripts/db-restore.js ./scripts/db-restore.js
+COPY --from=builder --chown=oravia:oravia /app/scripts/empty-slots-run-once.js ./scripts/empty-slots-run-once.js
 COPY --from=builder --chown=oravia:oravia /app/src ./src
 USER oravia
 EXPOSE 3000

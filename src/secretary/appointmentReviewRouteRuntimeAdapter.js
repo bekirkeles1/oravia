@@ -100,6 +100,33 @@ function createAppointmentReviewRouteRuntimeAdapter(options) {
     retryFailedReminder(input) {
       return runtime.retryFailedReminder(input);
     },
+    getEmptySlotState(input) {
+      return runtime.getEmptySlotState(input);
+    },
+    createEmptySlotOpportunity(input) {
+      return runtime.createEmptySlotOpportunity(input);
+    },
+    updateEarlierSlotConsent(input) {
+      return runtime.updateEarlierSlotConsent(input);
+    },
+    getEarlierSlotConsent(input) {
+      return runtime.getEarlierSlotConsent(input);
+    },
+    previewEmptySlotCandidates(input) {
+      return runtime.previewEmptySlotCandidates(input);
+    },
+    launchEmptySlotOfferWave(input) {
+      return runtime.launchEmptySlotOfferWave(input);
+    },
+    respondToEmptySlotOffer(input) {
+      return runtime.respondToEmptySlotOffer(input);
+    },
+    cancelEmptySlotOpportunity(input) {
+      return runtime.cancelEmptySlotOpportunity(input);
+    },
+    runEmptySlotCycle(input) {
+      return runtime.runEmptySlotCycle(input);
+    },
   };
 
   Object.defineProperties(adapter, {

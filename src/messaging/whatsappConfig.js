@@ -61,6 +61,10 @@ function resolveWhatsAppConfig(env = process.env) {
       env.ORAVIA_WHATSAPP_APPOINTMENT_REMINDER_TEMPLATE_NAME ||
         env.ORAVIA_REMINDER_META_TEMPLATE_NAME
     ),
+    emptySlotOfferTemplateName: normalizeTemplateName(
+      env.ORAVIA_WHATSAPP_EMPTY_SLOT_OFFER_TEMPLATE_NAME ||
+        env.ORAVIA_EMPTY_SLOT_META_TEMPLATE_NAME
+    ),
     templateLanguage: normalizeTemplateLanguage(
       env.ORAVIA_WHATSAPP_TEMPLATE_LANGUAGE || "tr"
     ),
@@ -77,6 +81,12 @@ function resolveWhatsAppConfig(env = process.env) {
     reminderTemplateLanguage: normalizeTemplateLanguage(
       env.ORAVIA_WHATSAPP_APPOINTMENT_REMINDER_TEMPLATE_LANGUAGE ||
         env.ORAVIA_REMINDER_META_TEMPLATE_LANGUAGE ||
+        env.ORAVIA_WHATSAPP_TEMPLATE_LANGUAGE ||
+        "tr"
+    ),
+    emptySlotOfferTemplateLanguage: normalizeTemplateLanguage(
+      env.ORAVIA_WHATSAPP_EMPTY_SLOT_OFFER_TEMPLATE_LANGUAGE ||
+        env.ORAVIA_EMPTY_SLOT_META_TEMPLATE_LANGUAGE ||
         env.ORAVIA_WHATSAPP_TEMPLATE_LANGUAGE ||
         "tr"
     ),
@@ -149,6 +159,7 @@ function projectSafeConfig(config, complete, missing = []) {
     rescheduleTemplateConfigured: Boolean(config.rescheduleTemplateName),
     cancellationTemplateConfigured: Boolean(config.cancellationTemplateName),
     reminderTemplateConfigured: Boolean(config.reminderTemplateName),
+    emptySlotOfferTemplateConfigured: Boolean(config.emptySlotOfferTemplateName),
     templateLanguage: config.templateLanguage || null,
     configurationComplete: complete,
     webhookVerificationReady:

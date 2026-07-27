@@ -198,6 +198,15 @@ test("server runtime factory validates state projection and exposes fixed immuta
     "reconcileAppointmentReminders",
     "runAppointmentReminderCycle",
     "retryFailedReminder",
+    "getEmptySlotState",
+    "createEmptySlotOpportunity",
+    "updateEarlierSlotConsent",
+    "getEarlierSlotConsent",
+    "previewEmptySlotCandidates",
+    "launchEmptySlotOfferWave",
+    "respondToEmptySlotOffer",
+    "cancelEmptySlotOpportunity",
+    "runEmptySlotCycle",
   ]);
   assert.equal(Object.isFrozen(runtime), true);
   assert.equal(Object.isFrozen(queue), true);

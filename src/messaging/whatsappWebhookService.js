@@ -13,6 +13,7 @@ function createWhatsAppWebhookService({
   lifecycleRepository,
   messagingRuntime,
   outboundProvider,
+  emptySlotResponseHandler,
 } = {}) {
   return Object.freeze({
     verifyChallenge({ mode, token, challenge }) {
@@ -112,6 +113,19 @@ function createWhatsAppWebhookService({
       return completeInbound(event, {
         processingStatus: "unsupported",
         code: "unsupported_whatsapp_message_type",
+      });
+    }
+
+    if (event.emptySlotResponse && emptySlotResponseHandler) {
+      const response = await emptySlotResponseHandler({
+        ...event.emptySlotResponse,
+        senderLookupHash: encrypted.lookupHash,
+      });
+      return completeInbound(event, {
+        processingStatus: "processed",
+        code: response?.code || "empty_slot_response_processed",
+        emptySlotResponseProcessed: response?.accepted === true,
+        replyDispatched: false,
       });
     }
 

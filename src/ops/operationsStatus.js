@@ -7,6 +7,10 @@ const { createSqlitePersistenceProvider } = require("../persistence/sqliteProvid
 const {
   createSqliteAppointmentReminderRepository,
 } = require("../persistence/sqliteAppointmentReminderRepository");
+const { resolveEmptySlotConfig } = require("../emptySlots/emptySlotConfig");
+const {
+  createSqliteEmptySlotRepository,
+} = require("../persistence/sqliteEmptySlotRepository");
 
 function getOperationsStatus(options = {}) {
   const env = options.env || process.env;
@@ -16,6 +20,7 @@ function getOperationsStatus(options = {}) {
   const readiness = getReadinessStatus(options);
   const calendar = resolveCalendarProviderConfig(env);
   const reminders = buildReminderOperationsProjection(env);
+  const emptySlots = buildEmptySlotOperationsProjection(env);
 
   return Object.freeze({
     accepted: true,
@@ -53,6 +58,7 @@ function getOperationsStatus(options = {}) {
       trustProxyHeaders: config.summary.trustProxyHeaders,
     }),
     reminders,
+    emptySlots,
   });
 }
 
@@ -83,6 +89,41 @@ function buildReminderOperationsProjection(env) {
     projection.failedCount = summary.counts.failed;
     projection.ambiguousCount = summary.counts.ambiguous;
     projection.nextDueAt = summary.nextDueAt;
+  } catch {
+    projection.status = "unavailable";
+  } finally {
+    provider?.close?.();
+  }
+  return Object.freeze(projection);
+}
+
+function buildEmptySlotOperationsProjection(env) {
+  const config = resolveEmptySlotConfig(env);
+  const projection = {
+    config: config.safeConfig,
+    openCount: 0,
+    outreachInProgressCount: 0,
+    filledCount: 0,
+    expiredCount: 0,
+  };
+  const storage = resolveServerStorageConfig({});
+  if (!storage.accepted || storage.storageMode !== STORAGE_MODES.SQLITE) {
+    return Object.freeze(projection);
+  }
+  let provider;
+  try {
+    provider = createSqlitePersistenceProvider({
+      databasePath: storage.databasePath,
+      clinicId: storage.clinicId,
+    });
+    const repository = createSqliteEmptySlotRepository({
+      persistenceProvider: provider,
+    });
+    const summary = repository.getSummary();
+    projection.openCount = summary.counts.open;
+    projection.outreachInProgressCount = summary.counts.outreach_in_progress;
+    projection.filledCount = summary.counts.filled;
+    projection.expiredCount = summary.counts.expired;
   } catch {
     projection.status = "unavailable";
   } finally {

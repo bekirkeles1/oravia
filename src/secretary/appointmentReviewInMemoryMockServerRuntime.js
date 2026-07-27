@@ -94,6 +94,22 @@ const { resolveReminderConfig } = require("../reminders/reminderConfig");
 const {
   createSqliteAppointmentReminderRepository,
 } = require("../persistence/sqliteAppointmentReminderRepository");
+const {
+  createInMemoryEmptySlotRepository,
+} = require("../emptySlots/emptySlotRepository");
+const { resolveEmptySlotConfig } = require("../emptySlots/emptySlotConfig");
+const {
+  acceptEmptySlotOffer,
+  createEmptySlotOpportunityFromReleasedAppointment,
+  declineEmptySlotOffer,
+  launchEmptySlotOfferWave,
+  optOutEarlierSlotOffers,
+  previewEmptySlotCandidates,
+  runEmptySlotCycle,
+} = require("../emptySlots/emptySlotService");
+const {
+  createSqliteEmptySlotRepository,
+} = require("../persistence/sqliteEmptySlotRepository");
 
 const RUNTIME_TYPE = "appointment_review_server_runtime_v1";
 const SCHEMA_VERSION = 1;
@@ -197,6 +213,14 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
     sqlitePersistenceProvider,
     operationKind: "appointment_reminder_dispatch",
   });
+  const emptySlotWaveIdempotencyStore = createIdempotencyStore({
+    sqlitePersistenceProvider,
+    operationKind: "empty_slot_offer_wave",
+  });
+  const emptySlotAcceptIdempotencyStore = createIdempotencyStore({
+    sqlitePersistenceProvider,
+    operationKind: "empty_slot_offer_acceptance",
+  });
   const conversationStateStore = sqlitePersistenceProvider
     ? createSqliteConversationStateStore({
         persistenceProvider: sqlitePersistenceProvider,
@@ -213,6 +237,14 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
         persistenceProvider: sqlitePersistenceProvider,
       })
     : createInMemoryAppointmentReminderRepository({
+        clinicId: storageConfig.clinicId,
+      });
+  const emptySlotConfig = resolveEmptySlotConfig(options.env);
+  const emptySlotRepository = sqlitePersistenceProvider
+    ? createSqliteEmptySlotRepository({
+        persistenceProvider: sqlitePersistenceProvider,
+      })
+    : createInMemoryEmptySlotRepository({
         clinicId: storageConfig.clinicId,
       });
   const calendarProvider =
@@ -339,6 +371,21 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
               appointmentVersion: result.previousAppointmentVersion,
               reason: "appointment_rescheduled",
             });
+            const emptySlotOpportunity =
+              createEmptySlotOpportunityFromReleasedAppointment({
+                releasedAppointment: {
+                  ...result.appointment,
+                  startAt: result.lifecycleEvent?.previousStartAt,
+                  endAt: result.lifecycleEvent?.previousEndAt,
+                  version: result.previousAppointmentVersion,
+                },
+                sourceReference: `reschedule:${result.lifecycleEvent?.eventId || result.appointmentId}`,
+                appointmentRepository,
+                emptySlotRepository,
+                config: emptySlotConfig,
+                manual: false,
+                now: input.now || new Date(),
+              });
             const reminders = reconcileOneAppointmentReminders({
               appointment: result.appointment,
               reminderRepository,
@@ -348,6 +395,7 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
               ...result,
               reminderCancellation: cancelled,
               reminderReconciliation: reminders,
+              emptySlotOpportunity,
             };
           }
           return result;
@@ -368,13 +416,29 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
           idempotencyStore: appointmentCancellationIdempotencyStore,
         })).then((result) => {
           if (result?.accepted) {
+            const releasedAppointment = {
+              ...result.appointment,
+              startAt: result.lifecycleEvent?.previousStartAt || result.appointment?.startAt,
+              endAt: result.lifecycleEvent?.previousEndAt || result.appointment?.endAt,
+              version: result.previousAppointmentVersion,
+            };
             const cancelled = cancelObsoleteAppointmentReminderJobs({
               reminderRepository,
               appointmentId: result.appointmentId,
               appointmentVersion: result.previousAppointmentVersion,
               reason: "appointment_cancelled",
             });
-            return { ...result, reminderCancellation: cancelled };
+            const emptySlotOpportunity =
+              createEmptySlotOpportunityFromReleasedAppointment({
+                releasedAppointment,
+                sourceReference: `cancellation:${result.lifecycleEvent?.eventId || result.appointmentId}`,
+                appointmentRepository,
+                emptySlotRepository,
+                config: emptySlotConfig,
+                manual: false,
+                now: input.now || new Date(),
+              });
+            return { ...result, reminderCancellation: cancelled, emptySlotOpportunity };
           }
           return result;
         })
@@ -456,6 +520,112 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
       return retryFailedReminderJob({
         reminderRepository,
         reminderJobId: input.reminderJobId,
+      });
+    },
+    getEmptySlotState(input = {}) {
+      return {
+        accepted: true,
+        config: emptySlotConfig.safeConfig,
+        summary: emptySlotRepository.getSummary(),
+        opportunities: emptySlotRepository.listOpportunities({
+          status: input.status,
+          limit: input.limit,
+        }),
+      };
+    },
+    createEmptySlotOpportunity(input = {}) {
+      const appointment = appointmentRepository.getAppointmentById(
+        String(input.sourceAppointmentId || "").trim()
+      );
+      return createEmptySlotOpportunityFromReleasedAppointment({
+        releasedAppointment: appointment,
+        sourceReference: `manual:${appointment?.id || "missing"}:${appointment?.version || 0}`,
+        appointmentRepository,
+        emptySlotRepository,
+        config: emptySlotConfig,
+        manual: true,
+        now: input.now || new Date(),
+      });
+    },
+    updateEarlierSlotConsent(input = {}) {
+      return emptySlotRepository.upsertConsent({
+        appointmentId: input.appointmentId,
+        enabled: input.enabled === true,
+        weekdays: input.weekdays,
+        dayparts: input.dayparts,
+        minimumNoticeMinutes: input.minimumNoticeMinutes,
+        source: "controlled_internal_action",
+      });
+    },
+    getEarlierSlotConsent(input = {}) {
+      return {
+        accepted: true,
+        consent: emptySlotRepository.getConsentForAppointment(input.appointmentId),
+      };
+    },
+    previewEmptySlotCandidates(input = {}) {
+      return previewEmptySlotCandidates({
+        opportunityId: input.opportunityId,
+        appointmentRepository,
+        emptySlotRepository,
+        config: emptySlotConfig,
+        now: input.now || new Date(),
+      });
+    },
+    launchEmptySlotOfferWave(input = {}) {
+      return launchEmptySlotOfferWave({
+        opportunityId: input.opportunityId,
+        expectedOpportunityVersion: input.expectedOpportunityVersion,
+        appointmentRepository,
+        emptySlotRepository,
+        outboundMessagingProvider,
+        idempotencyStore: emptySlotWaveIdempotencyStore,
+        config: emptySlotConfig,
+        now: input.now || new Date(),
+      });
+    },
+    respondToEmptySlotOffer(input = {}) {
+      return runMaybeTransaction(sqlitePersistenceProvider, () => {
+        const responseType = String(input.responseType || "").trim();
+        if (responseType === "decline") {
+          return declineEmptySlotOffer({
+            offerId: input.offerId,
+            emptySlotRepository,
+          });
+        }
+        if (responseType === "opt_out") {
+          const offer = emptySlotRepository.getOfferById(input.offerId);
+          return optOutEarlierSlotOffers({
+            appointmentId: offer?.candidateAppointmentId || input.appointmentId,
+            emptySlotRepository,
+          });
+        }
+        return acceptEmptySlotOffer({
+          offerId: input.offerId,
+          appointmentRepository,
+          emptySlotRepository,
+          reminderRepository,
+          reminderConfig,
+          idempotencyStore: emptySlotAcceptIdempotencyStore,
+          now: input.now || new Date(),
+        });
+      });
+    },
+    cancelEmptySlotOpportunity(input = {}) {
+      return emptySlotRepository.updateOpportunityStatus({
+        opportunityId: input.opportunityId,
+        status: "cancelled",
+        safeClosureCategory: "manual_cancelled",
+      });
+    },
+    runEmptySlotCycle(input = {}) {
+      return runEmptySlotCycle({
+        emptySlotRepository,
+        appointmentRepository,
+        outboundMessagingProvider,
+        idempotencyStore: emptySlotWaveIdempotencyStore,
+        config: emptySlotConfig,
+        now: input.now || new Date(),
       });
     },
   };
@@ -554,6 +724,16 @@ function createDefaultOutboundMessagingProvider({
           accepted: false,
           code: config.code || "meta_whatsapp_provider_unavailable",
           reason: "Meta WhatsApp reminder provider configuration is incomplete.",
+          provider: "meta_cloud",
+          providerDispatchAccepted: false,
+          realPatientDelivery: false,
+        };
+      },
+      sendEmptySlotOffer() {
+        return {
+          accepted: false,
+          code: config.code || "meta_whatsapp_provider_unavailable",
+          reason: "Meta WhatsApp empty-slot offer configuration is incomplete.",
           provider: "meta_cloud",
           providerDispatchAccepted: false,
           realPatientDelivery: false,

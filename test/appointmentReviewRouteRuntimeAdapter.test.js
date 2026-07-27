@@ -175,6 +175,15 @@ test("route runtime adapter exposes a narrow frozen route-facing contract", () =
     "reconcileAppointmentReminders",
     "runAppointmentReminderCycle",
     "retryFailedReminder",
+    "getEmptySlotState",
+    "createEmptySlotOpportunity",
+    "updateEarlierSlotConsent",
+    "getEarlierSlotConsent",
+    "previewEmptySlotCandidates",
+    "launchEmptySlotOfferWave",
+    "respondToEmptySlotOffer",
+    "cancelEmptySlotOpportunity",
+    "runEmptySlotCycle",
   ]);
   assert.equal(adapter.adapterType, "appointment_review_route_runtime_adapter_v1");
   assert.equal(adapter.schemaVersion, 1);

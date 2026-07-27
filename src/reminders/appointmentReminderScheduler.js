@@ -55,7 +55,21 @@ function createAppointmentReminderScheduler({
         processedCount: result.processedCount || 0,
         resultCounts: result.resultCounts || {},
       });
-      return result;
+      const emptySlotResult = typeof runtime.runEmptySlotCycle === "function"
+        ? await runtime.runEmptySlotCycle({})
+        : null;
+      if (emptySlotResult) {
+        logger.info("empty_slot_cycle_completed", {
+          operation: "empty_slot_cycle",
+          result: emptySlotResult.accepted ? "completed" : "failed",
+          code: emptySlotResult.code,
+          expiredOffers: emptySlotResult.expired?.expiredOffers || 0,
+          expiredOpportunities: emptySlotResult.expired?.expiredOpportunities || 0,
+        });
+      }
+      return emptySlotResult
+        ? { ...result, emptySlotCycle: emptySlotResult }
+        : result;
     } catch {
       logger.error("appointment_reminder_cycle_failed", {
         operation: "appointment_reminder_cycle",

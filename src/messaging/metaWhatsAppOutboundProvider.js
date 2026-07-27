@@ -6,6 +6,9 @@ const {
 const {
   mapAppointmentReminderTemplateParameters,
 } = require("../reminders/appointmentReminderMessageMapper");
+const {
+  mapEmptySlotOfferTemplateParameters,
+} = require("../emptySlots/emptySlotMessageMapper");
 
 function createMetaWhatsAppOutboundProvider({
   config,
@@ -156,6 +159,57 @@ function createMetaWhatsAppOutboundProvider({
             name: config.reminderTemplateName,
             language: {
               code: config.reminderTemplateLanguage,
+            },
+            components: [
+              {
+                type: "body",
+                parameters: mapped.parameters.map((text) => ({
+                  type: "text",
+                  text,
+                })),
+              },
+            ],
+          },
+        },
+        contentFingerprint: sha256(JSON.stringify(mapped.parameters)),
+      });
+    },
+    async sendEmptySlotOffer(command) {
+      const validation = validateAppointmentCommand({
+        ...command,
+        appointmentId: command?.appointment?.id || command?.offer?.candidateAppointmentId,
+      });
+      if (!validation.accepted) {
+        return validation;
+      }
+      if (!config.emptySlotOfferTemplateName || !config.emptySlotOfferTemplateLanguage) {
+        return safeReject("incomplete_meta_whatsapp_empty_slot_offer_template_config");
+      }
+      const decrypted = decryptDestination(validation.destination);
+      if (!decrypted.accepted) {
+        return decrypted;
+      }
+      const mapped = mapEmptySlotOfferTemplateParameters({
+        opportunity: command.opportunity,
+        appointment: command.appointment,
+        expiresAt: command.offer?.expiresAt,
+      });
+      if (!mapped.accepted) {
+        return mapped;
+      }
+      return sendGraphMessage({
+        operationKind: "empty_slot_offer",
+        appointmentId: validation.appointmentId,
+        destination: validation.destination,
+        graphBody: {
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to: decrypted.rawIdentity,
+          type: "template",
+          template: {
+            name: config.emptySlotOfferTemplateName,
+            language: {
+              code: config.emptySlotOfferTemplateLanguage,
             },
             components: [
               {
@@ -333,6 +387,9 @@ function createUnavailableProvider(code) {
       return safeReject(code || "meta_whatsapp_provider_unavailable");
     },
     sendAppointmentReminder() {
+      return safeReject(code || "meta_whatsapp_provider_unavailable");
+    },
+    sendEmptySlotOffer() {
       return safeReject(code || "meta_whatsapp_provider_unavailable");
     },
   });

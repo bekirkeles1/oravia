@@ -18,6 +18,10 @@
     "auth:bootstrap-user": "node scripts/bootstrap-auth-user.js",
     "db:backup": "node scripts/db-backup.js",
     "db:restore": "node scripts/db-restore.js",
+    "empty-slots:run-once": "node scripts/empty-slots-run-once.js",
+    "smoke:empty-slots": "node scripts/smoke-empty-slots-integrated.js",
+    "smoke:empty-slots:http": "node scripts/smoke-empty-slots-http.js",
+    "smoke:empty-slots:container": "node scripts/smoke-empty-slots-container.js",
     "reminders:run-once": "node scripts/reminders-run-once.js",
     "start": "node scripts/start-production.js"
   },
@@ -29,5 +33,10 @@
     "next": "^16.2.10",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
+  },
+  "overrides": {
+    "gaxios": "7.3.0",
+    "postcss": "8.5.23",
+    "sharp": "0.35.3"
   }
 }

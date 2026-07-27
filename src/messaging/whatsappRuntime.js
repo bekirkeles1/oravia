@@ -26,6 +26,9 @@ const {
 const {
   createWhatsAppWebhookService,
 } = require("./whatsappWebhookService");
+const {
+  createAppointmentReviewActiveRouteRuntimeCompositionRoot,
+} = require("../secretary/appointmentReviewRouteRuntimeCompositionRoot");
 const { handleMessagingInbound } = require("../api/messagingInboundHandler");
 const {
   resolveWhatsAppConfig,
@@ -97,6 +100,11 @@ function createWhatsAppRuntime(options = {}) {
       return handleMessagingInbound(payload, { conversationStateStore });
     },
   };
+  const emptySlotRuntimeRoot =
+    options.emptySlotRuntimeRoot ||
+    (storageConfig.storageMode === STORAGE_MODES.SQLITE
+      ? createAppointmentReviewActiveRouteRuntimeCompositionRoot(options)
+      : null);
 
   return Object.freeze({
     accepted: true,
@@ -109,6 +117,12 @@ function createWhatsAppRuntime(options = {}) {
       lifecycleRepository,
       messagingRuntime,
       outboundProvider,
+      emptySlotResponseHandler: emptySlotRuntimeRoot
+        ? (input) =>
+            emptySlotRuntimeRoot
+              .getRouteRuntimeAdapter()
+              .respondToEmptySlotOffer(input)
+        : null,
     }),
     getSafeIntegrationStatus() {
       return {
@@ -119,6 +133,7 @@ function createWhatsAppRuntime(options = {}) {
     },
     close() {
       persistenceProvider?.close();
+      emptySlotRuntimeRoot?.close?.();
     },
   });
 }

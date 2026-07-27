@@ -56,6 +56,45 @@ function parseMessageEvent({ message, value, businessPhoneNumberId }) {
     };
   }
 
+  if (messageType === "interactive") {
+    const payload = normalizeText(
+      message.interactive?.button_reply?.id ||
+        message.interactive?.list_reply?.id
+    );
+    if (!payload) {
+      return {
+        accepted: true,
+        eventKind: "message",
+        supported: false,
+        providerEventId,
+        businessPhoneNumberId,
+        sender,
+        messageType,
+        timestamp,
+        eventFingerprint: fingerprint({ providerEventId, sender, messageType }),
+      };
+    }
+    return {
+      accepted: true,
+      eventKind: "message",
+      supported: true,
+      providerEventId,
+      businessPhoneNumberId,
+      sender,
+      messageType,
+      text: payload,
+      emptySlotResponse: parseEmptySlotResponse(payload),
+      timestamp,
+      eventFingerprint: fingerprint({
+        providerEventId,
+        sender,
+        messageType,
+        payload,
+      }),
+      conversationReference: `whatsapp:${providerEventId}`,
+    };
+  }
+
   if (messageType !== "text") {
     return {
       accepted: true,
@@ -90,6 +129,7 @@ function parseMessageEvent({ message, value, businessPhoneNumberId }) {
     sender,
     messageType,
     text,
+    emptySlotResponse: parseEmptySlotResponse(text),
     timestamp,
     eventFingerprint: fingerprint({
       providerEventId,
@@ -98,6 +138,22 @@ function parseMessageEvent({ message, value, businessPhoneNumberId }) {
       text,
     }),
     conversationReference: `whatsapp:${providerEventId}`,
+  };
+}
+
+function parseEmptySlotResponse(text) {
+  const match = normalizeText(text).match(
+    /^(EMPTY_SLOT_ACCEPT|EMPTY_SLOT_DECLINE|EMPTY_SLOT_OPT_OUT):([A-Za-z0-9_:-]{3,160})$/
+  );
+  if (!match) return null;
+  const actionByPayload = {
+    EMPTY_SLOT_ACCEPT: "accept",
+    EMPTY_SLOT_DECLINE: "decline",
+    EMPTY_SLOT_OPT_OUT: "opt_out",
+  };
+  return {
+    responseType: actionByPayload[match[1]],
+    offerId: match[2],
   };
 }
 

@@ -29,12 +29,44 @@ function createMockOutboundAppointmentConfirmationProvider() {
       calls.push(freezeClone(command));
       return result;
     },
+    sendEmptySlotOffer(command) {
+      const result = createMockEmptySlotOfferResult(command);
+      calls.push(freezeClone(command));
+      return result;
+    },
     getCallCount() {
       return calls.length;
     },
     getCalls() {
       return calls.map((call) => freezeClone(call));
     },
+  });
+}
+
+function createMockEmptySlotOfferResult(command) {
+  const operationReference = normalizeText(command?.operationReference);
+  const offerId = normalizeText(command?.offer?.offerId);
+
+  if (!operationReference || !offerId) {
+    return freezeClone({
+      accepted: false,
+      code: "invalid_mock_empty_slot_offer_command",
+      reason: "Mock empty-slot offer command is incomplete.",
+      provider: "mock_outbound",
+      providerDispatchAccepted: false,
+      realPatientDelivery: false,
+    });
+  }
+
+  return freezeClone({
+    accepted: true,
+    provider: "mock_outbound",
+    providerMessageId: `mock_empty_slot_offer_${operationReference}`,
+    providerDispatchAccepted: true,
+    realPatientDelivery: false,
+    providerLifecycleStatus: "accepted",
+    safeNotice:
+      "Mock provider accepted the empty-slot offer; no real patient message was delivered.",
   });
 }
 
