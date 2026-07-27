@@ -18,6 +18,7 @@
     "auth:bootstrap-user": "node scripts/bootstrap-auth-user.js",
     "db:backup": "node scripts/db-backup.js",
     "db:restore": "node scripts/db-restore.js",
+    "reminders:run-once": "node scripts/reminders-run-once.js",
     "start": "node scripts/start-production.js"
   },
   "engines": {

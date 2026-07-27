@@ -8,6 +8,13 @@ const { validateProductionRuntimeConfig } = require("../src/ops/productionConfig
 const { createStructuredLogger } = require("../src/ops/structuredLogger");
 const { resolveServerStorageConfig, STORAGE_MODES } = require("../src/persistence/storageConfig");
 const { createSqlitePersistenceProvider } = require("../src/persistence/sqliteProvider");
+const {
+  createAppointmentReviewActiveRouteRuntimeCompositionRoot,
+} = require("../src/secretary/appointmentReviewRouteRuntimeCompositionRoot");
+const { resolveReminderConfig } = require("../src/reminders/reminderConfig");
+const {
+  createAppointmentReminderScheduler,
+} = require("../src/reminders/appointmentReminderScheduler");
 
 const logger = createStructuredLogger();
 
@@ -29,6 +36,8 @@ function main() {
   const storage = resolveServerStorageConfig();
   let provider;
   let lockPath = "";
+  let reminderRuntimeRoot = null;
+  let reminderScheduler = null;
 
   try {
     if (storage.storageMode === STORAGE_MODES.SQLITE) {
@@ -63,6 +72,26 @@ function main() {
     storageMode: storage.storageMode,
   });
 
+  const reminderConfig = resolveReminderConfig(process.env);
+  if (!reminderConfig.accepted) {
+    logger.error("startup_reminder_config_invalid", {
+      operation: "startup",
+      result: "blocked",
+      errors: reminderConfig.errors,
+    });
+    removeLock(lockPath);
+    process.exit(1);
+  }
+  if (reminderConfig.schedulerEnabled) {
+    reminderRuntimeRoot = createAppointmentReviewActiveRouteRuntimeCompositionRoot({});
+    reminderScheduler = createAppointmentReminderScheduler({
+      runtime: reminderRuntimeRoot.getRouteRuntimeAdapter(),
+      reminderConfig,
+      logger,
+    });
+    reminderScheduler.start();
+  }
+
   const serverPath = resolveServerPath();
   const child = spawn(process.execPath, [serverPath], {
     env: {
@@ -79,6 +108,8 @@ function main() {
       result: "closing",
       signal,
     });
+    reminderScheduler?.stop?.();
+    reminderRuntimeRoot?.close?.();
     child.kill(signal);
   };
 
@@ -86,6 +117,8 @@ function main() {
   process.once("SIGINT", () => shutdown("SIGINT"));
 
   child.on("exit", (code, signal) => {
+    reminderScheduler?.stop?.();
+    reminderRuntimeRoot?.close?.();
     removeLock(lockPath);
     logger.info("shutdown_complete", {
       operation: "shutdown",

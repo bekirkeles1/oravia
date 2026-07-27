@@ -57,6 +57,10 @@ function resolveWhatsAppConfig(env = process.env) {
       env.ORAVIA_WHATSAPP_CANCELLATION_TEMPLATE_NAME ||
         env.ORAVIA_WHATSAPP_APPOINTMENT_CANCELLATION_TEMPLATE_NAME
     ),
+    reminderTemplateName: normalizeTemplateName(
+      env.ORAVIA_WHATSAPP_APPOINTMENT_REMINDER_TEMPLATE_NAME ||
+        env.ORAVIA_REMINDER_META_TEMPLATE_NAME
+    ),
     templateLanguage: normalizeTemplateLanguage(
       env.ORAVIA_WHATSAPP_TEMPLATE_LANGUAGE || "tr"
     ),
@@ -67,6 +71,12 @@ function resolveWhatsAppConfig(env = process.env) {
     ),
     cancellationTemplateLanguage: normalizeTemplateLanguage(
       env.ORAVIA_WHATSAPP_CANCELLATION_TEMPLATE_LANGUAGE ||
+        env.ORAVIA_WHATSAPP_TEMPLATE_LANGUAGE ||
+        "tr"
+    ),
+    reminderTemplateLanguage: normalizeTemplateLanguage(
+      env.ORAVIA_WHATSAPP_APPOINTMENT_REMINDER_TEMPLATE_LANGUAGE ||
+        env.ORAVIA_REMINDER_META_TEMPLATE_LANGUAGE ||
         env.ORAVIA_WHATSAPP_TEMPLATE_LANGUAGE ||
         "tr"
     ),
@@ -138,6 +148,7 @@ function projectSafeConfig(config, complete, missing = []) {
     appointmentTemplateConfigured: Boolean(config.appointmentTemplateName),
     rescheduleTemplateConfigured: Boolean(config.rescheduleTemplateName),
     cancellationTemplateConfigured: Boolean(config.cancellationTemplateName),
+    reminderTemplateConfigured: Boolean(config.reminderTemplateName),
     templateLanguage: config.templateLanguage || null,
     configurationComplete: complete,
     webhookVerificationReady:

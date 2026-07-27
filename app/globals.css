@@ -368,6 +368,13 @@ button:disabled {
   opacity: 0.58;
 }
 
+.workspace-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
 .secondary-button {
   background: var(--surface);
   color: var(--accent);

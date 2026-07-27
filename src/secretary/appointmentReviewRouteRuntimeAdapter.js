@@ -85,6 +85,21 @@ function createAppointmentReviewRouteRuntimeAdapter(options) {
     dispatchAppointmentChangeNotification(input) {
       return runtime.dispatchAppointmentChangeNotification(input);
     },
+    getReminderState(input) {
+      return runtime.getReminderState(input);
+    },
+    listAppointmentReminderHistory(input) {
+      return runtime.listAppointmentReminderHistory(input);
+    },
+    reconcileAppointmentReminders(input) {
+      return runtime.reconcileAppointmentReminders(input);
+    },
+    runAppointmentReminderCycle(input) {
+      return runtime.runAppointmentReminderCycle(input);
+    },
+    retryFailedReminder(input) {
+      return runtime.retryFailedReminder(input);
+    },
   };
 
   Object.defineProperties(adapter, {

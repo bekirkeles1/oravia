@@ -11,6 +11,7 @@ import DoctorAvailabilityWorkspace from "./components/DoctorAvailabilityWorkspac
 import RoleBasedDashboard from "./components/RoleBasedDashboard";
 import SessionStatus from "./components/SessionStatus";
 import OperationsStatusPanel from "./components/OperationsStatusPanel";
+import ReminderOperationsPanel from "./components/ReminderOperationsPanel";
 import WhatsAppIntegrationStatusPanel from "./components/WhatsAppIntegrationStatusPanel";
 
 export default async function DashboardPage() {
@@ -147,6 +148,8 @@ export default async function DashboardPage() {
         </section>
 
         <OperationsStatusPanel />
+
+        <ReminderOperationsPanel />
 
         <WhatsAppIntegrationStatusPanel />
 

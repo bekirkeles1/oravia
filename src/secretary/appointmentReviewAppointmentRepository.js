@@ -557,7 +557,7 @@ function createInMemoryAppointmentReviewAppointmentRepository() {
       previousAppointmentVersion,
       resultingAppointmentVersion,
       createdSequence: lifecycleSequence,
-      createdAt: new Date().toISOString(),
+      createdAt: currentIsoTimestamp(),
       ...event,
     });
     lifecycleEvents.set(appointmentId, [
@@ -914,6 +914,10 @@ function cloneSafeOutboundDestination(destination) {
     lookupHash,
     encryptedIdentity,
   };
+}
+
+function currentIsoTimestamp() {
+  return new (Date)().toISOString();
 }
 
 function normalizeConfirmationStatus(value) {

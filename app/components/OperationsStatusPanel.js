@@ -42,6 +42,17 @@ export default function OperationsStatusPanel() {
       "Secure Cookies",
       status.security?.secureSessionCookies ? "enabled" : "disabled",
     ],
+    [
+      "Reminder Engine",
+      status.reminders?.config?.engineEnabled ? "enabled" : "disabled",
+    ],
+    [
+      "Reminder Scheduler",
+      status.reminders?.config?.schedulerEnabled ? "enabled" : "disabled",
+    ],
+    ["Reminder Pending", String(status.reminders?.pendingCount ?? 0)],
+    ["Reminder Failed", String(status.reminders?.failedCount ?? 0)],
+    ["Reminder Ambiguous", String(status.reminders?.ambiguousCount ?? 0)],
   ];
 
   return (

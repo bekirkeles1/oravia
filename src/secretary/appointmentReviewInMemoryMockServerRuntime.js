@@ -80,6 +80,20 @@ const {
 const {
   createSqliteAppointmentReviewAppointmentRepository,
 } = require("../persistence/sqliteAppointmentRepository");
+const {
+  createInMemoryAppointmentReminderRepository,
+} = require("../reminders/appointmentReminderRepository");
+const {
+  cancelObsoleteAppointmentReminderJobs,
+  reconcileAppointmentReminders,
+  reconcileOneAppointmentReminders,
+  retryFailedReminderJob,
+  runAppointmentReminderCycle,
+} = require("../reminders/appointmentReminderService");
+const { resolveReminderConfig } = require("../reminders/reminderConfig");
+const {
+  createSqliteAppointmentReminderRepository,
+} = require("../persistence/sqliteAppointmentReminderRepository");
 
 const RUNTIME_TYPE = "appointment_review_server_runtime_v1";
 const SCHEMA_VERSION = 1;
@@ -179,6 +193,10 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
     sqlitePersistenceProvider,
     operationKind: "cancellation_notification_dispatch",
   });
+  const reminderDispatchIdempotencyStore = createIdempotencyStore({
+    sqlitePersistenceProvider,
+    operationKind: "appointment_reminder_dispatch",
+  });
   const conversationStateStore = sqlitePersistenceProvider
     ? createSqliteConversationStateStore({
         persistenceProvider: sqlitePersistenceProvider,
@@ -189,6 +207,14 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
         persistenceProvider: sqlitePersistenceProvider,
       })
     : createInMemoryAppointmentReviewAppointmentRepository();
+  const reminderConfig = resolveReminderConfig(options.env);
+  const reminderRepository = sqlitePersistenceProvider
+    ? createSqliteAppointmentReminderRepository({
+        persistenceProvider: sqlitePersistenceProvider,
+      })
+    : createInMemoryAppointmentReminderRepository({
+        clinicId: storageConfig.clinicId,
+      });
   const calendarProvider =
     options.calendarProvider ||
     (typeof options.createCalendarProvider === "function"
@@ -246,7 +272,7 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
     },
     createAppointmentFromApprovedReview(input) {
       return runMaybeTransaction(sqlitePersistenceProvider, () =>
-        createAppointmentFromApprovedReview({
+        Promise.resolve(createAppointmentFromApprovedReview({
           ...input,
           resolveReviewSnapshot(reviewId) {
             return repository.getVersionedSnapshotById(reviewId);
@@ -257,6 +283,16 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
             repository.previewReviewAppointmentCreationLink,
           applyReviewAppointmentCreationLink:
             repository.applyReviewAppointmentCreationLink,
+        })).then((result) => {
+          if (result?.accepted && result.appointment) {
+            const reminders = reconcileOneAppointmentReminders({
+              appointment: result.appointment,
+              reminderRepository,
+              reminderConfig,
+            });
+            return { ...result, reminderReconciliation: reminders };
+          }
+          return result;
         })
       );
     },
@@ -291,10 +327,30 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
     },
     applyAppointmentReschedule(input) {
       return runMaybeTransaction(sqlitePersistenceProvider, () =>
-        applyAppointmentReschedule({
+        Promise.resolve(applyAppointmentReschedule({
           ...input,
           appointmentRepository,
           idempotencyStore: appointmentRescheduleIdempotencyStore,
+        })).then((result) => {
+          if (result?.accepted && result.appointment) {
+            const cancelled = cancelObsoleteAppointmentReminderJobs({
+              reminderRepository,
+              appointmentId: result.appointmentId,
+              appointmentVersion: result.previousAppointmentVersion,
+              reason: "appointment_rescheduled",
+            });
+            const reminders = reconcileOneAppointmentReminders({
+              appointment: result.appointment,
+              reminderRepository,
+              reminderConfig,
+            });
+            return {
+              ...result,
+              reminderCancellation: cancelled,
+              reminderReconciliation: reminders,
+            };
+          }
+          return result;
         })
       );
     },
@@ -306,10 +362,21 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
     },
     applyAppointmentCancellation(input) {
       return runMaybeTransaction(sqlitePersistenceProvider, () =>
-        applyAppointmentCancellation({
+        Promise.resolve(applyAppointmentCancellation({
           ...input,
           appointmentRepository,
           idempotencyStore: appointmentCancellationIdempotencyStore,
+        })).then((result) => {
+          if (result?.accepted) {
+            const cancelled = cancelObsoleteAppointmentReminderJobs({
+              reminderRepository,
+              appointmentId: result.appointmentId,
+              appointmentVersion: result.previousAppointmentVersion,
+              reason: "appointment_cancelled",
+            });
+            return { ...result, reminderCancellation: cancelled };
+          }
+          return result;
         })
       );
     },
@@ -343,6 +410,53 @@ function createInMemoryMockAppointmentReviewServerRuntime(options) {
               : rescheduleNotificationIdempotencyStore,
         })
       );
+    },
+    getReminderState(input = {}) {
+      return {
+        accepted: true,
+        config: reminderConfig.safeConfig,
+        summary: reminderRepository.getSummary(),
+        jobs: reminderRepository.listOperationalJobs({
+          limit: input.limit,
+          status: input.status,
+        }),
+      };
+    },
+    listAppointmentReminderHistory(input = {}) {
+      return {
+        accepted: true,
+        appointmentId: String(input.appointmentId || "").trim(),
+        jobs: reminderRepository.listJobsForAppointment(
+          String(input.appointmentId || "").trim()
+        ),
+      };
+    },
+    reconcileAppointmentReminders(input = {}) {
+      return runMaybeTransaction(sqlitePersistenceProvider, () =>
+        reconcileAppointmentReminders({
+          appointmentRepository,
+          reminderRepository,
+          reminderConfig,
+          now: input.now || new Date(),
+        })
+      );
+    },
+    runAppointmentReminderCycle(input = {}) {
+      return runAppointmentReminderCycle({
+        appointmentRepository,
+        reminderRepository,
+        reminderConfig,
+        outboundMessagingProvider,
+        idempotencyStore: reminderDispatchIdempotencyStore,
+        now: input.now || new Date(),
+        manualDispatch: input.manualDispatch === true,
+      });
+    },
+    retryFailedReminder(input = {}) {
+      return retryFailedReminderJob({
+        reminderRepository,
+        reminderJobId: input.reminderJobId,
+      });
     },
   };
 
@@ -425,11 +539,21 @@ function createDefaultOutboundMessagingProvider({
           realPatientDelivery: false,
         };
       },
-      sendAppointmentCancellationNotification() {
+    sendAppointmentCancellationNotification() {
         return {
           accepted: false,
           code: config.code || "meta_whatsapp_provider_unavailable",
           reason: "Meta WhatsApp provider configuration is incomplete.",
+          provider: "meta_cloud",
+          providerDispatchAccepted: false,
+          realPatientDelivery: false,
+        };
+      },
+      sendAppointmentReminder() {
+        return {
+          accepted: false,
+          code: config.code || "meta_whatsapp_provider_unavailable",
+          reason: "Meta WhatsApp reminder provider configuration is incomplete.",
           provider: "meta_cloud",
           providerDispatchAccepted: false,
           realPatientDelivery: false,

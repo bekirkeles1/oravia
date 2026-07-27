@@ -3,6 +3,9 @@ const crypto = require("node:crypto");
 const {
   mapAppointmentConfirmationTemplateParameters,
 } = require("./whatsappTemplateMapper");
+const {
+  mapAppointmentReminderTemplateParameters,
+} = require("../reminders/appointmentReminderMessageMapper");
 
 function createMetaWhatsAppOutboundProvider({
   config,
@@ -112,6 +115,60 @@ function createMetaWhatsAppOutboundProvider({
         operationKind: "appointment_cancellation_notification",
         templateName: config.cancellationTemplateName,
         language: config.cancellationTemplateLanguage || config.templateLanguage,
+      });
+    },
+    async sendAppointmentReminder(command) {
+      const validation = validateAppointmentCommand({
+        ...command,
+        appointmentId: command?.appointment?.id || command?.appointmentId,
+      });
+      if (!validation.accepted) {
+        return validation;
+      }
+
+      if (!config.reminderTemplateName || !config.reminderTemplateLanguage) {
+        return safeReject("incomplete_meta_whatsapp_reminder_template_config");
+      }
+
+      const decrypted = decryptDestination(validation.destination);
+      if (!decrypted.accepted) {
+        return decrypted;
+      }
+
+      const mapped = mapAppointmentReminderTemplateParameters({
+        appointment: command.appointment,
+        clinicDisplayName: command.clinicDisplayName,
+      });
+      if (!mapped.accepted) {
+        return mapped;
+      }
+
+      return sendGraphMessage({
+        operationKind: "appointment_reminder",
+        appointmentId: validation.appointmentId,
+        destination: validation.destination,
+        graphBody: {
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to: decrypted.rawIdentity,
+          type: "template",
+          template: {
+            name: config.reminderTemplateName,
+            language: {
+              code: config.reminderTemplateLanguage,
+            },
+            components: [
+              {
+                type: "body",
+                parameters: mapped.parameters.map((text) => ({
+                  type: "text",
+                  text,
+                })),
+              },
+            ],
+          },
+        },
+        contentFingerprint: sha256(JSON.stringify(mapped.parameters)),
       });
     },
   });
@@ -273,6 +330,9 @@ function createUnavailableProvider(code) {
       return safeReject(code || "meta_whatsapp_provider_unavailable");
     },
     sendAppointmentCancellationNotification() {
+      return safeReject(code || "meta_whatsapp_provider_unavailable");
+    },
+    sendAppointmentReminder() {
       return safeReject(code || "meta_whatsapp_provider_unavailable");
     },
   });

@@ -22,6 +22,7 @@ function createAppointmentReviewActiveRouteRuntimeCompositionRoot(options = {}) 
     storageMode: options.storageMode,
     databasePath: options.databasePath,
     clinicId: options.clinicId,
+    env: options.env,
   });
 
   return Object.freeze({

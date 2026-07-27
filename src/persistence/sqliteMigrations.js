@@ -196,6 +196,38 @@ const MIGRATIONS = Object.freeze([
         ON appointment_lifecycle_events (clinic_id, appointment_id, created_sequence)`,
     ]),
   }),
+  Object.freeze({
+    version: 5,
+    name: "appointment_reminder_jobs",
+    statements: Object.freeze([
+      `CREATE TABLE IF NOT EXISTS appointment_reminder_jobs (
+        clinic_id TEXT NOT NULL,
+        reminder_job_id TEXT NOT NULL,
+        appointment_id TEXT NOT NULL,
+        appointment_version INTEGER NOT NULL,
+        offset_identifier TEXT NOT NULL,
+        offset_minutes INTEGER NOT NULL,
+        scheduled_dispatch_at TEXT NOT NULL,
+        status TEXT NOT NULL,
+        attempt_count INTEGER NOT NULL,
+        operation_fingerprint TEXT NOT NULL,
+        provider_message_reference TEXT,
+        outbound_lifecycle_reference TEXT,
+        safe_failure_category TEXT,
+        result_json TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (clinic_id, reminder_job_id),
+        UNIQUE (clinic_id, appointment_id, appointment_version, offset_minutes),
+        FOREIGN KEY (clinic_id) REFERENCES clinics(clinic_id),
+        FOREIGN KEY (clinic_id, appointment_id) REFERENCES appointments(clinic_id, appointment_id)
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_appointment_reminder_jobs_due
+        ON appointment_reminder_jobs (clinic_id, status, scheduled_dispatch_at)`,
+      `CREATE INDEX IF NOT EXISTS idx_appointment_reminder_jobs_appointment
+        ON appointment_reminder_jobs (clinic_id, appointment_id, appointment_version)`,
+    ]),
+  }),
 ]);
 
 function runSqliteMigrations(database) {

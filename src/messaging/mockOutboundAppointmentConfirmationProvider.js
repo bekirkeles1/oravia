@@ -24,12 +24,44 @@ function createMockOutboundAppointmentConfirmationProvider() {
       calls.push(freezeClone(command));
       return result;
     },
+    sendAppointmentReminder(command) {
+      const result = createMockAppointmentReminderResult(command);
+      calls.push(freezeClone(command));
+      return result;
+    },
     getCallCount() {
       return calls.length;
     },
     getCalls() {
       return calls.map((call) => freezeClone(call));
     },
+  });
+}
+
+function createMockAppointmentReminderResult(command) {
+  const operationReference = normalizeText(command?.operationReference);
+  const appointmentId = normalizeText(command?.appointment?.id || command?.appointmentId);
+
+  if (!operationReference || !appointmentId) {
+    return freezeClone({
+      accepted: false,
+      code: "invalid_mock_reminder_command",
+      reason: "Mock appointment reminder command is incomplete.",
+      provider: "mock_outbound",
+      providerDispatchAccepted: false,
+      realPatientDelivery: false,
+    });
+  }
+
+  return freezeClone({
+    accepted: true,
+    provider: "mock_outbound",
+    providerMessageId: `mock_reminder_${operationReference}`,
+    providerDispatchAccepted: true,
+    realPatientDelivery: false,
+    providerLifecycleStatus: "accepted",
+    safeNotice:
+      "Mock provider accepted the appointment reminder; no real patient message was delivered.",
   });
 }
 
